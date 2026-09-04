@@ -1,0 +1,100 @@
+{"id": "A01", "query": "古诗教学有哪些方法", "answerable": true, "expect_source": "01_小学语文_古诗教学", "expect_terms": ["吟诵法"]}
+{"id": "A02", "query": "什么是吟诵法", "answerable": true, "expect_source": "01_小学语文_古诗教学", "expect_terms": ["有节奏地朗读"]}
+{"id": "A03", "query": "情境教学法具体怎么做", "answerable": true, "expect_source": "01_小学语文_古诗教学", "expect_terms": ["多媒体"]}
+{"id": "A04", "query": "故事讲述法有什么作用", "answerable": true, "expect_source": "01_小学语文_古诗教学", "expect_terms": ["创作背景"]}
+{"id": "A05", "query": "静夜思的作者是谁", "answerable": true, "expect_source": "01_小学语文_古诗教学", "expect_terms": ["李白"]}
+{"id": "A06", "query": "春晓是谁写的", "answerable": true, "expect_source": "01_小学语文_古诗教学", "expect_terms": ["孟浩然"]}
+{"id": "A07", "query": "小学古诗教学的教学目标是什么", "answerable": true, "expect_source": "01_小学语文_古诗教学", "expect_terms": ["韵律美"]}
+{"id": "A08", "query": "古诗教学的基本步骤有哪些", "answerable": true, "expect_source": "01_小学语文_古诗教学", "expect_terms": ["范读正音"]}
+{"id": "A09", "query": "古诗教学如何评价学生", "answerable": true, "expect_source": "01_小学语文_古诗教学", "expect_terms": ["背诵流利度"]}
+{"id": "A10", "query": "床前明月光的下一句是什么", "answerable": true, "expect_source": "01_小学语文_古诗教学", "expect_terms": ["疑是地上霜"]}
+{"id": "A11", "query": "春眠不觉晓的下一句", "answerable": true, "expect_source": "01_小学语文_古诗教学", "expect_terms": ["处处闻啼鸟"]}
+{"id": "A12", "query": "古诗教学导入新课需要几分钟", "answerable": true, "expect_source": "01_小学语文_古诗教学", "expect_terms": ["3分钟"]}
+{"id": "A13", "query": "理解诗意环节安排多长时间", "answerable": true, "expect_source": "01_小学语文_古诗教学", "expect_terms": ["10分钟"]}
+{"id": "A14", "query": "古诗教学怎样培养学生对传统文化的兴趣", "answerable": true, "expect_source": "01_小学语文_古诗教学", "expect_terms": ["传统文化"]}
+{"id": "A15", "query": "古诗教学拓展延伸环节几分钟", "answerable": true, "expect_source": "01_小学语文_古诗教学", "expect_terms": ["7分钟"]}
+{"id": "A16", "query": "怎样帮助学生背诵古诗", "answerable": true, "expect_source": "01_小学语文_古诗教学", "expect_terms": ["反复吟诵"]}
+{"id": "A17", "query": "古诗教学用什么来创设氛围", "answerable": true, "expect_source": "01_小学语文_古诗教学", "expect_terms": ["古典音乐"]}
+{"id": "B01", "query": "一元二次方程的一般形式是什么", "answerable": true, "expect_source": "02_初中数学_一元二次方程", "expect_terms": ["ax² + bx + c = 0"]}
+{"id": "B02", "query": "一元二次方程的求根公式", "answerable": true, "expect_source": "02_初中数学_一元二次方程", "expect_terms": ["√"]}
+{"id": "B03", "query": "判别式大于0说明方程有几个根", "answerable": true, "expect_source": "02_初中数学_一元二次方程", "expect_terms": ["两个不相等的实数根"]}
+{"id": "B04", "query": "判别式小于0时方程有实数根吗", "answerable": true, "expect_source": "02_初中数学_一元二次方程", "expect_terms": ["无实数根"]}
+{"id": "B05", "query": "配方法的步骤是什么", "answerable": true, "expect_source": "02_初中数学_一元二次方程", "expect_terms": ["配方"]}
+{"id": "B06", "query": "因式分解法有哪些具体做法", "answerable": true, "expect_source": "02_初中数学_一元二次方程", "expect_terms": ["十字相乘"]}
+{"id": "B07", "query": "根与系数的关系是什么", "answerable": true, "expect_source": "02_初中数学_一元二次方程", "expect_terms": ["-b/a"]}
+{"id": "B08", "query": "直接开平方法适用于什么形式的方程", "answerable": true, "expect_source": "02_初中数学_一元二次方程", "expect_terms": ["(x-h)² = k"]}
+{"id": "B09", "query": "矩形草地面积60平方米长比宽多4米怎么求长宽", "answerable": true, "expect_source": "02_初中数学_一元二次方程", "expect_terms": ["x² + 4x - 60 = 0"]}
+{"id": "B10", "query": "解一元二次方程常见错误有哪些", "answerable": true, "expect_source": "02_初中数学_一元二次方程", "expect_terms": ["Δ"]}
+{"id": "B11", "query": "一元二次方程的定义是什么", "answerable": true, "expect_source": "02_初中数学_一元二次方程", "expect_terms": ["最高次数为2"]}
+{"id": "B12", "query": "分层教学建议中提高层要求是什么", "answerable": true, "expect_source": "02_初中数学_一元二次方程", "expect_terms": ["灵活运用"]}
+{"id": "B13", "query": "十字相乘法属于哪种解法", "answerable": true, "expect_source": "02_初中数学_一元二次方程", "expect_terms": ["因式分解法"]}
+{"id": "B14", "query": "一元二次方程中a必须满足什么条件", "answerable": true, "expect_source": "02_初中数学_一元二次方程", "expect_terms": ["a ≠ 0"]}
+{"id": "B15", "query": "判别式等于0时根的情况", "answerable": true, "expect_source": "02_初中数学_一元二次方程", "expect_terms": ["两个相等的实数根"]}
+{"id": "B16", "query": "配方法和求根公式有什么关系", "answerable": true, "expect_source": "02_初中数学_一元二次方程", "expect_terms": ["推导求根公式的基础"]}
+{"id": "B17", "query": "分层教学中拓展层的要求", "answerable": true, "expect_source": "02_初中数学_一元二次方程", "expect_terms": ["综合运用"]}
+{"id": "C01", "query": "主旨大意题的解题技巧", "answerable": true, "expect_source": "03_高中英语_阅读理解技巧", "expect_terms": ["首段"]}
+{"id": "C02", "query": "细节理解题怎么定位原文", "answerable": true, "expect_source": "03_高中英语_阅读理解技巧", "expect_terms": ["关键词"]}
+{"id": "C03", "query": "推理判断题要注意什么", "answerable": true, "expect_source": "03_高中英语_阅读理解技巧", "expect_terms": ["不选原文原句"]}
+{"id": "C04", "query": "词义猜测题应该怎么推断", "answerable": true, "expect_source": "03_高中英语_阅读理解技巧", "expect_terms": ["上下文"]}
+{"id": "C05", "query": "curriculum是什么意思", "answerable": true, "expect_source": "03_高中英语_阅读理解技巧", "expect_terms": ["课程"]}
+{"id": "C06", "query": "sustainable development 的中文意思", "answerable": true, "expect_source": "03_高中英语_阅读理解技巧", "expect_terms": ["可持续发展"]}
+{"id": "C07", "query": "英语阅读教学如何提高阅读速度", "answerable": true, "expect_source": "03_高中英语_阅读理解技巧", "expect_terms": ["限时阅读"]}
+{"id": "C08", "query": "长难句分析的第一个步骤", "answerable": true, "expect_source": "03_高中英语_阅读理解技巧", "expect_terms": ["找出主句"]}
+{"id": "C09", "query": "推荐的英语阅读材料有哪些", "answerable": true, "expect_source": "03_高中英语_阅读理解技巧", "expect_terms": ["China Daily"]}
+{"id": "C10", "query": "推理判断题常见的提问词", "answerable": true, "expect_source": "03_高中英语_阅读理解技巧", "expect_terms": ["infer"]}
+{"id": "C11", "query": "主旨大意题的关键词有哪些", "answerable": true, "expect_source": "03_高中英语_阅读理解技巧", "expect_terms": ["mainly about"]}
+{"id": "C12", "query": "biodiversity的中文意思", "answerable": true, "expect_source": "03_高中英语_阅读理解技巧", "expect_terms": ["生物多样性"]}
+{"id": "C13", "query": "词义猜测题的提问方式", "answerable": true, "expect_source": "03_高中英语_阅读理解技巧", "expect_terms": ["refer to"]}
+{"id": "C14", "query": "教学中如何处理学生的错题", "answerable": true, "expect_source": "03_高中英语_阅读理解技巧", "expect_sources": ["03_高中英语_阅读理解技巧", "02_初中数学_一元二次方程"], "expect_terms": ["错题分析"]}
+{"id": "C15", "query": "algorithm是什么意思", "answerable": true, "expect_source": "03_高中英语_阅读理解技巧", "expect_terms": ["算法"]}
+{"id": "C16", "query": "细节理解题需要注意什么细节", "answerable": true, "expect_source": "03_高中英语_阅读理解技巧", "expect_terms": ["时态"]}
+{"id": "C17", "query": "英语阅读词汇教学有什么策略", "answerable": true, "expect_source": "03_高中英语_阅读理解技巧", "expect_terms": ["词汇积累与复现"]}
+{"id": "D01", "query": "Python中如何定义函数", "answerable": true, "expect_source": "04_大学计算机_Python基础", "expect_terms": ["函数定义与调用"]}
+{"id": "D02", "query": "列表和元组的区别是什么", "answerable": true, "expect_source": "04_大学计算机_Python基础", "expect_terms": ["不可变性"]}
+{"id": "D03", "query": "什么是lambda", "answerable": true, "expect_source": "04_大学计算机_Python基础", "expect_terms": ["匿名函数"]}
+{"id": "D04", "query": "Python读取文件用什么方法", "answerable": true, "expect_source": "04_大学计算机_Python基础", "expect_terms": ["read()"]}
+{"id": "D05", "query": "with语句有什么作用", "answerable": true, "expect_source": "04_大学计算机_Python基础", "expect_terms": ["上下文管理器"]}
+{"id": "D06", "query": "Python有哪些基本数据类型", "answerable": true, "expect_source": "04_大学计算机_Python基础", "expect_terms": ["整数"]}
+{"id": "D07", "query": "怎样用Python计算平均分", "answerable": true, "expect_source": "04_大学计算机_Python基础", "expect_terms": ["sum"]}
+{"id": "D08", "query": "面向对象编程有哪些特性", "answerable": true, "expect_source": "04_大学计算机_Python基础", "expect_terms": ["继承与多态"]}
+{"id": "D09", "query": "break和continue的作用", "answerable": true, "expect_source": "04_大学计算机_Python基础", "expect_terms": ["break"]}
+{"id": "D10", "query": "Python代码规范叫什么", "answerable": true, "expect_source": "04_大学计算机_Python基础", "expect_terms": ["PEP 8"]}
+{"id": "D11", "query": "猜数字游戏用了哪个模块", "answerable": true, "expect_source": "04_大学计算机_Python基础", "expect_terms": ["random"]}
+{"id": "D12", "query": "字典用什么结构存储数据", "answerable": true, "expect_source": "04_大学计算机_Python基础", "expect_terms": ["键值对"]}
+{"id": "D13", "query": "集合有什么用途", "answerable": true, "expect_source": "04_大学计算机_Python基础", "expect_terms": ["去重"]}
+{"id": "D14", "query": "Python课程期末项目占比多少", "answerable": true, "expect_source": "04_大学计算机_Python基础", "expect_terms": ["25%"]}
+{"id": "D15", "query": "第一个Python程序通常写什么", "answerable": true, "expect_source": "04_大学计算机_Python基础", "expect_terms": ["Hello World"]}
+{"id": "D16", "query": "切片操作属于哪种数据结构的操作", "answerable": true, "expect_source": "04_大学计算机_Python基础", "expect_terms": ["列表"]}
+{"id": "D17", "query": "算术运算符中整除用什么符号", "answerable": true, "expect_source": "04_大学计算机_Python基础", "expect_terms": ["//"]}
+{"id": "E01", "query": "前台电话接听标准是什么", "answerable": true, "expect_source": "05_职业教育_酒店管理", "expect_terms": ["3声内接听"]}
+{"id": "E02", "query": "常规入住办理时间标准", "answerable": true, "expect_source": "05_职业教育_酒店管理", "expect_terms": ["3分钟"]}
+{"id": "E03", "query": "超额预订怎么处理", "answerable": true, "expect_source": "05_职业教育_酒店管理", "expect_terms": ["同档次酒店"]}
+{"id": "E04", "query": "客人投诉房间噪音怎么办", "answerable": true, "expect_source": "05_职业教育_酒店管理", "expect_terms": ["换房"]}
+{"id": "E05", "query": "客房预订有哪些渠道", "answerable": true, "expect_source": "05_职业教育_酒店管理", "expect_terms": ["OTA"]}
+{"id": "E06", "query": "酒店管理系统简称是什么", "answerable": true, "expect_source": "05_职业教育_酒店管理", "expect_terms": ["PMS"]}
+{"id": "E07", "query": "前厅服务包含哪些内容", "answerable": true, "expect_source": "05_职业教育_酒店管理", "expect_terms": ["入住登记"]}
+{"id": "E08", "query": "退房结算包含哪些步骤", "answerable": true, "expect_source": "05_职业教育_酒店管理", "expect_terms": ["发票开具"]}
+{"id": "E09", "query": "客户关系管理包括哪些内容", "answerable": true, "expect_source": "05_职业教育_酒店管理", "expect_terms": ["VIP客户管理"]}
+{"id": "E10", "query": "酒店管理有哪些职业资格", "answerable": true, "expect_source": "05_职业教育_酒店管理", "expect_terms": ["前厅服务员"]}
+{"id": "E11", "query": "餐饮服务包括哪些类型", "answerable": true, "expect_source": "05_职业教育_酒店管理", "expect_terms": ["自助餐"]}
+{"id": "E12", "query": "前台礼貌用语有哪些", "answerable": true, "expect_source": "05_职业教育_酒店管理", "expect_terms": ["欢迎光临"]}
+{"id": "E13", "query": "客房服务包括哪些内容", "answerable": true, "expect_source": "05_职业教育_酒店管理", "expect_terms": ["加床"]}
+{"id": "E14", "query": "酒店管理有哪些实训项目", "answerable": true, "expect_source": "05_职业教育_酒店管理", "expect_terms": ["情景模拟"]}
+{"id": "E15", "query": "酒店概论主要讲什么", "answerable": true, "expect_source": "05_职业教育_酒店管理", "expect_terms": ["酒店的定义与分类"]}
+{"id": "E16", "query": "问讯服务包括哪些内容", "answerable": true, "expect_source": "05_职业教育_酒店管理", "expect_terms": ["留言服务"]}
+{"id": "E17", "query": "处理客人投诉后还要做什么", "answerable": true, "expect_source": "05_职业教育_酒店管理", "expect_terms": ["后续跟进"]}
+{"id": "F01", "query": "知识库支持哪些文件格式", "answerable": true, "expect_source": "sample_knowledge", "expect_terms": ["PDF"]}
+{"id": "F02", "query": "教学设计原则有哪些", "answerable": true, "expect_source": "sample_knowledge", "expect_terms": ["以学生为中心"]}
+{"id": "F03", "query": "变量是什么", "answerable": true, "expect_source": "sample_knowledge", "expect_terms": ["存储数据的容器"]}
+{"id": "F04", "query": "控制结构有哪几种", "answerable": true, "expect_source": "sample_knowledge", "expect_sources": ["sample_knowledge", "04_大学计算机_Python基础"], "expect_terms": ["顺序结构"]}
+{"id": "F05", "query": "知识库内容应该包含哪些方面", "answerable": true, "expect_source": "sample_knowledge", "expect_terms": ["教学案例"]}
+{"id": "U01", "query": "太阳系有几颗行星", "answerable": false, "expect_source": "", "expect_terms": []}
+{"id": "U02", "query": "量子力学的不确定性原理是什么", "answerable": false, "expect_source": "", "expect_terms": []}
+{"id": "U03", "query": "普通感冒应该怎么治疗", "answerable": false, "expect_source": "", "expect_terms": []}
+{"id": "U04", "query": "股票K线图怎么看", "answerable": false, "expect_source": "", "expect_terms": []}
+{"id": "U05", "query": "法国大革命是哪一年爆发的", "answerable": false, "expect_source": "", "expect_terms": []}
+{"id": "U06", "query": "水稻应该怎么种植", "answerable": false, "expect_source": "", "expect_terms": []}
+{"id": "U07", "query": "民法典关于合同违约的规定", "answerable": false, "expect_source": "", "expect_terms": []}
+{"id": "U08", "query": "篮球比赛的规则是什么", "answerable": false, "expect_source": "", "expect_terms": []}
+{"id": "U09", "query": "微波炉加热的原理", "answerable": false, "expect_source": "", "expect_terms": []}
+{"id": "U10", "query": "2026年高考志愿填报政策", "answerable": false, "expect_source": "", "expect_terms": []}

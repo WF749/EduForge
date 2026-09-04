@@ -1,0 +1,52 @@
+# 依赖与缓存（容器内重新安装，避免上下文膨胀与陈旧产物）
+node_modules
+.venv
+.uv_cache
+__pycache__
+*.pyc
+.ipynb_checkpoints
+
+# 大模型权重与体积较大的本地模型
+models_cache
+backend/models_cache
+*.bin
+*.gguf
+*.safetensors
+*.pt
+*.onnx
+
+# 运行时产物（每次运行重新生成）
+backend/uploads
+backend/data
+backend/generated_courseware
+backend/generated_lesson_plans
+backend/generated_animations
+backend/generated_games
+backend/chroma_db
+backend/llm_config.db
+backend/llm_config.db-*
+generated_courseware
+generated_games
+generated_animations
+logs
+*.log
+
+# 前端构建产物（容器内重新构建）
+frontend/dist
+
+# 版本控制与 CI
+.git
+.gitignore
+.github
+docker-compose.yml
+
+# 本地环境
+.env
+.env.*
+.venv
+
+# 诊断与说明文档（不进入镜像）
+项目诊断与改造方案.md
+docs/00-项目诊断与企业级重构规划.md
+LLM层与对话意图模块审查报告.md
+frontend-review-report.md

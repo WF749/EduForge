@@ -1,0 +1,92 @@
+# Python & uv
+__pycache__/
+.venv/
+.uv_cache/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# Node
+node_modules/
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 本地运行日志（可能含请求信息）
+logs/
+*.log
+
+# 运行时数据
+# 注意：RAG 向量索引实际目录是 rag_index/（非 chromadb/），里面含用户上传文档的原文切片，绝不能提交
+backend/data/rag_index/
+backend/data/chromadb/
+backend/data/knowledge_base_store.json
+backend/data/machine_marker.txt
+backend/data/encryption_key.hex
+backend/models_cache/
+backend/uploads/*
+!backend/uploads/.gitkeep
+# 生成的输出（含用户上传课件/生成内容）
+backend/generated_animations/
+backend/generated_courseware/
+backend/generated_games/
+backend/generated_lesson_plans/
+generated_animations/
+generated_courseware/
+generated_games/
+generated_lesson_plans/
+uploads/
+!uploads/.gitkeep
+backend/uploads/
+!backend/uploads/.gitkeep
+
+# 构建产物
+frontend/dist/
+frontend/dist_old/
+frontend/.build-new/
+frontend/.verify-dist/
+*.egg-info/
+build/
+
+# Vite 临时文件（改 vite.config.js 时会生成，勿提交）
+frontend/vite.config.js.timestamp-*
+*.timestamp-*.mjs
+
+# 环境配置（禁止提交真实密钥）
+.env
+.env.*
+!.env.example
+
+# 运行时保存的 LLM 密钥与对话（设置页 / 聊天，勿提交）
+# 注意：.bak 同样含加密后的密钥列，必须一并排除
+backend/data/runtime_config.json
+backend/data/runtime_config.json.bak
+backend/data/*.bak
+backend/data/chat_history.json
+backend/data/uploaded_files.json
+backend/data/history/
+
+# SQLite LLM 配置（可能含加密后的密钥列）
+**/llm_config.db
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.docker/
+
+# AI 会话工作目录（工作日志与交付总结，不属于项目源码）
+.workbuddy/
+
+# 根目录残留：0 字节空文件，疑似误敲命令产生
+3.7.0
+wheelhouse/
