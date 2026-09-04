@@ -1,0 +1,74 @@
+{
+  "topic": "细胞分裂过程",
+  "audience": "高中生",
+  "duration": 5,
+  "animation_data": {
+    "title": "细胞分裂过程动画演示",
+    "description": "面向高中生的细胞分裂过程教学动画",
+    "scenes": [
+      {
+        "scene_id": 1,
+        "title": "引入",
+        "duration": "30秒",
+        "description": "通过生动的动画引入细胞分裂过程概念",
+        "visual_elements": [
+          "标题动画",
+          "背景渐变"
+        ],
+        "script": "同学们好，今天我们来学习细胞分裂过程"
+      },
+      {
+        "scene_id": 2,
+        "title": "核心讲解",
+        "duration": "2分钟",
+        "description": "详细讲解细胞分裂过程的核心原理和知识点",
+        "visual_elements": [
+          "流程图",
+          "示意图",
+          "关键点高亮"
+        ],
+        "script": "细胞分裂过程的核心要点包括..."
+      },
+      {
+        "scene_id": 3,
+        "title": "实例演示",
+        "duration": "1分钟",
+        "description": "细胞分裂过程的实际应用案例演示",
+        "visual_elements": [
+          "案例视频",
+          "数据图表"
+        ],
+        "script": "让我们来看一个实际应用案例"
+      },
+      {
+        "scene_id": 4,
+        "title": "总结回顾",
+        "duration": "30秒",
+        "description": "回顾本课程的重点内容",
+        "visual_elements": [
+          "思维导图",
+          "要点列表"
+        ],
+        "script": "今天的学习就到这里，总结一下..."
+      }
+    ],
+    "characters": [
+      {
+        "name": "讲师",
+        "role": "知识引导者"
+      }
+    ],
+    "technical_specs": {
+      "resolution": "1920x1080",
+      "frame_rate": "30fps"
+    },
+    "production_steps": [
+      "分镜设计",
+      "动画制作",
+      "配音合成"
+    ],
+    "estimated_time": "2-3小时"
+  },
+  "html_path": "generated_animations_test\\细胞分裂过程_20260603_214153_c81e2b28\\细胞分裂过程_storyboard.html",
+  "task_dir": "generated_animations_test\\细胞分裂过程_20260603_214153_c81e2b28"
+}

@@ -1,0 +1,38 @@
+# EduForge 单容器部署
+# 用法：
+#   1) 准备密钥：复制 .env.example 为 .env 并填入 API Key
+#   2) 启动：docker compose up -d --build
+#   3) 访问：http://localhost:8005
+services:
+  eduforge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8005:8005"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8005
+      - DEBUG=False
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - LOCAL_MODEL_URL=${LOCAL_MODEL_URL:-http://localhost:8001/v1}
+    volumes:
+      - ./backend/uploads:/app/backend/uploads
+      - ./knowledge_base:/app/knowledge_base
+      - ./backend/data:/app/backend/data
+      - ./backend/generated_courseware:/app/backend/generated_courseware
+      - ./backend/generated_lesson_plans:/app/backend/generated_lesson_plans
+      - ./backend/generated_animations:/app/backend/generated_animations
+      - ./backend/generated_games:/app/backend/generated_games
+      - ./backend/llm_config.db:/app/backend/llm_config.db
+      # 持久化本地 embedding 模型（使用本地 bge 时避免每次重启重新下载）
+      - ./backend/.cache/huggingface:/root/.cache/huggingface
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8005/health').status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s

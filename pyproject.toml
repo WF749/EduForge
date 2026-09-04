@@ -1,0 +1,35 @@
+[project]
+name = "eduforge"
+version = "2.0.0"
+description = "EduForge - 面向 K-12 教师的本地化多模态备课智能体工作台"
+readme = "README.md"
+requires-python = ">=3.10, <3.13"
+dependencies = [
+    "fastapi==0.109.0",
+    "uvicorn[standard]==0.27.0",
+    "python-multipart==0.0.6",
+    "dashscope==1.14.1",
+    "openai>=1.60.0,<2",
+    "httpx>=0.27.0",
+    "PyPDF2==3.0.1",
+    "pdfplumber>=0.10.0",
+    "python-docx==0.8.11",
+    "python-pptx==0.6.23",
+    "olefile>=0.46",
+    "Pillow==9.5.0",
+    "pytesseract==0.3.10",
+    "moviepy==1.0.3",
+    "pydub==0.25.1",
+    "chromadb>=0.5.0",
+    "numpy<2.0.0",
+    "sentence-transformers",
+    # 中文分词，供 RAG 的 BM25 关键词通道使用。
+    # 缺失时 app/rag/bm25.py 会自动降级为字符二元组（零依赖但精度略低），
+    # 因此这是"建议装"而非"必须装"。
+    "jieba>=0.42.1",
+    "python-dotenv==1.0.0",
+    "requests==2.31.0",
+    "matplotlib>=3.7.0",
+]
+
+
