@@ -90,6 +90,7 @@ Thumbs.db
 # 内部定位评审文档（竞品分析与战略讨论，不属于项目文档；本地保留，不入库）
 docs/POSITIONING.md
 docs/POSITIONING-REVIEW.md
+docs/00-项目诊断与企业级重构规划.md
 
 # 根目录残留：0 字节空文件，疑似误敲命令产生
 3.7.0
