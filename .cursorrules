@@ -1,0 +1,18 @@
+# Cursor 规则入口
+
+先读仓库根目录的 AGENTS.md —— 它是本仓库唯一的 AI 协作入口（8 条红线 + 文档地图）。
+
+展开阅读：
+- docs/CONSTRAINTS.md   硬约束与原因（前端可访问性 / 数据合规 / 教学合规 / 模型调用 / 依赖架构 / 文档仓库）
+- docs/DEVELOPMENT.md   启动、测试、前端构建、故障排查
+- docs/ARCHITECTURE.md  分层与模块边界
+- docs/TECH-EVALUATION.md  技术引进评估
+- docs/HARNESS.md       本仓库的 Harness 机制
+
+提交前必跑（基线 176 项全绿）：
+  PYTHONPATH=backend uv run --project backend python scripts/smoke_safety.py
+  PYTHONPATH=backend uv run --project backend python scripts/smoke_teaching_compliance.py
+  PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_plan.py
+
+最高优先级红线：绝不能直接 `npm run build`（vite 会先清空 frontend/dist，
+而 dist 是后端生产托管目录，构建中断会导致线上白屏）。构建必须用临时目录再替换。
