@@ -1,6 +1,6 @@
 # Claude Code 入口
 
-**先读 [`AGENTS.md`](AGENTS.md)。** 它是本仓库唯一的 AI 协作入口，包含 8 条红线与文档地图。
+**先读 [`AGENTS.md`](AGENTS.md)。** 它是本仓库唯一的 AI 协作入口，包含 9 条红线与文档地图。
 
 - 硬约束完整版：[`docs/CONSTRAINTS.md`](docs/CONSTRAINTS.md)
 - 环境/启动/测试/故障排查：[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)
