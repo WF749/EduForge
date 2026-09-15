@@ -85,7 +85,7 @@
             </div>
             <h3>正在生成互动游戏...</h3>
             <p>AI正在设计游戏关卡和题目，请稍候</p>
-            <el-progress :percentage="progress" :stroke-width="8" :show-text="true" status="primary" />
+            <el-progress :percentage="progress" :stroke-width="8" :indeterminate="generating" :show-text="!generating" status="primary" />
           </div>
 
           <!-- 结果 -->
@@ -93,7 +93,7 @@
             <div class="result-header">
               <div class="result-title">
                 <el-icon :size="24" color="#67c23a"><CircleCheckFilled /></el-icon>
-                <h3>{{ result.game_data?.title || '互动游戏生成完成' }}</h3>
+                <h3>{{ result.game_data?.title || result.game_data?.name || result.game_name || '互动游戏生成完成' }}</h3>
               </div>
               <el-tag type="success">生成成功</el-tag>
             </div>
@@ -133,7 +133,7 @@
             <div class="info-cards">
               <div class="info-card">
                 <span class="info-label">游戏类型</span>
-                <span class="info-value">{{ result.game_data?.game_type || form.game_type }}</span>
+                <span class="info-value">{{ result.game_data?.game_type || result.game_data?.type || form.game_type }}</span>
               </div>
               <div class="info-card">
                 <span class="info-label">题目数量</span>
@@ -145,7 +145,7 @@
               </div>
               <div class="info-card">
                 <span class="info-label">预计时间</span>
-                <span class="info-value">{{ result.game_data?.estimated_time || '5-10分钟' }}</span>
+                <span class="info-value">{{ result.game_data?.estimated_time || (result.game_data?.time_limit ? Math.ceil(result.game_data.time_limit / 60) + '分钟' : '5-10分钟') }}</span>
               </div>
             </div>
 
@@ -202,6 +202,7 @@ import { ref, reactive, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { resolveApiBaseURL } from '@/api/baseUrl'
+import { trackedFetch } from '@/api/dataFlow'
 import { renderMathInText } from '@/utils/mathRender'
 import ComplianceReport from '@/components/ComplianceReport.vue'
 import 'katex/dist/katex.min.css'
@@ -228,7 +229,7 @@ const previewFrame = ref(null)
 const form = reactive({
   topic: '',
   audience: '大学生',
-  game_type: 'quiz',
+  game_type: '选择题',
   teaching_content: ''
 })
 
@@ -238,11 +239,11 @@ const progress = ref(0)
 // 出厂质检报告（后端生成时附带）
 const compliance = ref(null)
 const gameTypes = ref([
-  { id: '选择题', name: '选择题', description: '多项选择答题' },
-  { id: '填空题', name: '填空题', description: '填空练习' },
-  { id: '点击配对', name: '点击配对', description: '知识点连线匹配' },
-  { id: '拖拽排序', name: '拖拽排序', description: '流程/步骤排序' },
-  { id: '记忆翻牌', name: '记忆翻牌', description: '卡片记忆配对' }
+  { id: '选择题', name: '知识问答', description: '选择题形式测试知识点' },
+  { id: '填空题', name: '填空挑战', description: '填写正确答案' },
+  { id: '匹配题', name: '连连看', description: '匹配相关概念' },
+  { id: '排序题', name: '排序挑战', description: '按正确顺序排列' },
+  { id: '闯关游戏', name: '知识闯关', description: '逐关挑战获取胜利' }
 ])
 
 function renderMath(text) {
@@ -285,7 +286,7 @@ onMounted(async () => {
   if (query.duration) form.duration = parseInt(query.duration)
 
   try {
-    const res = await fetch(`${resolveApiBaseURL()}/courseware/game/types`)
+    const res = await trackedFetch(`${resolveApiBaseURL()}/courseware/game/types`)
     const data = await res.json()
     if (data.success && data.types) {
       gameTypes.value = data.types
@@ -307,16 +308,10 @@ async function generateGame() {
 
   generating.value = true
   result.value = null
-  progress.value = 0
-
-  const progressTimer = setInterval(() => {
-    if (progress.value < 90) {
-      progress.value += Math.random() * 8 + 2
-    }
-  }, 500)
+  progress.value = 50
 
   try {
-    const response = await fetch(`${resolveApiBaseURL()}/courseware/game/generate`, {
+    const response = await trackedFetch(`${resolveApiBaseURL()}/courseware/game/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -340,7 +335,6 @@ async function generateGame() {
     console.error('游戏生成失败:', e)
     ElMessage.error('游戏生成失败，请检查网络连接')
   } finally {
-    clearInterval(progressTimer)
     generating.value = false
   }
 }
@@ -406,7 +400,7 @@ function toggleFullscreen() {
 function resetForm() {
   form.topic = ''
   form.audience = '大学生'
-  form.game_type = 'quiz'
+  form.game_type = '选择题'
   form.teaching_content = ''
 }
 

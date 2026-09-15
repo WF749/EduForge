@@ -116,6 +116,7 @@ def add_chunks(
     filename: str,
     chunks: List[str],
     meta: Optional[Dict] = None,
+    chunk_size: Optional[int] = None,
 ) -> None:
     """写入主存储（JSON）；可选同步到 Chroma。"""
     if not chunks:
@@ -157,6 +158,7 @@ def add_chunks(
                     doc_id,
                     "\n".join(chunks),
                     metadata={"filename": filename, **(meta or {}), "origin": "upload"},
+                    chunk_size=chunk_size or 320,
                 )
         except Exception as e:  # noqa: BLE001
             log.warning("同步到统一检索索引失败(%s): %s", doc_id, e)
@@ -312,9 +314,17 @@ def query_kb(q: str, top_k: int = 5) -> List[Dict[str, Any]]:
         for ch in d.get("chunks") or []:
             sc = _score_chunk(q, ch)
             if sc > 0.05:
-                results.append({"content": ch[:2000], "score": sc, "doc_id": did})
+                results.append({
+                    "content": ch[:2000],
+                    "score": sc,
+                    "doc_id": did,
+                    "source": d.get("filename") or did,
+                })
     results.sort(key=lambda x: x["score"], reverse=True)
-    out = [{"content": r["content"], "score": r["score"]} for r in results[:top_k]]
+    out = [
+        {"content": r["content"], "score": r["score"], "source": r.get("source", "")}
+        for r in results[:top_k]
+    ]
 
     if out or not _use_chroma():
         return out

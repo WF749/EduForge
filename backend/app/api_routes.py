@@ -17,7 +17,7 @@ from .core.errors import ErrorCode
 from .core.llm_gateway import llm_chat
 from .core.logging_setup import get_logger
 from .core.providers import get_provider, resolve_base_url
-from .document_extract import extract_text
+from .document_extract import extract_text, resolve_uploaded_references
 from .services.dialogue_manager import dialogue_manager
 from .services.content_version_manager import content_version_manager
 from .services.multimodal_analyzer import multimodal_analyzer, ModalityType
@@ -74,7 +74,13 @@ def _providers_payload(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 "base_url": (keys.get(f"{pid}Base") or keys.get("localUrl") or ""),
             }
         )
-    return {"providers": plist, "provider": active, "temperature": cfg.get("temperature", 0.7)}
+    return {
+        "providers": plist,
+        "provider": active,
+        "temperature": cfg.get("temperature", 0.7),
+        "chunkSize": cfg.get("chunkSize", 500),
+        "topK": cfg.get("topK", 5),
+    }
 
 
 @router.get("/llm/config")
@@ -349,6 +355,21 @@ async def _sse_stream(body: Dict[str, Any]) -> AsyncIterator[bytes]:
     yield f"data: {done}\n\n".encode("utf-8")
 
 
+def _configured_int(key: str, default: int, minimum: int, maximum: int) -> int:
+    try:
+        return max(minimum, min(maximum, int(persist.load_runtime_config().get(key, default))))
+    except (TypeError, ValueError):
+        return default
+
+
+def _message_with_uploads(message: str, body: Dict[str, Any]) -> str:
+    refs = resolve_uploaded_references(body.get("attachment_ids"))
+    if not refs:
+        return message
+    reference_text = "\n\n".join(refs)
+    return f"[上传的参考资料]\n{reference_text}\n\n[用户问题]\n{message}"
+
+
 @router.post("/chat/analyze")
 async def chat_analyze(body: Dict[str, Any]):
     """分析用户消息，进行意图识别和对话状态管理
@@ -384,30 +405,41 @@ async def reset_dialogue(body: Dict[str, Any]):
 
 @router.post("/chat/stream")
 async def chat_stream(body: Dict[str, Any]):
-    if body.get("use_knowledge"):
-        hits = knowledge_store.query_kb(body.get("message", ""), top_k=5)
+    b = dict(body)
+    question = b.get("message", "")
+    b["message"] = _message_with_uploads(question, b)
+    if b.get("use_knowledge"):
+        hits = knowledge_store.query_kb(question, top_k=_configured_int("topK", 5, 1, 20))
         ctx = "\n".join(h.get("content", "") for h in hits)
         if ctx:
-            body = dict(body)
-            body["message"] = f"[知识库参考]\n{ctx}\n\n[用户问题]\n{body.get('message','')}"
-    return StreamingResponse(_sse_stream(body), media_type="text/plain; charset=utf-8")
+            b["message"] = f"[知识库参考]\n{ctx}\n\n{b['message']}"
+    return StreamingResponse(_sse_stream(b), media_type="text/plain; charset=utf-8")
 
 
 @router.post("/chat/vision")
 async def chat_vision(body: Dict[str, Any]):
     b = dict(body)
+    question = b.get("message", "")
+    b["message"] = _message_with_uploads(question, b)
     if b.get("use_knowledge"):
-        hits = knowledge_store.query_kb(b.get("message", ""), top_k=5)
+        hits = knowledge_store.query_kb(question, top_k=_configured_int("topK", 5, 1, 20))
         ctx = "\n".join(h.get("content", "") for h in hits)
         if ctx:
-            b["message"] = f"[知识库参考]\n{ctx}\n\n[用户问题]\n{b.get('message','')}"
+            b["message"] = f"[知识库参考]\n{ctx}\n\n{b['message']}"
     return StreamingResponse(_sse_stream(b), media_type="text/plain; charset=utf-8")
 
 
 @router.post("/chat/deep-thinking")
 async def chat_deep(body: Dict[str, Any]):
     b = dict(body)
-    b["message"] = "请逐步思考后回答：\n" + (b.get("message") or "")
+    question = b.get("message") or ""
+    b["message"] = _message_with_uploads(question, b)
+    if b.get("use_knowledge"):
+        hits = knowledge_store.query_kb(question, top_k=_configured_int("topK", 5, 1, 20))
+        ctx = "\n".join(h.get("content", "") for h in hits)
+        if ctx:
+            b["message"] = f"[知识库参考]\n{ctx}\n\n{b['message']}"
+    b["message"] = "请逐步思考后回答：\n" + b["message"]
     return StreamingResponse(_sse_stream(b), media_type="text/plain; charset=utf-8")
 
 
@@ -426,11 +458,11 @@ async def chat_search(body: Dict[str, Any]):
     )
     b = dict(body)
     if b.get("use_knowledge"):
-        hits = knowledge_store.query_kb(q, top_k=5)
+        hits = knowledge_store.query_kb(q, top_k=_configured_int("topK", 5, 1, 20))
         ctx = "\n".join(h.get("content", "") for h in hits)
         if ctx:
             inner = f"[知识库参考]\n{ctx}\n\n" + inner
-    b["message"] = inner
+    b["message"] = _message_with_uploads(inner, b)
     return StreamingResponse(_sse_stream(b), media_type="text/plain; charset=utf-8")
 
 
@@ -448,14 +480,14 @@ async def chat_deep_search(body: Dict[str, Any]):
         else f"[联网检索：当前网络环境无法访问外部资源]\n{q}"
     )
     if body.get("use_knowledge"):
-        hits = knowledge_store.query_kb(q, top_k=5)
+        hits = knowledge_store.query_kb(q, top_k=_configured_int("topK", 5, 1, 20))
         ctx = "\n".join(h.get("content", "") for h in hits)
         if ctx:
             ref = f"[知识库参考]\n{ctx}\n\n" + ref
     b = dict(body)
-    b["message"] = (
+    b["message"] = _message_with_uploads((
         "请结合下列资料逐步推理，先简要列出要点再给出结论，并标注哪些来自检索、哪些是推断：\n\n" + ref
-    )
+    ), b)
     return StreamingResponse(_sse_stream(b), media_type="text/plain; charset=utf-8")
 
 
@@ -798,9 +830,10 @@ async def upload_file(
                 "file_id": fid,
                 "filename": safe_name,
             }
-        chunks = knowledge_store.chunk_text(text, size=900)
+        chunk_size = _configured_int("chunkSize", 500, 100, 1000)
+        chunks = knowledge_store.chunk_text(text, size=chunk_size)
         did = knowledge_store.doc_id_for_upload(fid)
-        knowledge_store.add_chunks(did, safe_name, chunks)
+        knowledge_store.add_chunks(did, safe_name, chunks, chunk_size=chunk_size)
     return {"success": True, "file_id": fid, "filename": safe_name}
 
 
@@ -837,9 +870,10 @@ def knowledge_add_file(file_id: str):
             "success": False,
             "message": "无法提取文本，知识库未写入。请使用可复制文字的 PDF/Word。",
         }
-    chunks = knowledge_store.chunk_text(text, size=900)
+    chunk_size = _configured_int("chunkSize", 500, 100, 1000)
+    chunks = knowledge_store.chunk_text(text, size=chunk_size)
     did = knowledge_store.doc_id_for_upload(file_id)
-    knowledge_store.add_chunks(did, meta["filename"], chunks)
+    knowledge_store.add_chunks(did, meta["filename"], chunks, chunk_size=chunk_size)
     return {"success": True, "document_id": did}
 
 
@@ -856,7 +890,7 @@ def knowledge_docs(limit: int = Query(100)):
 @router.post("/knowledge/query")
 async def knowledge_query(body: Dict[str, Any]):
     q = body.get("query") or ""
-    top_k = int(body.get("top_k") or 5)
+    top_k = int(body.get("top_k") or _configured_int("topK", 5, 1, 20))
     results = knowledge_store.query_kb(q, top_k=top_k)
     return {"success": True, "results": results}
 

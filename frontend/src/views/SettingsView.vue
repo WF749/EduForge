@@ -225,16 +225,9 @@
 
         <el-form label-position="top">
           <el-form-item label="嵌入模型">
-            <el-select v-model="form.embeddingModel" style="width: 100%">
-              <el-option label="bge-small-zh-v1.5（中文，推荐，约 400MB）" value="bge-small-zh-v1.5" />
-              <el-option label="text2vec-base-chinese（中文）" value="text2vec-base-chinese" />
-              <el-option label="all-MiniLM-L6-v2（英文，不适合中文语料）" value="all-MiniLM-L6-v2" />
-            </el-select>
+            <el-tag type="success" size="large">bge-small-zh-v1.5 · 本地中文模型</el-tag>
             <span class="form-hint">
-              <el-tag v-if="form.embeddingModel === 'all-MiniLM-L6-v2'" type="warning" size="small">
-                当前为英文模型，中文检索会失效
-              </el-tag>
-              <template v-else>中文教学语料请使用中文嵌入模型。</template>
+              当前索引固定使用该模型；切换模型需要重建全部索引，因此暂不提供无效的前端切换项。
             </span>
           </el-form-item>
 
@@ -301,11 +294,13 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import { resolveApiBaseURL } from '@/api/baseUrl'
 import { installDataFlowInterceptor } from '@/api/dataFlow'
+import { useAppStore } from '@/store/app'
 import {
   Cpu, Connection, Check, Delete, InfoFilled, Link, Refresh, DataLine, Collection
 } from '@element-plus/icons-vue'
 
 const api = axios.create({ baseURL: resolveApiBaseURL(), timeout: 60000 })
+const appStore = useAppStore()
 
 installDataFlowInterceptor(api)
 
@@ -320,7 +315,6 @@ const form = reactive({
   baseUrl: '',
   model: '',
   temperature: 0.7,
-  embeddingModel: 'bge-small-zh-v1.5',
   chunkSize: 500,
   topK: 5
 })
@@ -388,6 +382,8 @@ async function loadSavedConfig() {
   }
   if (res.data.provider) currentProvider.value = res.data.provider
   if (typeof res.data.temperature === 'number') form.temperature = res.data.temperature
+  if (typeof res.data.chunkSize === 'number') form.chunkSize = res.data.chunkSize
+  if (typeof res.data.topK === 'number') form.topK = res.data.topK
   syncFormToProvider()
 }
 
@@ -479,7 +475,6 @@ async function saveConfig() {
       apiKeys: { [currentProvider.value]: form.apiKey ? form.apiKey.trim() : '' },
       models: { [currentProvider.value]: form.model || '' },
       temperature: form.temperature,
-      embeddingModel: form.embeddingModel,
       chunkSize: form.chunkSize,
       topK: form.topK
     }
@@ -495,6 +490,7 @@ async function saveConfig() {
     }
     // 保存成功后立即回读，拿到掩码与生效状态
     await loadSavedConfig()
+    await appStore.fetchConfig()
     form.apiKey = ''
     ElMessage.success(
       res.data.has_api_key

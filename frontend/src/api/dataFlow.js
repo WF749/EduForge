@@ -70,8 +70,28 @@ export const dataFlowSummary = computed(() => {
 })
 
 function _read(h, key) {
-  const v = h?.[key]
+  const v = typeof h?.get === 'function' ? h.get(key) : h?.[key]
   return typeof v === 'string' && v.trim() ? v.trim() : ''
+}
+
+function _recordHeaders(headers, fallbackAction = 'pass') {
+  const level = _read(headers, HEADER_LEVEL)
+  if (!level) return
+  lastDataFlow.value = {
+    level,
+    route: _read(headers, HEADER_ROUTE),
+    egress: _read(headers, HEADER_EGRESS) === 'true',
+    action: _read(headers, HEADER_ACTION) || fallbackAction,
+    findings: _read(headers, HEADER_FINDINGS),
+    at: Date.now()
+  }
+}
+
+/** fetch 版本的同一观测入口；SSE 和原生 fetch 调用也不会漏掉响应头。 */
+export async function trackedFetch(input, init) {
+  const response = await fetch(input, init)
+  try { _recordHeaders(response.headers, response.ok ? 'pass' : 'block') } catch { /* 只观测 */ }
+  return response
 }
 
 /**
@@ -84,20 +104,7 @@ export function installDataFlowInterceptor(instance) {
   instance.interceptors.response.use(
     (response) => {
       try {
-        const h = response?.headers || {}
-        const level = _read(h, HEADER_LEVEL)
-        // 没有定级头 = 这次调用没经过合规判定（例如纯查询接口），不覆盖上一次结果
-        if (level) {
-          lastDataFlow.value = {
-            level,
-            route: _read(h, HEADER_ROUTE),
-            egress: _read(h, HEADER_EGRESS) === 'true',
-            action: _read(h, HEADER_ACTION) || 'pass',
-            // 只放类型与数量（后端保证不放原文），这里原样透传
-            findings: _read(h, HEADER_FINDINGS),
-            at: Date.now()
-          }
-        }
+        _recordHeaders(response?.headers || {}, 'pass')
       } catch {
         // 观测逻辑绝不阻断业务
       }
@@ -106,18 +113,7 @@ export function installDataFlowInterceptor(instance) {
     (error) => {
       // 403 阻断时 axios 走 error 分支，但响应头同样携带定级信息，必须也读一次
       try {
-        const h = error?.response?.headers || {}
-        const level = _read(h, HEADER_LEVEL)
-        if (level) {
-          lastDataFlow.value = {
-            level,
-            route: _read(h, HEADER_ROUTE),
-            egress: _read(h, HEADER_EGRESS) === 'true',
-            action: _read(h, HEADER_ACTION) || 'block',
-            findings: _read(h, HEADER_FINDINGS),
-            at: Date.now()
-          }
-        }
+        _recordHeaders(error?.response?.headers || {}, 'block')
       } catch {
         /* 同上 */
       }

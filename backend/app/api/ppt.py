@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks, UploadFile, File,
 from fastapi.responses import FileResponse, JSONResponse
 from typing import Optional, List, Dict, Tuple
 
+from ..document_extract import resolve_uploaded_references
 from ..paths import GENERATED_CW, BACKEND_DIR
 from ..services.ppt_content_generator import PPTContentGenerator
 from ..services.teaching_compliance import run_compliance_gate
@@ -242,6 +243,8 @@ async def generate_ppt(
     task.progress = 0
     generation_tasks[task_id] = task
     
+    reference_context = resolve_uploaded_references(reference_docs)
+
     # 启动后台任务
     background_tasks.add_task(
         _generate_ppt_task,
@@ -253,7 +256,7 @@ async def generate_ppt(
         theme_color,
         style_preference,
         key_points or [],
-        reference_docs or [],
+        reference_context,
         template
     )
     
@@ -310,6 +313,10 @@ async def _generate_ppt_task(task_id: str, topic: str, duration: int, audience: 
             print(f"生成图片关键词失败(不影响PPT生成): {e}")
         
         task.progress = 60
+        reference_labels = [
+            ref.split("\n", 1)[0].removeprefix("[").removesuffix("]")
+            for ref in reference_docs
+        ]
         ppt_content = {
             "outline": outline,
             "visual_style": visual_style,
@@ -324,7 +331,7 @@ async def _generate_ppt_task(task_id: str, topic: str, duration: int, audience: 
                 "key_points": key_points_eff,
                 "teaching_content": teaching_content,
                 "topic_expansion": expansion,
-                "reference_docs": reference_docs,
+                "reference_docs": reference_labels,
                 "template": template
             }
         }
@@ -392,7 +399,7 @@ async def _generate_ppt_task(task_id: str, topic: str, duration: int, audience: 
             "theme_color": theme_color,
             "style_preference": style_preference,
             "key_points": key_points_eff,
-            "reference_docs": reference_docs,
+            "reference_docs": reference_labels,
             "template": template,
             "files": {
                 "pptx": os.path.basename(pptx_path)

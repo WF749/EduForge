@@ -65,6 +65,7 @@ class GameGenerator:
             "game_name": game_data.get('name'),
             "description": game_data.get('description'),
             "rules": game_data.get('rules'),
+            "game_data": game_data,
             "html_path": html_path,
             "html_content": html_content,
             "task_dir": task_dir

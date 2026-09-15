@@ -1,6 +1,7 @@
 """课件生成相关API - 支持课件、游戏、动画下载"""
 import os
 import shutil
+from urllib.parse import quote
 from fastapi import APIRouter, Body, Query, Path, HTTPException
 from fastapi.responses import FileResponse
 from typing import Optional
@@ -108,7 +109,9 @@ async def generate_game(
             "game_name": result.get("game_name"),
             "description": result.get("description"),
             "rules": result.get("rules"),
+            "game_data": result.get("game_data"),
             "html_path": result.get("html_path"),
+            "html_content": result.get("html_content"),
             "task_dir": result.get("task_dir")
         }
 
@@ -145,12 +148,23 @@ async def get_game_types():
 
 @router.get("/courseware/game/download", tags=["课件-游戏"])
 async def download_game(
+    task_id: Optional[str] = Query(None, description="任务ID"),
     task_dir: Optional[str] = Query(None, description="任务目录"),
     topic: Optional[str] = Query(None, description="课程主题")
 ):
     """下载游戏文件"""
     try:
         file_path = None
+
+        if task_id and os.path.exists(GAMES_DIR):
+            suffix = f"_{task_id}"
+            for item in sorted(os.listdir(GAMES_DIR), reverse=True):
+                if not item.endswith(suffix):
+                    continue
+                candidate_dir = os.path.join(GAMES_DIR, item)
+                if os.path.isdir(candidate_dir):
+                    task_dir = candidate_dir
+                    break
 
         if task_dir and os.path.exists(task_dir):
             for f in os.listdir(task_dir):
@@ -194,23 +208,29 @@ async def download_game(
 @router.post("/courseware/animation/generate", tags=["课件-动画"])
 async def generate_animation(
     topic: str = Body(..., description="课程主题"),
+    subject: str = Body("general", description="学科类型"),
     audience: str = Body("大学生", description="目标受众"),
     teaching_content: str = Body("", description="教学内容（可选）"),
     duration: int = Body(5, description="动画时长（分钟）"),
-    style: str = Body("2D动画", description="动画风格：与 /animation/styles 一致"),
+    style: str = Body("auto", description="动画风格：与 /animation/styles 一致"),
     provider: Optional[str] = Body(None, description="LLM提供商")
 ):
     """生成动画演示"""
     try:
         generator = AnimationGenerator(output_dir=ANIMATIONS_DIR)
 
+        subject_name = {
+            "mathematics": "数学", "physics": "物理", "chemistry": "化学",
+            "biology": "生物", "geography": "地理", "general": "综合",
+        }.get(subject, subject)
+        content_with_subject = f"学科：{subject_name}\n{teaching_content}".strip()
         result = generator.generate(
             topic=topic,
             audience=audience,
-            teaching_content=teaching_content,
+            teaching_content=content_with_subject,
             duration=duration,
             provider=provider,
-            style=style or "2D动画",
+            style=style or "auto",
         )
 
         animation_payload = {
@@ -223,8 +243,8 @@ async def generate_animation(
             "html_content": result.get("html_content"),
             "task_dir": result.get("task_dir"),
             "generation_method": result.get("generation_method"),
-            "style_applied": style or "2D动画",
-            "subject": result.get("subject"),
+            "style_applied": "智能生成",
+            "subject": result.get("subject") or subject,
             "knowledge_points": result.get("knowledge_points", []),
             "scenes": result.get("scenes", []),
         }
@@ -262,12 +282,23 @@ async def get_animation_styles():
 
 @router.get("/courseware/animation/download", tags=["课件-动画"])
 async def download_animation(
+    task_id: Optional[str] = Query(None, description="任务ID"),
     task_dir: Optional[str] = Query(None, description="任务目录"),
     topic: Optional[str] = Query(None, description="课程主题")
 ):
     """下载动画文件"""
     try:
         file_path = None
+
+        if task_id and os.path.exists(ANIMATIONS_DIR):
+            suffix = f"_{task_id}"
+            for item in sorted(os.listdir(ANIMATIONS_DIR), reverse=True):
+                if not item.endswith(suffix):
+                    continue
+                candidate_dir = os.path.join(ANIMATIONS_DIR, item)
+                if os.path.isdir(candidate_dir):
+                    task_dir = candidate_dir
+                    break
 
         if task_dir and os.path.exists(task_dir):
             candidates = []
@@ -451,7 +482,12 @@ async def list_files(
     try:
         files = []
 
-        for dir_name, dir_label in [(OUTPUT_DIR, "课件"), (GAMES_DIR, "游戏"), (ANIMATIONS_DIR, "动画")]:
+        sources = [
+            (OUTPUT_DIR, "课件", "generated_courseware"),
+            (GAMES_DIR, "游戏", "generated_games"),
+            (ANIMATIONS_DIR, "动画", "generated_animations"),
+        ]
+        for dir_name, dir_label, mount_name in sources:
             if os.path.exists(dir_name):
                 for item in sorted(os.listdir(dir_name), reverse=True):
                     item_dir = os.path.join(dir_name, item)
@@ -462,19 +498,41 @@ async def list_files(
                         item_files = []
                         for f in os.listdir(item_dir):
                             if f.endswith(('.pptx', '.docx', '.json', '.html')):
+                                artifact_url = f"/{mount_name}/{quote(item)}/{quote(f)}"
                                 item_files.append({
                                     "name": f,
                                     "type": f.split('.')[-1],
-                                    "size": os.path.getsize(os.path.join(item_dir, f))
+                                    "size": os.path.getsize(os.path.join(item_dir, f)),
+                                    "download_url": artifact_url,
+                                    "preview_url": artifact_url if f.endswith('.html') else None,
                                 })
 
                         if item_files:
                             files.append({
                                 "dir": item,
                                 "label": dir_label,
-                                "path": item_dir,
+                                "delete_url": f"/api/courseware/files/{quote(item)}?source={quote(mount_name)}",
                                 "files": item_files
                             })
+
+        if os.path.exists(LESSON_PLANS_DIR):
+            for filename in sorted(os.listdir(LESSON_PLANS_DIR), reverse=True):
+                file_path = os.path.join(LESSON_PLANS_DIR, filename)
+                if not os.path.isfile(file_path) or not filename.endswith(('.docx', '.pdf', '.json')):
+                    continue
+                artifact_url = f"/api/lesson-plan/download?filename={quote(filename)}"
+                files.append({
+                    "dir": os.path.splitext(filename)[0],
+                    "label": "教案",
+                    "delete_url": None,
+                    "files": [{
+                        "name": filename,
+                        "type": filename.rsplit('.', 1)[-1],
+                        "size": os.path.getsize(file_path),
+                        "download_url": artifact_url,
+                        "preview_url": None,
+                    }],
+                })
 
         return {
             "success": True,
@@ -489,16 +547,29 @@ async def list_files(
 
 
 @router.delete("/courseware/files/{dir_name}", tags=["课件"])
-async def delete_generated_dir(dir_name: str):
+async def delete_generated_dir(
+    dir_name: str,
+    source: Optional[str] = Query(None, description="生成目录挂载名，可选"),
+):
     """删除指定的生成目录及其中所有文件"""
     import shutil
     try:
         deleted = False
-        for base_dir in [OUTPUT_DIR, GAMES_DIR, ANIMATIONS_DIR]:
+        source_dirs = {
+            "generated_courseware": OUTPUT_DIR,
+            "generated_games": GAMES_DIR,
+            "generated_animations": ANIMATIONS_DIR,
+        }
+        base_dirs = [source_dirs[source]] if source in source_dirs else [OUTPUT_DIR, GAMES_DIR, ANIMATIONS_DIR]
+        for base_dir in base_dirs:
             target = os.path.join(base_dir, dir_name)
             real_target = os.path.realpath(target)
             real_base = os.path.realpath(base_dir)
-            if not real_target.startswith(real_base):
+            try:
+                inside_base = os.path.commonpath([real_target, real_base]) == real_base
+            except ValueError:
+                inside_base = False
+            if not inside_base:
                 raise HTTPException(status_code=403, detail="路径无效")
             if os.path.isdir(real_target):
                 shutil.rmtree(real_target)

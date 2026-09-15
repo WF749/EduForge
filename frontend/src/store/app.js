@@ -247,9 +247,11 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  async function queryKnowledge(query, topK = 5) {
+  async function queryKnowledge(query, topK = null) {
     try {
-      const res = await api.post('/knowledge/query', { query, top_k: topK })
+      const payload = { query }
+      if (topK) payload.top_k = topK
+      const res = await api.post('/knowledge/query', payload)
       return res.data
     } catch (e) {
       console.error('查询知识库失败:', e)

@@ -228,9 +228,9 @@
             >
               <div class="result-header">
                 <span class="result-index">{{ index + 1 }}</span>
-                <el-tag v-if="result.score >= 0.8" type="success" size="small">高度相关</el-tag>
-                <el-tag v-else-if="result.score >= 0.5" type="warning" size="small">相关</el-tag>
-                <el-tag v-else type="info" size="small">低相关</el-tag>
+                <el-tag v-if="result.score >= 0.8" type="success" size="small">高匹配</el-tag>
+                <el-tag v-else-if="result.score >= 0.5" type="warning" size="small">中匹配</el-tag>
+                <el-tag v-else type="info" size="small">低匹配</el-tag>
                 <el-progress
                   :percentage="Math.round(result.score * 100)"
                   :stroke-width="4"
@@ -242,7 +242,7 @@
               <div class="result-content">{{ result.content }}</div>
               <div class="result-meta">
                 <el-icon :size="12"><Document /></el-icon>
-                来源: {{ result.metadata?.filename || result.metadata?.source || '未知' }}
+                来源: {{ result.source || result.metadata?.filename || result.metadata?.source || '未知' }}
               </div>
             </div>
           </div>
@@ -532,7 +532,7 @@ async function executeQuery() {
   querying.value = true
 
   try {
-    const res = await store.queryKnowledge(queryText.value, 5)
+    const res = await store.queryKnowledge(queryText.value)
     queryResults.value = res.results || []
   } catch (e) {
     ElMessage.error('检索失败')

@@ -460,15 +460,14 @@
               <template #prefix><el-icon><Edit /></el-icon></template>
             </el-input>
           </el-form-item>
+          <el-form-item label="学科">
+            <el-select v-model="requirements.subject" filterable allow-create style="width:100%">
+              <el-option v-for="subject in ['语文','数学','英语','物理','化学','生物','历史','地理','道德与法治','科学','信息科技','艺术','体育与健康']" :key="subject" :label="subject" :value="subject" />
+            </el-select>
+          </el-form-item>
           <el-form-item label="目标受众">
             <el-select v-model="requirements.target_audience" style="width:100%">
-              <el-option label="小学高年级" value="小学高年级" />
-              <el-option label="初中学生" value="初中学生" />
-              <el-option label="高中学生" value="高中学生" />
-              <el-option label="大一新生" value="大一新生" />
-              <el-option label="大二学生" value="大二学生" />
-              <el-option label="专业学生" value="专业学生" />
-              <el-option label="研究生" value="研究生" />
+              <el-option v-for="grade in ['一年级','二年级','三年级','四年级','五年级','六年级','七年级','八年级','九年级','高一','高二','高三']" :key="grade" :label="grade" :value="grade" />
             </el-select>
           </el-form-item>
           <el-form-item label="课时时长">
@@ -489,8 +488,6 @@
             <div class="gen-toggles">
               <el-checkbox v-model="requirements.include_ppt">📊 PPT课件</el-checkbox>
               <el-checkbox v-model="requirements.include_word">📝 Word教案</el-checkbox>
-              <el-checkbox v-model="requirements.include_animation">🎬 动画演示</el-checkbox>
-              <el-checkbox v-model="requirements.include_game">🎮 互动游戏</el-checkbox>
             </div>
           </el-form-item>
         </el-form>
@@ -498,7 +495,7 @@
           <el-button @click="showRequirements = false">继续对话</el-button>
           <el-button type="primary" @click="startGeneration">
             <el-icon><VideoPlay /></el-icon>
-            开始生成
+            进入生成中心
           </el-button>
         </div>
       </aside>
@@ -512,6 +509,7 @@ import { ref, reactive, nextTick, onMounted, onBeforeUnmount, onActivated, compu
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/store/app'
 import { resolveApiBaseURL } from '@/api/baseUrl'
+import { trackedFetch } from '@/api/dataFlow'
 import { ElMessage } from 'element-plus'
 import { marked } from 'marked'
 // 按需注册语言，避免把 highlight.js 全部 190+ 语言打进包（原 ChatView 产物 1MB）
@@ -646,14 +644,13 @@ const quickHints = [
 // ====== 需求表单 ======
 const requirements = reactive({
   topic: '',
-  target_audience: '大一新生',
+  subject: '数学',
+  target_audience: '七年级',
   duration: 45,
   difficulty: 'medium',
   key_points_text: '',
   include_ppt: true,
-  include_word: true,
-  include_animation: false,
-  include_game: false
+  include_word: true
 })
 
 // ====== 工具函数 ======
@@ -741,6 +738,14 @@ async function sendMessage() {
   const currentProvider = activeProvider?.provider || store.config.provider || 'demo'
   // 确保模型不为空，如果activeProvider.model为空，使用后端配置中的models[currentProvider]
   const currentModel = activeProvider?.model || store.config.models?.[currentProvider] || ''
+  const commonPayload = {
+    conversation_id: currentConversationId.value,
+    use_knowledge: useKnowledgeBase.value,
+    provider: currentProvider,
+    model: currentModel,
+    history: messages.value.slice(0, -1).map(({ role, content }) => ({ role, content })),
+    attachment_ids: uploadedFiles.value.map(file => file.file_id).filter(Boolean)
+  }
 
   // 确定端点和构建 payload（支持深度思考+智能搜索同时开启+识图）
   let endpoint = '/chat/stream'
@@ -752,10 +757,7 @@ async function sendMessage() {
     payload = {
       message: userMsg,
       image_base64: imageData,
-      conversation_id: currentConversationId.value,
-      use_knowledge: useKnowledgeBase.value,
-      provider: currentProvider,
-      model: currentModel
+      ...commonPayload
     }
   } else if (deepThinkingEnabled.value && smartSearchEnabled.value) {
     // 两者同时开启：先搜索获取资料，再深度思考分析
@@ -765,10 +767,7 @@ async function sendMessage() {
       query: userMsg,
       engine: 'baidu',
       top_k: 5,
-      conversation_id: currentConversationId.value,
-      use_knowledge: useKnowledgeBase.value,
-      provider: currentProvider,
-      model: currentModel
+      ...commonPayload
     }
   } else if (smartSearchEnabled.value) {
     endpoint = '/chat/search'
@@ -776,27 +775,18 @@ async function sendMessage() {
       query: userMsg,
       engine: 'baidu',
       top_k: 5,
-      conversation_id: currentConversationId.value,
-      use_knowledge: useKnowledgeBase.value,
-      provider: currentProvider,
-      model: currentModel
+      ...commonPayload
     }
   } else if (deepThinkingEnabled.value) {
     endpoint = '/chat/deep-thinking'
     payload = {
       message: userMsg,
-      conversation_id: currentConversationId.value,
-      use_knowledge: useKnowledgeBase.value,
-      provider: currentProvider,
-      model: currentModel
+      ...commonPayload
     }
   } else {
     payload = {
       message: userMsg,
-      conversation_id: currentConversationId.value,
-      use_knowledge: useKnowledgeBase.value,
-      provider: currentProvider,
-      model: currentModel
+      ...commonPayload
     }
   }
 
@@ -807,7 +797,7 @@ async function sendMessage() {
 
   let fullContent = ''
   try {
-    const resp = await fetch(resolveApiBaseURL() + endpoint, {
+    const resp = await trackedFetch(resolveApiBaseURL() + endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -879,7 +869,7 @@ async function saveHistory() {
   if (!currentConversationId.value || messages.value.length === 0) return
   try {
     const history = messages.value.map(m => ({ role: m.role, content: m.content, timestamp: m.timestamp }))
-    await fetch(`${resolveApiBaseURL()}/chat/history`, {
+    await trackedFetch(`${resolveApiBaseURL()}/chat/history`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ conversation_id: currentConversationId.value, history })
@@ -896,7 +886,7 @@ async function saveHistory() {
 
 async function loadHistory(convId) {
   try {
-    const resp = await fetch(`${resolveApiBaseURL()}/chat/history?conversation_id=${convId}`)
+    const resp = await trackedFetch(`${resolveApiBaseURL()}/chat/history?conversation_id=${convId}`)
     const data = await resp.json()
     if (data.success && data.history) {
       messages.value = data.history.map(m => ({
@@ -924,7 +914,7 @@ async function selectConversation(convId) {
 
 async function deleteConversation(convId) {
   try {
-    await fetch(`${resolveApiBaseURL()}/chat/history?conversation_id=${convId}`, { method: 'DELETE' })
+    await trackedFetch(`${resolveApiBaseURL()}/chat/history?conversation_id=${convId}`, { method: 'DELETE' })
   } catch {}
   const idx = conversations.value.findIndex(c => c.id === convId)
   if (idx > -1) conversations.value.splice(idx, 1)
@@ -934,7 +924,7 @@ async function deleteConversation(convId) {
 function clearCurrentChat() {
   messages.value = []
   if (currentConversationId.value) {
-    fetch(`${resolveApiBaseURL()}/chat/history?conversation_id=${currentConversationId.value}`, { method: 'DELETE' })
+    trackedFetch(`${resolveApiBaseURL()}/chat/history?conversation_id=${currentConversationId.value}`, { method: 'DELETE' })
   }
   ElMessage.success('已清空当前对话')
 }
@@ -1141,7 +1131,7 @@ async function summarizeRequirements() {
   }
   summarizing.value = true
   try {
-    const resp = await fetch(resolveApiBaseURL() + '/chat/summarize-requirements', {
+    const resp = await trackedFetch(resolveApiBaseURL() + '/chat/summarize-requirements', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ conversation_id: currentConversationId.value })
@@ -1211,7 +1201,7 @@ function copyMessage(content) {
 async function testConnection() {
   try {
     ElMessage.info('正在测试连接...')
-    const resp = await fetch(`${resolveApiBaseURL()}/llm/test-connection`, {
+    const resp = await trackedFetch(`${resolveApiBaseURL()}/llm/test-connection`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ provider: store.config?.llm_provider || 'demo', api_key: '', base_url: null })
@@ -1290,30 +1280,21 @@ function showRequirementPanel() {
 
 async function startGeneration() {
   if (!requirements.topic) { ElMessage.warning('请填写教学主题'); return }
-  requirements.key_points = requirements.key_points_text.split(/[,，]/).map(s => s.trim()).filter(Boolean)
-  const req = {
-    requirements: { topic: requirements.topic, target_audience: requirements.target_audience,
-      duration: requirements.duration, difficulty: requirements.difficulty,
-      key_points: requirements.key_points, include_ppt: requirements.include_ppt,
-      include_word: requirements.include_word, include_animation: requirements.include_animation,
-      include_game: requirements.include_game },
-    reference_files: uploadedFiles.value.map(f => f.file_id),
-    conversation_id: currentConversationId.value
-  }
-  try {
-    const res = await store.generateCourseware(req)
-    ElMessage.success('课件生成任务已创建')
-    // 传递完整结果数据到预览页（与CoursewareView保持一致）
-    const taskId = res.task_id || ('task_' + Date.now())
-    router.push({
-      path: `/preview/${taskId}`,
-      query: {
-        courseware: JSON.stringify(res.result || res)
-      }
-    })
-  } catch (e) {
-    ElMessage.error('生成失败: ' + (e.message || '请重试'))
-  }
+  router.push({
+    path: '/courseware',
+    query: {
+      topic: requirements.topic,
+      subject: requirements.subject,
+      audience: requirements.target_audience,
+      duration: requirements.duration,
+      difficulty: requirements.difficulty,
+      key_points: requirements.key_points_text,
+      reference_files: uploadedFiles.value.map(file => file.file_id).filter(Boolean).join(','),
+      reference_names: uploadedFiles.value.map(file => file.filename || file.file_id).join(','),
+      include_ppt: requirements.include_ppt,
+      include_word: requirements.include_word
+    }
+  })
 }
 
 function goSettings() { router.push('/settings') }
@@ -1368,6 +1349,7 @@ onMounted(async () => {
 // keep-alive 激活时刷新会话列表
 onActivated(async () => {
   try {
+    await store.fetchConfig()
     const data = await store.getConversations()
     if (data?.conversations) conversations.value = data.conversations
   } catch {}
