@@ -4,6 +4,8 @@
 from fastapi import APIRouter, Body, Query, Path, HTTPException
 from fastapi.responses import FileResponse
 from typing import Optional, List, Dict, Any
+from urllib.parse import quote
+from ..document_extract import resolve_uploaded_references
 from ..paths import GENERATED_LP
 from ..services.llm_lesson_plan_all_stages import LessonPlanGenerator
 from ..services.university_major_config import UniversityMajorConfig
@@ -190,7 +192,8 @@ async def export_lesson_plan(
             "success": True,
             "message": "教案导出成功",
             "file_path": file_path,
-            "filename": filename
+            "filename": filename,
+            "download_url": f"/api/lesson-plan/download?filename={quote(filename)}",
         }
 
     except Exception as e:
@@ -240,18 +243,25 @@ async def generate_full_lesson_plan(
     grade: str = Body(..., description="年级/课型"),
     topic: str = Body(..., description="教学主题"),
     duration: int = Body(45, description="授课时长（分钟）"),
-    requirements: str = Body("", description="补充需求")
+    requirements: str = Body("", description="补充需求"),
+    reference_files: Optional[List[str]] = Body(None, description="上传参考资料的文件ID")
 ):
     """完整教案生成流程"""
     try:
         # 阶段1：需求解析与合规校验
+        reference_text = "\n\n".join(resolve_uploaded_references(reference_files))
+        effective_requirements = requirements
+        if reference_text:
+            effective_requirements = (
+                f"{requirements}\n\n【参考资料摘录】\n{reference_text}"
+            ).strip()
         requirements_result = lesson_plan_generator.analyze_requirements(
             level=level,
             subject=subject,
             grade=grade,
             topic=topic,
             duration=duration,
-            requirements=requirements
+            requirements=effective_requirements
         )
 
         # 阶段2：教案结构化大纲生成
@@ -391,7 +401,10 @@ async def download_lesson_plan(
 ):
     """下载生成的教案文件"""
     try:
-        file_path = os.path.join(LESSON_PLAN_DIR, filename)
+        safe_name = os.path.basename(filename)
+        if safe_name != filename:
+            raise HTTPException(status_code=400, detail="文件名无效")
+        file_path = os.path.join(LESSON_PLAN_DIR, safe_name)
 
         if not os.path.exists(file_path):
             raise HTTPException(status_code=404, detail="文件不存在")

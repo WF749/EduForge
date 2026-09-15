@@ -15,9 +15,25 @@ load_dotenv(_PROJECT / ".env")
 _HTTP_TIMEOUT = httpx.Timeout(180.0, connect=30.0)
 
 
+def _history_from_payload(body: Dict[str, Any]) -> List[Dict[str, Any]]:
+    history = body.get("history")
+    if not isinstance(history, list):
+        return []
+    messages: List[Dict[str, Any]] = []
+    for item in history[-20:]:
+        if not isinstance(item, dict) or item.get("role") not in ("user", "assistant"):
+            continue
+        content = item.get("content")
+        if isinstance(content, str) and content.strip():
+            messages.append({"role": item["role"], "content": content.strip()[:12_000]})
+    return messages
+
+
 def _messages_from_payload(body: Dict[str, Any]) -> List[Dict[str, Any]]:
+    messages = _history_from_payload(body)
     msg = (body.get("message") or "").strip()
-    return [{"role": "user", "content": msg}]
+    messages.append({"role": "user", "content": msg})
+    return messages
 
 
 # ---------------------------------------------------------------------------
@@ -98,7 +114,7 @@ def _messages_multimodal(body: Dict[str, Any]) -> List[Dict[str, Any]]:
         {"type": "image_url", "image_url": {"url": img_url}},
         {"type": "text", "text": user_text},
     ]
-    return [{"role": "user", "content": content}]
+    return [*_history_from_payload(body), {"role": "user", "content": content}]
 
 
 async def stream_chat_completion(body: Dict[str, Any]) -> AsyncIterator[str]:

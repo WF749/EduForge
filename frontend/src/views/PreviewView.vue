@@ -5,14 +5,14 @@
       <div class="preview-header">
         <div class="header-left">
           <el-button :icon="ArrowLeft" @click="goBack">返回</el-button>
-          <h1>课件预览</h1>
+          <h1>PPT内容预览</h1>
         </div>
         <div class="header-right">
-          <el-button v-if="taskStatus === 'completed'" type="primary" @click="downloadFile('pptx')">
+          <el-button v-if="taskStatus === 'completed' && hasPptxFile" type="primary" @click="downloadFile('pptx')">
             <el-icon><Download /></el-icon>
             下载PPT
           </el-button>
-          <el-button v-if="taskStatus === 'completed'" @click="downloadFile('docx')">
+          <el-button v-if="taskStatus === 'completed' && hasDocxFile" @click="downloadFile('docx')">
             <el-icon><Download /></el-icon>
             下载教案
           </el-button>
@@ -208,7 +208,7 @@
       </div>
 
       <!-- 生成中状态 -->
-      <div v-else-if="taskStatus === 'processing'" class="generating-state">
+      <div v-else-if="!['completed', 'failed'].includes(taskStatus)" class="generating-state">
         <div class="generating-animation">
           <div class="pulse-ring"></div>
           <div class="pulse-ring delay"></div>
@@ -290,6 +290,12 @@ const hasAnimation = computed(() => {
 
 const hasGame = computed(() => {
   return gameResult.value || gameContent.value
+})
+
+const hasDocxFile = computed(() => !!coursewareData.value?.files?.docx)
+const hasPptxFile = computed(() => {
+  const data = coursewareData.value || {}
+  return !!(data.files?.pptx || data.pptx_path)
 })
 
 // 进度颜色
@@ -522,59 +528,15 @@ async function loadPreview() {
                 })
               })
             } else {
-              // 创建默认幻灯片
-              parsedSlides.push({
-                slide_id: 'slide_0',
-                slide_number: 1,
-                type: 'cover',
-                title: pptContent.topic || pptContent.title || '课件',
-                content: `面向${pptContent.audience || '未知受众'}的课程\n时长: ${pptContent.duration || 45}分钟`
-              })
-              parsedSlides.push({
-                slide_id: 'slide_1',
-                slide_number: 2,
-                type: 'content',
-                title: '课程内容',
-                content: '课程内容将在这里显示'
-              })
-              parsedSlides.push({
-                slide_id: 'slide_2',
-                slide_number: 3,
-                type: 'summary',
-                title: '课程总结',
-                content: '本课程涵盖了相关知识点，希望对您有所帮助！'
-              })
+              throw new Error('PPT内容中没有可展示的幻灯片')
             }
           }
-          // 默认格式: 创建多张幻灯片
           else {
-            console.log('使用默认格式解析...')
-            // 创建封面幻灯片
-            parsedSlides.push({
-              slide_id: 'slide_0',
-              slide_number: 1,
-              type: 'cover',
-              title: courseware.topic || '课件',
-              content: `面向${courseware.audience || '未知受众'}的课程\n时长: ${courseware.duration || 45}分钟`
-            })
-            
-            // 创建内容幻灯片
-            parsedSlides.push({
-              slide_id: 'slide_1',
-              slide_number: 2,
-              type: 'content',
-              title: '课程内容',
-              content: typeof pptContent === 'string' ? pptContent.substring(0, 500) + (pptContent.length > 500 ? '...' : '') : '课程内容将在这里显示'
-            })
-            
-            // 创建总结幻灯片
-            parsedSlides.push({
-              slide_id: 'slide_2',
-              slide_number: 3,
-              type: 'summary',
-              title: '课程总结',
-              content: '本课程涵盖了相关知识点，希望对您有所帮助！'
-            })
+            throw new Error('PPT内容格式无法解析')
+          }
+
+          if (parsedSlides.length === 0) {
+            throw new Error('PPT内容中没有可展示的幻灯片')
           }
           
           console.log('解析完成，共', parsedSlides.length, '张幻灯片')
@@ -632,34 +594,7 @@ async function loadPreview() {
             subtitle.value = '请等待后端完成 PPT 任务'
             console.log('仅有 task_id，等待轮询 /ppt/status')
           } else {
-            console.log('没有找到ppt_content，使用默认幻灯片')
-            slides.value = [
-              {
-                slide_id: 'slide_0',
-                slide_number: 1,
-                type: 'cover',
-                title: '课件',
-                content: '课程内容将在这里显示'
-              },
-              {
-                slide_id: 'slide_1',
-                slide_number: 2,
-                type: 'content',
-                title: '课程内容',
-                content: '课程内容将在这里显示'
-              },
-              {
-                slide_id: 'slide_2',
-                slide_number: 3,
-                type: 'summary',
-                title: '课程总结',
-                content: '本课程涵盖了相关知识点，希望对您有所帮助！'
-              }
-            ]
-            title.value = '课件'
-            subtitle.value = '通用课程'
-            taskStatus.value = 'completed'
-            console.log('使用默认幻灯片，状态设置为completed')
+            throw new Error('没有找到可预览的PPT内容')
           }
         }
       } catch (e) {
@@ -669,14 +604,19 @@ async function loadPreview() {
       }
     } else {
       // 从后端获取预览数据
-      const preview = await store.previewCourseware(route.params.taskId)
-      
-      if (preview) {
-        title.value = preview.title
-        subtitle.value = preview.subtitle
-        slides.value = preview.slides || []
-        taskStatus.value = 'completed'
+      const response = await pptApi.get(`/ppt/preview/${route.params.taskId}`)
+      const pptContent = response.data?.ppt_data
+      if (!response.data?.success || !pptContent) throw new Error('没有找到该PPT任务')
+      coursewareData.value = { task_id: route.params.taskId, ppt_content: pptContent }
+      const metadata = pptContent.metadata || {}
+      title.value = metadata.topic || '课件'
+      subtitle.value = `面向${metadata.audience || '学生'}的${metadata.subject || '通用'}课程`
+      const directSlides = pptContent.detailed_content || pptContent.slides || []
+      if (!Array.isArray(directSlides) || directSlides.length === 0) {
+        throw new Error('PPT内容中没有可展示的幻灯片')
       }
+      updateSlidesFromContent(directSlides)
+      taskStatus.value = 'completed'
     }
   } catch (e) {
     error.value = '加载失败，请稍后重试'
@@ -740,8 +680,11 @@ async function downloadFile(format) {
 
     // 处理动画下载
     if (format === 'animation') {
-      if (animationResult.value?.html_path) {
-        window.open(`/api/courseware/animation/download?task_dir=${encodeURIComponent(animationResult.value.task_dir)}`, '_blank')
+      if (animationResult.value?.task_id) {
+        window.open(`${resolveApiBaseURL()}/courseware/animation/download?task_id=${encodeURIComponent(animationResult.value.task_id)}`, '_blank')
+        ElMessage.success('动画文件下载中...')
+      } else if (animationResult.value?.html_path) {
+        window.open(`${resolveApiBaseURL()}/courseware/animation/download?task_dir=${encodeURIComponent(animationResult.value.task_dir)}`, '_blank')
         ElMessage.success('动画文件下载中...')
       } else {
         ElMessage.warning('动画文件尚未生成')
@@ -751,8 +694,11 @@ async function downloadFile(format) {
 
     // 处理游戏下载
     if (format === 'game') {
-      if (gameResult.value?.html_path) {
-        window.open(`/api/courseware/game/download?task_dir=${encodeURIComponent(gameResult.value.task_dir)}`, '_blank')
+      if (gameResult.value?.task_id) {
+        window.open(`${resolveApiBaseURL()}/courseware/game/download?task_id=${encodeURIComponent(gameResult.value.task_id)}`, '_blank')
+        ElMessage.success('游戏文件下载中...')
+      } else if (gameResult.value?.html_path) {
+        window.open(`${resolveApiBaseURL()}/courseware/game/download?task_dir=${encodeURIComponent(gameResult.value.task_dir)}`, '_blank')
         ElMessage.success('游戏文件下载中...')
       } else {
         ElMessage.warning('游戏文件尚未生成')
@@ -760,24 +706,23 @@ async function downloadFile(format) {
       return
     }
 
-    // 处理PPT下载 - 优先使用task_dir（文件系统可靠），回退到task_id
+    // 处理PPT下载：使用真实任务 ID，避免让浏览器提交本机文件路径
     if (format === 'pptx') {
-      if (courseware.task_dir) {
-        const topicParam = encodeURIComponent(courseware.topic || '')
-        const taskDirParam = encodeURIComponent(courseware.task_dir)
-        window.open(`/api/courseware/download/pptx?task_dir=${taskDirParam}&topic=${topicParam}`, '_blank')
-        ElMessage.success('PPT文件下载中...')
-        return
-      } else if (courseware.task_id) {
-        window.open(`/api/ppt/download/${courseware.task_id}`, '_blank')
+      const taskId = courseware.task_id || route.params.taskId
+      if (taskId) {
+        window.open(`${resolveApiBaseURL()}/ppt/download/${encodeURIComponent(taskId)}`, '_blank')
         ElMessage.success('PPT文件下载中...')
         return
       }
     }
     
-    // 处理DOCX下载 - 优先使用task_dir（与PPT一致），回退到files字段
+    // 处理DOCX下载：优先使用教案导出接口返回的精确地址
     if (format === 'docx') {
-      if (courseware.task_dir) {
+      if (courseware.files?.docx && /^(https?:|\/)/.test(courseware.files.docx)) {
+        window.open(courseware.files.docx, '_blank')
+        ElMessage.success('教案文件下载中...')
+        return
+      } else if (courseware.task_dir) {
         const topicParam = encodeURIComponent(courseware.topic || '')
         const taskDirParam = encodeURIComponent(courseware.task_dir)
         window.open(`/api/courseware/download/docx?task_dir=${taskDirParam}&topic=${topicParam}`, '_blank')
@@ -790,36 +735,7 @@ async function downloadFile(format) {
       }
     }
 
-    // 如果没有真实文件，生成HTML格式作为备选
-    let content = ''
-    let fileName = `${courseware.topic || '课件'}`
-    let mimeType = 'text/html'
-
-    switch (format) {
-      case 'pptx':
-        fileName += '_幻灯片.html'
-        content = generateSlidesHTML(courseware)
-        break
-      case 'docx':
-        fileName += '_教案.html'
-        content = generateLessonPlanHTML(courseware)
-        break
-      default:
-        ElMessage.error('不支持的文件格式')
-        return
-    }
-
-    const blob = new Blob([content], { type: mimeType })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = fileName
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-
-    ElMessage.success(`文件已开始下载：${fileName}`)
+    ElMessage.warning(`当前任务没有可下载的${format === 'pptx' ? 'PPTX' : 'DOCX'}文件`)
   } catch (e) {
     console.error('下载文件失败:', e)
     ElMessage.error('下载文件失败')
@@ -1284,10 +1200,9 @@ function generateGameHTML(courseware) {
 
 // 获取当前任务ID
 function getTaskId() {
-  if (route.params.taskId) return route.params.taskId
   const cw = coursewareData.value
   if (cw && cw.task_id) return cw.task_id
-  return null
+  return route.params.taskId || null
 }
 
 // 提交修改 - 调用后端LLM驱动的PPT优化

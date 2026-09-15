@@ -112,7 +112,7 @@
             </div>
             <h3>正在生成动画方案...</h3>
             <p>AI正在设计动画分镜脚本和角色，请稍候</p>
-            <el-progress :percentage="progress" :stroke-width="8" :show-text="true" status="primary" />
+            <el-progress :percentage="progress" :stroke-width="8" :indeterminate="generating" :show-text="!generating" status="primary" />
           </div>
 
           <!-- 结果 -->
@@ -259,6 +259,7 @@ import { ref, reactive, watch, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { resolveApiBaseURL } from '@/api/baseUrl'
+import { trackedFetch } from '@/api/dataFlow'
 import { renderMathInText } from '@/utils/mathRender'
 import ComplianceReport from '@/components/ComplianceReport.vue'
 import 'katex/dist/katex.min.css'
@@ -438,20 +439,15 @@ async function generateAnimation() {
 
   generating.value = true
   result.value = null
-  progress.value = 0
-
-  const progressTimer = setInterval(() => {
-    if (progress.value < 90) {
-      progress.value += Math.random() * 8 + 2
-    }
-  }, 500)
+  progress.value = 50
 
   try {
-    const response = await fetch(`${resolveApiBaseURL()}/courseware/animation/generate`, {
+    const response = await trackedFetch(`${resolveApiBaseURL()}/courseware/animation/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         topic: form.topic,
+        subject: form.subject,
         audience: form.audience,
         teaching_content: form.teaching_content || form.topic,
         duration: form.duration
@@ -471,7 +467,6 @@ async function generateAnimation() {
     console.error('动画生成失败:', e)
     ElMessage.error('动画生成失败，请检查网络连接')
   } finally {
-    clearInterval(progressTimer)
     generating.value = false
   }
 }

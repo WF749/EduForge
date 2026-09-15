@@ -1,9 +1,11 @@
 """Extract plain text from uploaded files (fast path first, then fallbacks)."""
 from pathlib import Path
+from typing import Iterable, List
 
 # 控制解析量：避免超大 PDF 阻塞请求
 MAX_PDF_PAGES = 60
 MAX_TOTAL_CHARS = 400_000
+MAX_REFERENCE_CHARS = 24_000
 
 
 def extract_text(path: Path) -> str:
@@ -17,6 +19,35 @@ def extract_text(path: Path) -> str:
     if suf in (".pptx", ".ppt"):
         return _pptx(path)
     return _cap(_read_utf8(path))
+
+
+def resolve_uploaded_references(
+    references: Iterable[str] | None,
+    *,
+    max_chars: int = MAX_REFERENCE_CHARS,
+) -> List[str]:
+    """把上传文件 ID 解析成有来源标记的文本，普通文本保持兼容。"""
+    from . import persist
+
+    registry = persist.load_file_registry().get("files") or {}
+    resolved: List[str] = []
+    remaining = max(0, int(max_chars))
+    for raw in references or []:
+        value = str(raw or "").strip()
+        if not value or remaining <= 0:
+            continue
+        meta = registry.get(value)
+        if meta:
+            path = Path(meta.get("path") or "")
+            text = extract_text(path) if path.is_file() else ""
+            if not text.strip():
+                continue
+            name = Path(meta.get("filename") or path.name).name
+            value = f"[参考资料：{name}]\n{text.strip()}"
+        piece = value[:remaining]
+        resolved.append(piece)
+        remaining -= len(piece)
+    return resolved
 
 
 def _cap(s: str) -> str:

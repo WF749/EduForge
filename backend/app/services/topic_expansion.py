@@ -164,7 +164,10 @@ def enrich_for_ppt(
     """
     kp_in = [str(x).strip() for x in (key_points or []) if str(x).strip()]
     base_tc = " ".join(kp_in)
-    ref = ", ".join(str(x) for x in (reference_docs or []) if x)
+    refs = [str(x).strip() for x in (reference_docs or []) if str(x).strip()]
+    ref = "\n\n".join(refs)
+    if ref:
+        base_tc = f"{base_tc}\n\n【参考资料摘录】\n{ref}".strip()
 
     expansion: Dict[str, Any] = {}
     if _is_sparse(kp_in, base_tc):

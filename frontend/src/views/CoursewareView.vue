@@ -7,7 +7,7 @@
           <el-icon :size="28"><VideoPlay /></el-icon>
           课件智能生成中心
         </h1>
-        <p class="subtitle">输入课程信息，AI一键生成PPT课件、Word教案、动画创意、互动游戏</p>
+        <p class="subtitle">输入准确的课程信息，按需生成PPT课件和Word教案</p>
       </div>
 
       <!-- 主内容区域 -->
@@ -30,24 +30,22 @@
               </el-form-item>
 
               <div class="form-grid">
-                <el-form-item label="目标受众">
-                  <el-select v-model="form.target_audience" size="large">
-                    <el-option label="小学生" value="小学生" />
-                    <el-option label="初中生" value="初中生" />
-                    <el-option label="高中生" value="高中生" />
-                    <el-option label="大一新生" value="大一新生" />
-                    <el-option label="大二学生" value="大二学生" />
-                    <el-option label="专业学生" value="专业学生" />
-                    <el-option label="研究生" value="研究生" />
-                    <el-option label="在职人员" value="在职人员" />
-                    <el-option label="公众" value="公众" />
+                <el-form-item label="学科" required>
+                  <el-select v-model="form.subject" size="large" filterable allow-create>
+                    <el-option v-for="subject in subjectOptions" :key="subject" :label="subject" :value="subject" />
                   </el-select>
                 </el-form-item>
 
-                <el-form-item label="课时时长">
-                  <el-input-number v-model="form.duration" :min="15" :max="180" :step="15" size="large" />
+                <el-form-item label="年级" required>
+                  <el-select v-model="form.target_audience" size="large">
+                    <el-option v-for="grade in gradeOptions" :key="grade" :label="grade" :value="grade" />
+                  </el-select>
                 </el-form-item>
               </div>
+
+              <el-form-item label="课时时长">
+                <el-input-number v-model="form.duration" :min="15" :max="180" :step="15" size="large" />
+              </el-form-item>
             </el-form>
           </div>
 
@@ -73,7 +71,7 @@
               </el-form-item>
 
               <!-- 参考文档上传 -->
-              <el-form-item label="参考文档 / 模板上传（可选）">
+              <el-form-item label="参考资料上传（可选）">
                 <el-upload
                   class="upload-demo"
                   drag
@@ -89,30 +87,10 @@
                   <div class="el-upload__text">拖拽文件到此处或 <em>点击上传</em></div>
                   <template #tip>
                     <div class="el-upload__tip">
-                      支持 PDF、Word、PPTX、TXT 格式，上传PPTX/DOCX可智能识别模板类型
+                      支持 PDF、Word、PPTX、TXT；生成时会读取其中可提取的文字内容
                     </div>
                   </template>
                 </el-upload>
-                <!-- 模板识别结果 -->
-                <div v-if="detectedTemplate" class="template-detected">
-                  <el-alert
-                    :title="detectedTemplate.title"
-                    :description="detectedTemplate.details"
-                    :type="detectedTemplate.alertType"
-                    show-icon
-                    :closable="false"
-                  />
-                  <el-button
-                    v-if="detectedTemplate.suggested_template"
-                    type="primary"
-                    size="small"
-                    plain
-                    style="margin-top: 8px;"
-                    @click="applyDetectedTemplate"
-                  >
-                    应用识别的模板类型
-                  </el-button>
-                </div>
               </el-form-item>
 
               <div class="form-grid">
@@ -124,18 +102,6 @@
                   </el-select>
                 </el-form-item>
 
-                <el-form-item label="风格偏好">
-                  <el-select v-model="form.style" size="large">
-                    <el-option label="专业严谨" value="professional" />
-                    <el-option label="轻松活泼" value="casual" />
-                    <el-option label="简洁清晰" value="minimal" />
-                    <el-option label="科技感" value="tech" />
-                    <el-option label="商务正式" value="business" />
-                    <el-option label="创意艺术" value="creative" />
-                    <el-option label="学术研究" value="academic" />
-                    <el-option label="教育培训" value="educational" />
-                  </el-select>
-                </el-form-item>
               </div>
             </el-form>
           </div>
@@ -148,7 +114,7 @@
 
             <el-form label-position="top" size="large">
               <div class="form-grid">
-                <el-form-item label="主题色">
+                <el-form-item label="PPT主题色">
                   <el-select v-model="form.theme_color" size="large">
                     <el-option label="蓝色系" value="蓝色系" />
                     <el-option label="绿色系" value="绿色系" />
@@ -158,18 +124,6 @@
                   </el-select>
                 </el-form-item>
 
-                <el-form-item label="PPT模板">
-                  <el-select v-model="form.ppt_template" size="large">
-                    <el-option label="标准教学" value="standard" />
-                    <el-option label="互动教学" value="interactive" />
-                    <el-option label="实验教学" value="experimental" />
-                    <el-option label="学术讲座" value="lecture" />
-                    <el-option label="商务演示" value="business" />
-                    <el-option label="科技前沿" value="tech" />
-                    <el-option label="艺术设计" value="art" />
-                    <el-option label="教育培训" value="education" />
-                  </el-select>
-                </el-form-item>
               </div>
             </el-form>
           </div>
@@ -236,7 +190,7 @@
             <!-- 生成过程可视化窗口 -->
             <div class="generation-visualization">
               <div class="visualization-header">
-                <h4><el-icon><VideoCamera /></el-icon> PPT制作过程</h4>
+                <h4><el-icon><VideoCamera /></el-icon> 实际任务进度</h4>
               </div>
               <div class="visualization-body">
                 <div v-if="currentSlide" class="slide-preview">
@@ -252,7 +206,7 @@
                 </div>
                 <div v-else class="preview-loading">
                   <el-icon class="is-loading"><Loading /></el-icon>
-                  <p>正在准备幻灯片...</p>
+                  <p>正在等待后端返回真实生成状态...</p>
                 </div>
               </div>
             </div>
@@ -306,14 +260,6 @@
                 <el-icon><Files /></el-icon>
                 <span>Word教案</span>
               </div>
-              <div class="feature-item">
-                <el-icon><VideoCamera /></el-icon>
-                <span>动画创意</span>
-              </div>
-              <div class="feature-item">
-                <el-icon><Connection /></el-icon>
-                <span>互动游戏</span>
-              </div>
             </div>
           </div>
 
@@ -322,20 +268,17 @@
             <div class="result-header">
               <h3>
                 <el-icon><SuccessFilled /></el-icon>
-                生成完成！
+                 {{ currentResult.generation_errors?.length ? '部分内容已完成' : '生成完成' }}
               </h3>
               <p>{{ currentResult.topic || '课件' }}</p>
-              <el-button size="small" @click="openFileLocation">
-                <el-icon><Folder /></el-icon> 打开文件所在目录
+              <el-button size="small" @click="router.push('/history')">
+                <el-icon><Folder /></el-icon> 查看历史作品
               </el-button>
             </div>
 
             <!-- 出厂质检报告：后端生成完成时已附带，纯规则离线扫描 -->
-            <ComplianceReport
-              v-if="currentResult.compliance"
-              :report="currentResult.compliance"
-              label="本次课件"
-            />
+            <ComplianceReport v-if="currentResult.compliance_reports?.ppt" :report="currentResult.compliance_reports.ppt" label="PPT课件" />
+            <ComplianceReport v-if="currentResult.compliance_reports?.lesson_plan" :report="currentResult.compliance_reports.lesson_plan" label="Word教案" />
 
             <!-- 文件卡片列表 -->
             <div class="result-files">
@@ -349,9 +292,10 @@
                   <span class="file-size">{{ currentResult.files?.pptx ? '已生成' : '内容已生成' }}</span>
                 </div>
                 <div class="file-actions">
-                  <el-button type="primary" size="small" @click="downloadFile('pptx')">
+                  <el-button v-if="currentResult.files?.pptx" type="primary" size="small" @click="downloadFile('pptx')">
                     <el-icon><Download /></el-icon> 下载
                   </el-button>
+                  <el-tag v-else size="small" type="warning">内容已生成，文件不可用</el-tag>
                   <el-button size="small" @click="previewFile('pptx')">
                     <el-icon><View /></el-icon> 预览
                   </el-button>
@@ -368,12 +312,10 @@
                   <span class="file-size">{{ currentResult.files?.docx ? '已生成' : '内容已生成' }}</span>
                 </div>
                 <div class="file-actions">
-                  <el-button type="primary" size="small" @click="downloadFile('docx')">
+                  <el-button v-if="currentResult.files?.docx" type="primary" size="small" @click="downloadFile('docx')">
                     <el-icon><Download /></el-icon> 下载
                   </el-button>
-                  <el-button size="small" @click="previewFile('docx')">
-                    <el-icon><View /></el-icon> 预览
-                  </el-button>
+                  <el-tag v-else size="small" type="warning">待重新导出</el-tag>
                 </div>
               </div>
 
@@ -448,7 +390,7 @@
                 <el-icon><Plus /></el-icon>
                 生成新课
               </el-button>
-              <el-button type="primary" size="large" @click="viewFullPreview">
+              <el-button v-if="hasPptContent" type="primary" size="large" @click="viewFullPreview">
                 <el-icon><View /></el-icon>
                 完整预览
               </el-button>
@@ -476,6 +418,7 @@ import {
   VideoCamera, UploadFilled, Folder
 } from '@element-plus/icons-vue'
 import ComplianceReport from '@/components/ComplianceReport.vue'
+import { trackedFetch } from '@/api/dataFlow'
 
 // Palette 图标可能不存在于 element-plus, 使用 Setting 作为后备
 const Palette = Setting
@@ -486,22 +429,21 @@ const store = useAppStore()
 // 表单数据
 const form = reactive({
   topic: '',
-  target_audience: '大一新生',
+  subject: '数学',
+  target_audience: '七年级',
   duration: 45,
   difficulty: 'medium',
-  style: 'professional',
   key_points_text: '',
   theme_color: '蓝色系',
-  ppt_template: 'standard',
   include_ppt: true,
   include_word: true
 })
 
+const subjectOptions = ['语文', '数学', '英语', '物理', '化学', '生物', '历史', '地理', '道德与法治', '科学', '信息科技', '艺术', '体育与健康']
+const gradeOptions = ['一年级', '二年级', '三年级', '四年级', '五年级', '六年级', '七年级', '八年级', '九年级', '高一', '高二', '高三']
+
 // 上传文件状态
 const uploadedFiles = ref([])
-
-// 模板识别状态
-const detectedTemplate = ref(null)
 
 // 生成状态
 const generating = ref(false)
@@ -639,47 +581,12 @@ function handleUploadSuccess(response) {
     ElMessage.success('文件上传成功')
     uploadedFiles.value.push({
       name: response.filename,
+      file_id: response.file_id,
       url: response.filename
     })
-    
-    // 处理模板智能识别结果
-    if (response.template_info) {
-      const info = response.template_info
-      const templateTypeMap = {
-        'ppt_template': { title: 'PPT课件模板', alertType: 'success' },
-        'lesson_plan_template': { title: '教案模板', alertType: 'info' },
-        'document_template': { title: '文档模板', alertType: 'warning' },
-      }
-      const typeConfig = templateTypeMap[info.template_type] || { title: '未知模板', alertType: 'warning' }
-      
-      detectedTemplate.value = {
-        title: `智能识别: ${typeConfig.title} (置信度 ${info.confidence}%)`,
-        details: info.details || '',
-        alertType: typeConfig.alertType,
-        template_type: info.template_type,
-        suggested_template: info.suggested_template || 'standard',
-        file_format: info.file_format || '',
-      }
-      
-      ElMessage.info(`已智能识别为${typeConfig.title}，可点击应用模板类型`)
-    }
   } else {
     ElMessage.error('文件上传失败: ' + response.message)
   }
-}
-
-// 应用识别的模板类型
-function applyDetectedTemplate() {
-  if (!detectedTemplate.value) return
-  const suggested = detectedTemplate.value.suggested_template
-  const templateNameMap = {
-    'standard': '标准教学',
-    'interactive': '互动教学',
-    'experimental': '实验教学',
-    'lecture': '学术讲座',
-  }
-  form.ppt_template = suggested
-  ElMessage.success(`已应用模板: ${templateNameMap[suggested] || suggested}`)
 }
 
 // 处理文件上传失败
@@ -691,384 +598,195 @@ function handleUploadError(error) {
 // 重置表单
 function resetForm() {
   form.topic = ''
-  form.target_audience = '大一新生'
+  form.subject = '数学'
+  form.target_audience = '七年级'
   form.duration = 45
   form.difficulty = 'medium'
-  form.style = 'professional'
   form.key_points_text = ''
   form.theme_color = '蓝色系'
-  form.ppt_template = 'standard'
   form.include_ppt = true
   form.include_word = true
   currentResult.value = null
   slides.value = []
   uploadedFiles.value = []
-  detectedTemplate.value = null
   clearStorage()
 }
 
 
 
-// 开始生成 - 根据选择的内容动态生成
-async function startGeneration() {
-  console.log('开始生成课件...')
+const difficultyLabels = { easy: '入门', medium: '中等', hard: '进阶' }
 
-  // 【修复】开始生成前先清理历史缓存，避免显示旧结果
+function levelForGrade(grade) {
+  if (/^[一二三四五六]年级$/.test(grade)) return '小学'
+  if (/^[七八九]年级$/.test(grade)) return '初中'
+  return '普通高中'
+}
+
+async function readJson(response, fallback) {
+  const data = await response.json()
+  if (!response.ok) throw new Error(data.detail || data.message || fallback)
+  return data
+}
+
+// 只展示后端返回的真实状态；每种产物独立失败，已成功内容不会被丢弃。
+async function startGeneration() {
   clearStorage()
   currentResult.value = null
   slides.value = []
   currentSlide.value = null
 
-  // 表单校验
-  if (!form.topic.trim()) {
-    ElMessage.warning('请输入教学主题')
-    return
-  }
-  
-  if (!form.target_audience) {
-    ElMessage.warning('请选择目标受众')
-    return
-  }
-  
-  if (!form.duration) {
-    ElMessage.warning('请选择课时时长')
-    return
-  }
+  if (!form.topic.trim()) return ElMessage.warning('请输入教学主题')
+  if (!form.subject) return ElMessage.warning('请选择学科')
+  if (!form.target_audience) return ElMessage.warning('请选择年级')
+  if (!form.duration) return ElMessage.warning('请选择课时时长')
+  if (!form.include_ppt && !form.include_word) return ElMessage.warning('请至少选择一种生成内容')
 
-  // 确定需要生成的内容
-  const selectedContent = []
-  if (form.include_ppt) selectedContent.push('ppt')
-  if (form.include_word) selectedContent.push('word')
-
-  if (selectedContent.length === 0) {
-    ElMessage.warning('请至少选择一种生成内容')
-    return
-  }
-
-  console.log('生成内容:', selectedContent)
-
-  // 构建动态生成步骤
-  const steps = [
-    { name: '智能需求分析', key: 'requirements' },
-    { name: '结构化大纲生成', key: 'outline' },
-    { name: '分页面精细化内容生成', key: 'content' }
-  ]
-  
-  // 根据选择的内容添加相应步骤
-  if (form.include_ppt) {
-    steps.push({ name: 'PPT视觉与动画设计', key: 'ppt_style' })
-    steps.push({ name: 'PPT排版与格式规范', key: 'ppt_layout' })
-    steps.push({ name: '最终PPT生成', key: 'final_ppt' })
-  }
-  if (form.include_word) {
-    steps.push({ name: 'Word教案生成', key: 'word_generation' })
-  }
-  steps.push({ name: '生成完成', key: 'complete' })
-  
-  // 重置状态
-  generating.value = true
+  const steps = []
+  if (form.include_ppt) steps.push({ name: 'PPT课件生成' })
+  if (form.include_word) steps.push({ name: 'Word教案生成' })
+  steps.push({ name: '处理结束' })
+  generationSteps.value = steps.map(step => ({ ...step, status: '等待中', details: '' }))
   currentProgressStep.value = 0
   progressPercent.value = 0
-  generationSteps.value = steps.map(step => ({ name: step.name, status: '等待中' }))
+  generating.value = true
 
-  try {
-    // 获取上传的参考文档和教学内容描述
-    const teachingContent = form.key_points_text || ''
-    const referenceDocs = uploadedFiles.value.map(file => file.name)
-    
-    let currentStep = 0
-    
-    // 步骤1: 智能需求分析
-    updateProgressStep(currentStep, '分析中...', '正在分析教学主题、目标受众和教学内容需求')
-    // 模拟需求分析
-    await sleep(1000)
-    updateProgressStep(currentStep++, '完成', '需求分析完成，识别出核心教学内容')
-    await sleep(300)
+  const failures = []
+  const completed = []
+  const referenceFiles = uploadedFiles.value.map(file => file.file_id).filter(Boolean)
+  const difficulty = difficultyLabels[form.difficulty] || '中等'
+  currentResult.value = {
+    topic: form.topic,
+    subject: form.subject,
+    grade: form.target_audience,
+    audience: form.target_audience,
+    duration: form.duration,
+    files: {},
+    compliance_reports: {}
+  }
 
-    // 步骤2: 结构化大纲生成
-    updateProgressStep(currentStep, '生成中...', '正在生成结构化大纲，规划内容结构')
-    // 模拟大纲生成
-    await sleep(1000)
-    updateProgressStep(currentStep++, '完成', '大纲生成完成，包含完整的内容结构') 
-    await sleep(300)
-
-    // 步骤3: 分页面精细化内容生成
-    updateProgressStep(currentStep, '生成中...', '正在为每个页面生成详细内容')
-    
-    // 模拟内容生成过程
-    const sampleSlides = [
-      { title: '封面页', content: form.topic, type: 'cover' },
-      { title: '目录', content: '1. 课程介绍\n2. 核心内容\n3. 互动练习\n4. 总结与展望', type: 'table_of_contents' },
-      { title: '课程介绍', content: '欢迎来到本课程，本课程将为您介绍' + form.topic + '的核心内容。', type: 'content' },
-      { title: '核心内容', content: '本课程的核心内容包括：\n' + (form.key_points_text || '课程核心内容'), type: 'content' },
-      { title: '互动练习', content: '让我们通过一些互动练习来巩固所学知识。', type: 'exercise' },
-      { title: '总结与展望', content: '通过本课程的学习，您已经掌握了' + form.topic + '的基础知识。', type: 'summary' }
-    ]
-    
-    // 逐个生成内容并显示
-    for (let i = 0; i < sampleSlides.length; i++) {
-      currentSlide.value = sampleSlides[i]
-      await sleep(800)
-    }
-    
-    updateProgressStep(currentStep++, '完成', '精细化内容生成完成') 
-    await sleep(300)
-
-    // 步骤4: PPT视觉与动画设计（如果选择了PPT）
-    if (form.include_ppt) {
-      updateProgressStep(currentStep, '生成中...', '正在生成PPT视觉风格和动画效果设计')
-      // 模拟视觉风格生成
-      await sleep(1000)
-      updateProgressStep(currentStep++, '完成', `视觉风格设计完成，应用 ${form.theme_color} 主题色和 ${form.style} 风格`)
-      await sleep(300)
-
-      // 步骤5: PPT排版与格式规范
-      updateProgressStep(currentStep, '生成中...', '正在进行PPT排版和格式规范处理')
-      await sleep(500)
-      updateProgressStep(currentStep++, '完成', 'PPT排版和格式规范处理完成')
-      await sleep(300)
-
-      // 步骤6: 最终PPT生成
-      updateProgressStep(currentStep, '生成中...', '正在生成最终PPT文件，包含所有内容和设计')
-      
-      // 构建生成参数
-      const pptConfig = {
-        topic: form.topic,
-        duration: form.duration,
-        audience: form.target_audience,
-        subject: 'general',
-        theme_color: form.theme_color,
-        style_preference: form.style,
-        key_points: form.key_points_text.split('\n').filter(item => item.trim()),
-        reference_docs: referenceDocs,
-        template: form.ppt_template
-      }
-
-      // 调用后端API生成PPT
-      const response = await fetch(`${resolveApiBaseURL()}/ppt/generate`, {
+  let currentStep = 0
+  if (form.include_ppt) {
+    updateProgressStep(currentStep, '提交中', '正在创建PPT生成任务')
+    try {
+      const keyPoints = form.key_points_text.split('\n').map(item => item.trim()).filter(Boolean)
+      keyPoints.push(`内容难度：${difficulty}`)
+      const response = await trackedFetch(`${resolveApiBaseURL()}/ppt/generate`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(pptConfig)
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic: form.topic,
+          duration: form.duration,
+          audience: form.target_audience,
+          subject: form.subject,
+          theme_color: form.theme_color,
+          style_preference: 'professional',
+          key_points: keyPoints,
+          reference_docs: referenceFiles,
+          template: 'standard'
+        })
       })
-      
-      const result = await response.json()
-      console.log('PPT生成结果:', result)
+      const task = await readJson(response, 'PPT任务创建失败')
+      if (!task.success || !task.task_id) throw new Error(task.message || 'PPT任务创建失败')
 
-      if (!result.success) {
-        throw new Error(result.message || 'PPT生成失败')
-      }
-
-      // 轮询生成进度
-      const taskId = result.task_id
-      let attempts = 0
-      const maxAttempts = 300 // 5分钟
-      
-      while (attempts < maxAttempts) {
-        const statusResponse = await fetch(`${resolveApiBaseURL()}/ppt/status/${taskId}`)
-        const statusRes = await statusResponse.json()
-        
-        if (statusRes.success) {
-          const progress = statusRes.progress || 0
-          const status = statusRes.status || 'pending'
-          const currentStepName = statusRes.current_step || ''
-          
-          // 精确计算进度：将后端的0-100进度映射到当前步骤占总步骤的范围内
-          const basePercent = Math.round((currentStep / steps.length) * 90)
-          const stepRange = Math.round((1 / steps.length) * 90)
-          progressPercent.value = Math.min(90, basePercent + Math.round((progress / 100) * stepRange))
-          
-          // 显示生成进度
-          if (status === 'generating' && progress > 0) {
-            console.log(`PPT生成中... ${progress}% - ${currentStepName}`)
-            updateProgressStep(currentStep, `${progress}%`, currentStepName || '正在生成PPT...')
+      let finished = false
+      for (let attempts = 0; attempts < 300; attempts++) {
+        const statusResponse = await trackedFetch(`${resolveApiBaseURL()}/ppt/status/${task.task_id}`)
+        const status = await readJson(statusResponse, 'PPT状态读取失败')
+        const taskProgress = Number(status.progress || 0)
+        updateProgressStep(currentStep, `${taskProgress}%`, status.current_step || '正在生成PPT')
+        progressPercent.value = Math.round(((currentStep + taskProgress / 100) / steps.length) * 100)
+        if (status.status === 'completed' && status.result) {
+          const previous = currentResult.value
+          currentResult.value = {
+            ...previous,
+            ...status.result,
+            task_id: task.task_id,
+            files: { ...previous.files, ...(status.result.files || {}) },
+            compliance_reports: {
+              ...previous.compliance_reports,
+              ...(status.result.compliance ? { ppt: status.result.compliance } : {})
+            }
           }
-          
-          if (status === 'completed') {
-            console.log('PPT生成完成！')
-            
-            // 设置结果
-            currentResult.value = statusRes.result
-            currentResult.value.task_id = taskId // 保存任务ID
-            
-            // 解析幻灯片
-            parseSlides(currentResult.value)
-
-            updateProgressStep(currentStep++, '完成', 'PPT文件生成完成')
-            ElMessage.success('PPT生成完成！')
-            
-            // 清空当前幻灯片
-            currentSlide.value = null
-            break
-          } else if (status === 'failed') {
-            throw new Error(statusRes.error || 'PPT生成失败')
-          } else if (status === 'unknown') {
-            throw new Error('任务已过期或服务已重启，请重新生成')
-          }
+          parseSlides(currentResult.value)
+          updateProgressStep(currentStep, '完成', 'PPT文件生成完成')
+          completed.push('PPT')
+          finished = true
+          break
         }
-        
-        attempts++
-        await sleep(1000) // 1秒轮询一次
+        if (status.status === 'failed' || status.status === 'unknown') {
+          throw new Error(status.error || 'PPT任务失败或已过期')
+        }
+        await sleep(1000)
       }
-    
-      if (attempts >= maxAttempts) {
-        throw new Error('PPT生成超时，请稍后重试')
-      }
+      if (!finished) throw new Error('PPT生成超时，请稍后重试')
+    } catch (error) {
+      failures.push(`PPT：${error.message}`)
+      updateProgressStep(currentStep, '失败', error.message)
     }
+    currentStep++
+  }
 
-    // 生成Word教案（如果选择了）
-    if (form.include_word) {
-      updateProgressStep(currentStep, '生成中...', '正在生成Word教案')
-      
-      // 构建教案生成参数 - 根据目标受众动态适配学段
-      const audienceToLevel = {
-        '小学生': { level: '小学', grade: '小学' },
-        '初中生': { level: '初中', grade: '初中' },
-        '高中生': { level: '普通高中', grade: '高中' },
-        '大一新生': { level: '普通高等院校', grade: '大一' },
-        '大二学生': { level: '普通高等院校', grade: '大二' },
-        '专业学生': { level: '普通高等院校', grade: '专业课程' },
-        '研究生': { level: '普通高等院校', grade: '研究生' },
-        '在职人员': { level: '职业高中/中等职业学校', grade: '在职培训' },
-        '公众': { level: '普通高等院校', grade: '公开课' },
-      }
-      const levelInfo = audienceToLevel[form.target_audience] || { level: '普通高等院校', grade: '大一' }
-      const lessonPlanConfig = {
-        level: levelInfo.level,
-        subject: form.topic,
-        grade: levelInfo.grade,
-        topic: form.topic,
-        duration: form.duration,
-        requirements: form.key_points_text
-      }
-      
-      // 调用后端API生成教案
-      const lessonPlanResponse = await fetch(`${resolveApiBaseURL()}/lesson-plan/generate-full`, {
+  if (form.include_word) {
+    updateProgressStep(currentStep, '生成中', '正在生成教案内容')
+    try {
+      const requirements = [form.key_points_text, `内容难度：${difficulty}`].filter(Boolean).join('\n')
+      const response = await trackedFetch(`${resolveApiBaseURL()}/lesson-plan/generate-full`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(lessonPlanConfig)
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          level: levelForGrade(form.target_audience),
+          subject: form.subject,
+          grade: form.target_audience,
+          topic: form.topic,
+          duration: form.duration,
+          requirements,
+          reference_files: referenceFiles
+        })
       })
-      
-      const lessonPlanResult = await lessonPlanResponse.json()
-      console.log('教案生成结果:', lessonPlanResult)
-      
-      if (lessonPlanResult.success) {
-          // 导出教案为Word格式
-          const exportResponse = await fetch(`${resolveApiBaseURL()}/lesson-plan/export`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              lesson_plan: lessonPlanResult.lesson_plan,
-              export_format: 'docx',
-              topic: form.topic  // 【修复】传递原始主题，确保文件名正确
-            })
-          })
-        
-        const exportResult = await exportResponse.json()
-        console.log('教案导出结果:', exportResult)
-        
-        if (exportResult.success) {
-          // 更新currentResult中的教案信息
-          if (!currentResult.value) {
-            currentResult.value = {}
-          }
-          currentResult.value.lesson_plan = lessonPlanResult.lesson_plan
-          // 保存出厂质检报告（后端生成时已附带）
-          if (lessonPlanResult.compliance) {
-            currentResult.value.compliance = lessonPlanResult.compliance
-          }
-          currentResult.value.files = currentResult.value.files || {}
-          currentResult.value.files.docx = exportResult.file_path
-          
-          updateProgressStep(currentStep++, '完成', 'Word教案生成完成')
-          ElMessage.success('Word教案生成完成！')
-        } else {
-          console.error('教案导出失败:', exportResult.message)
-          updateProgressStep(currentStep++, '失败', '教案导出失败')
-        }
-      } else {
-        console.error('教案生成失败:', lessonPlanResult.message)
-        updateProgressStep(currentStep++, '失败', '教案生成失败')
-      }
-    }
+      const lesson = await readJson(response, '教案生成失败')
+      if (!lesson.success || !lesson.lesson_plan) throw new Error(lesson.message || '教案生成失败')
 
-    // 最终步骤：生成完成
-    updateProgressStep(currentStep, '完成', '所有内容生成完成')
-    progressPercent.value = 100
-    ElMessage.success('所有内容生成完成！')
-  } catch (e) {
-    console.error('生成失败:', e)
-    ElMessage.error('生成失败: ' + (e.message || '请检查网络连接'))
-    // 更新状态为失败
-    if (currentProgressStep.value < generationSteps.value.length) {
-      updateProgressStep(currentProgressStep.value, '失败', '生成过程中出现错误')
-    }
-  } finally {
-    generating.value = false
-  }
-}
+      currentResult.value.lesson_plan = lesson.lesson_plan
+      if (lesson.compliance) currentResult.value.compliance_reports.lesson_plan = lesson.compliance
+      updateProgressStep(currentStep, '导出中', '教案内容已生成，正在导出Word文件')
 
-// 运行Python脚本
-async function runPythonScript(script, args) {
-  // 模拟Python脚本运行
-  console.log('运行Python脚本:', script, '参数:', args)
-  
-  // 模拟脚本运行时间
-  await sleep(3000)
-  
-  // 模拟脚本返回结果
-  const topic = JSON.parse(args).topic
-  const pptxPath = `generated_courseware/${encodeURIComponent(topic)}/PPT课件.pptx`
-  
-  return {
-    success: true,
-    message: 'PPT生成成功',
-    pptx_path: pptxPath
-  }
-}
-
-// 轮询生成进度
-async function pollGenerationStatus(taskId) {
-  let attempts = 0
-  const maxAttempts = 300 // 5分钟
-  let lastProgress = 0
-  
-  while (attempts < maxAttempts) {
-    const statusResponse = await fetch(`${resolveApiBaseURL()}/ppt/status/${taskId}`)
-    const statusRes = await statusResponse.json()
-    
-    if (statusRes.success) {
-      const progress = statusRes.progress || 0
-      const status = statusRes.status || 'pending'
-      
-      // 更新进度
-      progressPercent.value = progress
-      
-      // 显示生成进度
-      if (status === 'generating' && progress > lastProgress) {
-        ElMessage.info(`PPT生成中... ${progress}%`)
-        lastProgress = progress
-      }
-      
-      if (status === 'completed') {
-        ElMessage.success('PPT生成完成！')
-        break
-      } else if (status === 'failed') {
-        throw new Error(statusRes.error || '生成失败')
-      }
+      const exportResponse = await trackedFetch(`${resolveApiBaseURL()}/lesson-plan/export`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lesson_plan: lesson.lesson_plan, export_format: 'docx', topic: form.topic })
+      })
+      const exported = await readJson(exportResponse, 'Word导出失败')
+      if (!exported.success || !exported.download_url) throw new Error(exported.message || 'Word导出失败')
+      currentResult.value.files.docx = exported.download_url
+      updateProgressStep(currentStep, '完成', 'Word教案生成完成')
+      completed.push('Word教案')
+    } catch (error) {
+      failures.push(`Word教案：${error.message}`)
+      updateProgressStep(
+        currentStep,
+        currentResult.value.lesson_plan ? '内容已生成，导出失败' : '失败',
+        error.message
+      )
     }
-    
-    attempts++
-    await sleep(1000) // 1秒轮询一次
+    currentStep++
   }
-  
-  if (attempts >= maxAttempts) {
-    throw new Error('生成超时，请稍后重试')
+
+  currentResult.value.generation_errors = failures
+  updateProgressStep(
+    currentStep,
+    failures.length ? (completed.length || currentResult.value.lesson_plan ? '部分完成' : '失败') : '完成',
+    failures.length ? failures.join('；') : '所选内容均已生成'
+  )
+  progressPercent.value = 100
+  generating.value = false
+
+  if (failures.length && (completed.length || currentResult.value.lesson_plan)) {
+    ElMessage.warning('部分内容已完成，可查看失败项并单独重试')
+  } else if (failures.length) {
+    currentResult.value = null
+    ElMessage.error(failures.join('；'))
+  } else {
+    ElMessage.success(`${completed.join('、')}生成完成`)
   }
 }
 
@@ -1102,63 +820,9 @@ function parseSlides(result) {
           type: i === 0 ? 'cover' : 'content'
         })
       })
-    } else {
-      // 回退到默认幻灯片
-      parsedSlides.push({ title: result.topic || '课件', type: 'cover' })
-      parsedSlides.push({ title: '课程内容', type: 'content' })
-      parsedSlides.push({ title: '互动练习', type: 'exercise' })
-      parsedSlides.push({ title: '课程总结', type: 'summary' })
     }
 
     slides.value = parsedSlides
-  }
-}
-
-// 打开文件所在目录
-function openFileLocation() {
-  if (!currentResult.value) {
-    ElMessage.warning('没有文件路径信息')
-    return
-  }
-  
-  // 构建文件路径
-  let fullPath = ''
-  if (currentResult.value.task_dir) {
-    fullPath = currentResult.value.task_dir
-  } else if (currentResult.value.files?.pptx) {
-    fullPath = currentResult.value.files.pptx.replace(/\\[^\\]+$/, '')
-  } else if (currentResult.value.files?.docx) {
-    fullPath = currentResult.value.files.docx.replace(/\\[^\\]+$/, '')
-  } else if (currentResult.value.animation_result?.task_dir) {
-    fullPath = currentResult.value.animation_result.task_dir
-  } else if (currentResult.value.game_result?.task_dir) {
-    fullPath = currentResult.value.game_result.task_dir
-  }
-  
-  if (!fullPath) {
-    ElMessage.warning('没有文件路径信息')
-    return
-  }
-  
-  // 显示文件路径信息
-  ElMessage.info(`生成的文件保存在: ${fullPath}`)
-  
-  // 确保路径格式正确
-  let formattedPath = fullPath
-  if (process.platform === 'win32') {
-    // 对于Windows系统，确保路径格式正确
-    formattedPath = fullPath.replace(/\//g, '\\')
-  } else {
-    // 对于其他系统，使用正斜杠
-    formattedPath = fullPath.replace(/\\/g, '/')
-  }
-  
-  // 在新窗口中打开文件路径
-  try {
-    window.open(`file:///${formattedPath.replace(/\\/g, '/')}`, '_blank')
-  } catch (e) {
-    console.error('打开文件路径失败:', e)
-    ElMessage.error('打开文件路径失败，请手动前往该路径')
   }
 }
 
@@ -1174,41 +838,39 @@ function downloadFile(type) {
     let hasDownload = false
 
     if (type === 'pptx') {
-      // 优先使用task_dir（文件系统可靠），回退到task_id
-      const taskDir = currentResult.value.task_dir
-      const topic = currentResult.value.topic || form.topic
-      if (taskDir) {
-        downloadUrl = `${resolveApiBaseURL()}/courseware/download/pptx?task_dir=${encodeURIComponent(taskDir)}&topic=${encodeURIComponent(topic)}`
+      const taskId = currentResult.value.task_id || currentResult.value.taskId
+      if (taskId) {
+        downloadUrl = `${resolveApiBaseURL()}/ppt/download/${encodeURIComponent(taskId)}`
         hasDownload = true
       } else {
-        const taskId = currentResult.value.task_id || currentResult.value.taskId
-        if (taskId) {
-          downloadUrl = `${resolveApiBaseURL()}/ppt/download/${taskId}`
-          hasDownload = true
-        } else {
-          ElMessage.warning('没有可下载的PPT文件')
-        }
+        ElMessage.warning('没有可下载的PPT任务')
       }
     } else if (type === 'docx') {
       if (currentResult.value.files?.docx) {
-        // 使用后端API下载Word文件
-        const taskDir = currentResult.value.files.docx.replace(/\\[^\\]+$/, '')
-        downloadUrl = `${resolveApiBaseURL()}/courseware/download/docx?task_dir=${encodeURIComponent(taskDir)}`
+        downloadUrl = currentResult.value.files.docx
         hasDownload = true
       } else {
         ElMessage.warning('没有可下载的Word文件')
       }
     } else if (type === 'animation') {
+      const taskId = currentResult.value.animation_result?.task_id
       const taskDir = currentResult.value.animation_result?.task_dir
-      if (taskDir) {
+      if (taskId) {
+        downloadUrl = `${resolveApiBaseURL()}/courseware/animation/download?task_id=${encodeURIComponent(taskId)}`
+        hasDownload = true
+      } else if (taskDir) {
         downloadUrl = `${resolveApiBaseURL()}/courseware/animation/download?task_dir=${encodeURIComponent(taskDir)}`
         hasDownload = true
       } else {
         ElMessage.warning('没有可下载的动画文件')
       }
     } else if (type === 'game') {
+      const taskId = currentResult.value.game_result?.task_id
       const taskDir = currentResult.value.game_result?.task_dir
-      if (taskDir) {
+      if (taskId) {
+        downloadUrl = `${resolveApiBaseURL()}/courseware/game/download?task_id=${encodeURIComponent(taskId)}`
+        hasDownload = true
+      } else if (taskDir) {
         downloadUrl = `${resolveApiBaseURL()}/courseware/game/download?task_dir=${encodeURIComponent(taskDir)}`
         hasDownload = true
       } else {
@@ -1246,15 +908,21 @@ function previewFile(type) {
       ElMessage.warning('任务ID不存在')
     }
   } else if (type === 'animation') {
+    const taskId = currentResult.value.animation_result?.task_id
     const taskDir = currentResult.value.animation_result?.task_dir
-    if (taskDir) {
+    if (taskId) {
+      window.open(`${resolveApiBaseURL()}/courseware/animation/download?task_id=${encodeURIComponent(taskId)}`, '_blank')
+    } else if (taskDir) {
       window.open(`${resolveApiBaseURL()}/courseware/animation/download?task_dir=${encodeURIComponent(taskDir)}`, '_blank')
     } else {
       ElMessage.warning('没有可预览的动画文件')
     }
   } else if (type === 'game') {
+    const taskId = currentResult.value.game_result?.task_id
     const taskDir = currentResult.value.game_result?.task_dir
-    if (taskDir) {
+    if (taskId) {
+      window.open(`${resolveApiBaseURL()}/courseware/game/download?task_id=${encodeURIComponent(taskId)}`, '_blank')
+    } else if (taskDir) {
       window.open(`${resolveApiBaseURL()}/courseware/game/download?task_dir=${encodeURIComponent(taskDir)}`, '_blank')
     } else {
       ElMessage.warning('没有可预览的游戏文件')
@@ -1267,21 +935,16 @@ function previewFile(type) {
 // 查看PPT预览
 async function viewPPTPreview(taskId) {
   try {
-    // 添加 task_dir 和 topic 参数以支持文件系统回退
-    const taskDir = encodeURIComponent(currentResult.value?.task_dir || '')
-    const topic = encodeURIComponent(currentResult.value?.topic || form.topic || '')
-    const previewResponse = await fetch(`${resolveApiBaseURL()}/ppt/preview/${taskId}?task_dir=${taskDir}&topic=${topic}`)
+    const previewResponse = await trackedFetch(`${resolveApiBaseURL()}/ppt/preview/${encodeURIComponent(taskId)}`)
     const previewRes = await previewResponse.json()
     
     if (previewRes.success) {
-      const previewId = 'task_' + Date.now()
       router.push({
-        path: `/preview/${previewId}`,
+        path: `/preview/${taskId}`,
         query: {
           courseware: JSON.stringify({
             ppt_content: previewRes.ppt_data,
             task_id: currentResult.value?.task_id || taskId,
-            task_dir: currentResult.value?.task_dir || '',
             topic: currentResult.value?.topic || form.topic || ''
           })
         }
@@ -1299,11 +962,18 @@ async function viewPPTPreview(taskId) {
 function viewFullPreview() {
   if (!currentResult.value) return
 
-  const taskId = 'task_' + Date.now()
+  const taskId = currentResult.value.task_id || currentResult.value.taskId
+  if (!taskId) {
+    ElMessage.warning('当前内容没有可继续编辑的PPT任务')
+    return
+  }
+  const previewData = { ...currentResult.value }
+  delete previewData.task_dir
+  delete previewData.pptx_path
   router.push({
     path: `/preview/${taskId}`,
     query: {
-      courseware: JSON.stringify(currentResult.value)
+      courseware: JSON.stringify(previewData)
     }
   })
 }
@@ -1331,6 +1001,18 @@ onMounted(() => {
   }
   if (query.audience) {
     form.target_audience = query.audience
+  }
+  if (query.subject) form.subject = query.subject
+  if (query.difficulty) form.difficulty = query.difficulty
+  if (query.key_points) form.key_points_text = query.key_points
+  if (query.reference_files) {
+    const ids = String(query.reference_files).split(',').filter(Boolean)
+    const names = String(query.reference_names || '').split(',')
+    uploadedFiles.value = ids.map((file_id, index) => ({
+      file_id,
+      name: names[index] || file_id,
+      url: names[index] || file_id
+    }))
   }
   if (query.duration) {
     form.duration = parseInt(query.duration)

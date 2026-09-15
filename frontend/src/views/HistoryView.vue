@@ -34,13 +34,13 @@
 
       <!-- 文件列表 -->
       <div v-else class="files-grid">
-        <div v-for="group in filteredFiles" :key="group.path" class="file-card glass-card">
+        <div v-for="group in filteredFiles" :key="`${group.label}:${group.dir}`" class="file-card glass-card">
           <div class="card-header">
             <div class="card-title-row">
               <el-tag :type="getTagType(group.label || '课件')" size="small">{{ group.label || '课件' }}</el-tag>
               <span class="card-name">{{ formatDirName(group.dir) }}</span>
             </div>
-            <el-button type="danger" text size="small" @click="deleteGroup(group)" :icon="Delete">删除</el-button>
+            <el-button v-if="group.delete_url" type="danger" text size="small" @click="deleteGroup(group)" :icon="Delete">删除</el-button>
           </div>
 
           <div class="card-files">
@@ -67,6 +67,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { resolveApiBaseURL } from '@/api/baseUrl'
+import { trackedFetch } from '@/api/dataFlow'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Refresh, Delete, Document, View, Download, Loading } from '@element-plus/icons-vue'
 
@@ -122,7 +123,7 @@ function formatSize(bytes) {
 async function loadFiles() {
   loading.value = true
   try {
-    const resp = await fetch(resolveApiBaseURL() + '/courseware/files')
+    const resp = await trackedFetch(resolveApiBaseURL() + '/courseware/files')
     const data = await resp.json()
     if (data.success) {
       fileGroups.value = data.files || []
@@ -135,19 +136,13 @@ async function loadFiles() {
 }
 
 function downloadFile(group, file) {
-  const url = resolveApiBaseURL() + `/courseware/download/` + file.type +
-    '?task_dir=' + encodeURIComponent(group.path) +
-    '&topic=' + encodeURIComponent(formatDirName(group.dir))
-  window.open(url, '_blank')
+  if (!file.download_url) return ElMessage.warning('该文件没有可用的下载地址')
+  window.open(file.download_url, '_blank')
 }
 
 function previewFile(group, file) {
-  const filePath = `${group.path}/${file.name}`.replace(/\/+/g, '/').replace(/^\//, '')
-  const api = resolveApiBaseURL()
-  const origin = typeof window !== 'undefined' ? window.location.origin : ''
-  const base = api.startsWith('http') ? api.replace(/\/?api\/?$/, '') : origin
-  const url = `${base.replace(/\/$/, '')}/${filePath}`.replace(/([^:]\/)\/+/g, '$1')
-  window.open(url, '_blank')
+  if (!file.preview_url) return ElMessage.warning('该文件不支持在线预览')
+  window.open(file.preview_url, '_blank')
 }
 
 async function deleteGroup(group) {
@@ -157,7 +152,7 @@ async function deleteGroup(group) {
       '确认删除',
       { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' }
     )
-    const resp = await fetch(resolveApiBaseURL() + '/courseware/files/' + encodeURIComponent(group.dir), {
+    const resp = await trackedFetch(group.delete_url, {
       method: 'DELETE'
     })
     const data = await resp.json()
