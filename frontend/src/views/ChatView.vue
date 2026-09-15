@@ -1222,17 +1222,13 @@ function useQuickPrompt(prompt) {
 // ====== 快捷操作处理 ======
 function handleQuickAction(action) {
   if (action.action === 'courseware') {
-    // 跳转到课件生成页面
+    // 带进工作台：主题 / 受众 / 课时直接成为"这一节课"的上下文
     router.push({
-      path: '/courseware',
+      path: '/',
       query: {
         topic: action.topic || '',
-        audience: action.audience || '大一新生',
-        duration: action.duration || 45,
-        include_ppt: true,
-        include_word: true,
-        include_animation: false,
-        include_game: false
+        audience: action.audience || '七年级',
+        duration: action.duration || 45
       }
     })
   } else if (action.action === 'animation') {
@@ -1263,11 +1259,11 @@ function handleQuickAction(action) {
 
 // ====== 课件生成 ======
 function goToCourseware() {
-  // 提取对话中的主题信息，传递到课件生成页面
+  // 提取对话中的主题信息，带进工作台的"这一节课"
   const lastUser = messages.value.filter(m => m.role === 'user').pop()
   const topic = lastUser ? lastUser.content.slice(0, 50) : ''
   router.push({
-    path: '/courseware',
+    path: '/',
     query: topic ? { topic } : {}
   })
 }
@@ -1281,7 +1277,7 @@ function showRequirementPanel() {
 async function startGeneration() {
   if (!requirements.topic) { ElMessage.warning('请填写教学主题'); return }
   router.push({
-    path: '/courseware',
+    path: '/',
     query: {
       topic: requirements.topic,
       subject: requirements.subject,
