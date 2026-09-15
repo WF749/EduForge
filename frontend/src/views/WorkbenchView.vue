@@ -39,7 +39,7 @@ export default { name: 'WorkbenchView' }
 </script>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   HomeFilled, Files, Document, VideoCamera, TrophyBase, Collection, Clock
@@ -89,6 +89,13 @@ watch(
   },
   { immediate: true }
 )
+
+// 启动时先渲染本地存档，再异步用后端台账覆盖 —— 顺序反了会白屏等网络。
+// 台账是权威来源：换浏览器/清缓存后，只要有 taskId 就能把这一节课找回来。
+onMounted(async () => {
+  if (store.taskId) await store.restoreFromServer()
+  else if (store.ready) await store.syncContext()
+})
 </script>
 
 <style lang="scss" scoped>

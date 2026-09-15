@@ -25,6 +25,7 @@ export function useArtifactRunner(artifactId) {
     try {
       const patch = await task(text => { hint.value = text || '' })
       store.setArtifact(artifactId, { status: 'done', ...patch, error: '', at: Date.now() })
+      store.pushArtifact(artifactId)
       return true
     } catch (e) {
       store.setArtifact(artifactId, {
@@ -32,6 +33,7 @@ export function useArtifactRunner(artifactId) {
         error: e?.message || '生成失败，请重试',
         at: Date.now()
       })
+      store.pushArtifact(artifactId)
       return false
     } finally {
       running.value = false

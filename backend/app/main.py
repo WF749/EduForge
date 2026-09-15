@@ -11,6 +11,7 @@ from . import api_routes
 from .api import agent as agent_api
 from .api import courseware as courseware_api
 from .api import lesson_plan as lesson_plan_api
+from .api import lesson_tasks as lesson_tasks_api
 from .api import ppt as ppt_api
 from .api import rag as rag_api
 from .api import safety as safety_api
@@ -67,6 +68,8 @@ def api_health():
 app.include_router(courseware_api.router, prefix="/api")
 app.include_router(ppt_api.router, prefix="/api")
 app.include_router(lesson_plan_api.router, prefix="/api")
+# 「一节课」的台账：课程上下文 + 四类产物归属 + 参考资料关联
+app.include_router(lesson_tasks_api.router, prefix="/api")
 
 # 新增：系统/可观测性（/api/providers、/api/models/live、/api/metrics）
 app.include_router(system_api.router, prefix="/api")

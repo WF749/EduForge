@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, reactive, computed, watch } from 'vue'
+import { upsertTask, fetchTask, putArtifact } from '@/api/lessonTasks'
 
 /**
  * 「一节课」的上下文与产物台账。
@@ -78,6 +79,9 @@ export const useLessonStore = defineStore('lesson', () => {
   const keyPoints = ref('')
   const referenceFiles = ref([]) // [{ file_id, name }]
   const artifacts = reactive(emptyArtifacts())
+  // 后端台账里的课程任务 ID。空表示还没建过（要等主题填了才建，避免留下一堆空课）。
+  const taskId = ref('')
+  const syncedAt = ref(0)
 
   // 面板级选项也放在这里：批量生成要用和单个面板完全相同的参数，
   // 否则"一键生成全部"和"进面板单独生成"会产出两套东西。
@@ -91,6 +95,7 @@ export const useLessonStore = defineStore('lesson', () => {
   function persist() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        taskId: taskId.value,
         topic: topic.value,
         subject: subject.value,
         grade: grade.value,
@@ -115,6 +120,7 @@ export const useLessonStore = defineStore('lesson', () => {
       const raw = localStorage.getItem(STORAGE_KEY)
       if (!raw) return
       const saved = JSON.parse(raw)
+      if (typeof saved.taskId === 'string') taskId.value = saved.taskId
       if (typeof saved.topic === 'string') topic.value = saved.topic
       if (typeof saved.subject === 'string') subject.value = saved.subject
       if (typeof saved.grade === 'string') grade.value = saved.grade
@@ -142,6 +148,95 @@ export const useLessonStore = defineStore('lesson', () => {
   hydrate()
   watch([topic, subject, grade, duration, difficulty, keyPoints, referenceFiles,
     pptTheme, animationMinutes, gameType, artifacts], persist, { deep: true })
+
+  // ---- 后端台账同步 -------------------------------------------------------
+  // 先读本地存档保证首屏立刻有内容，再异步去后端拉权威版本覆盖。
+  // 顺序不能反：等网络返回再渲染，用户会看到一屏空白。
+  let syncTimer = null
+
+  function scheduleSync() {
+    if (!topic.value.trim()) return
+    clearTimeout(syncTimer)
+    syncTimer = setTimeout(syncContext, 800)
+  }
+
+  async function syncContext() {
+    if (!topic.value.trim()) return
+    try {
+      const task = await upsertTask({
+        id: taskId.value || undefined,
+        topic: topic.value,
+        subject: subject.value,
+        grade: grade.value,
+        duration: duration.value,
+        difficulty: difficulty.value,
+        keyPoints: keyPoints.value,
+        references: referenceFiles.value,
+        options: {
+          pptTheme: pptTheme.value,
+          animationMinutes: animationMinutes.value,
+          gameType: gameType.value
+        }
+      })
+      taskId.value = task.id
+      syncedAt.value = Date.now()
+    } catch {
+      /* 台账写不进去不影响本地备课，静默降级 */
+    }
+  }
+
+  /** 生成结束（成功或失败）后把产物状态记进台账 */
+  async function pushArtifact(id) {
+    if (!artifacts[id]) return
+    // 生成耗时一般远超 800ms 防抖，但"填完主题立刻点生成"会赶在落库之前 ——
+    // 这时先补一次建课，否则这条产物会无处可记。
+    if (!taskId.value) await syncContext()
+    if (!taskId.value) return
+    try {
+      await putArtifact(taskId.value, id, artifacts[id])
+    } catch {
+      /* 同上：记账失败不打断备课 */
+    }
+  }
+
+  /** 从后端台账恢复这一节课；返回是否成功 */
+  async function restoreFromServer() {
+    if (!taskId.value) return false
+    try {
+      const task = await fetchTask(taskId.value)
+      if (!task) return false
+      if (typeof task.topic === 'string') topic.value = task.topic
+      if (typeof task.subject === 'string') subject.value = task.subject
+      if (typeof task.grade === 'string') grade.value = task.grade
+      if (Number.isFinite(task.duration)) duration.value = task.duration
+      if (typeof task.difficulty === 'string') difficulty.value = task.difficulty
+      if (typeof task.keyPoints === 'string') keyPoints.value = task.keyPoints
+      if (Array.isArray(task.references)) referenceFiles.value = task.references
+      if (task.options) {
+        if (typeof task.options.pptTheme === 'string') pptTheme.value = task.options.pptTheme
+        if (Number.isFinite(task.options.animationMinutes)) {
+          animationMinutes.value = task.options.animationMinutes
+        }
+        if (typeof task.options.gameType === 'string') gameType.value = task.options.gameType
+      }
+      if (task.artifacts) {
+        for (const a of ARTIFACTS) {
+          const src = task.artifacts[a.id]
+          if (!src) continue
+          // 服务端的 running 一律降级：那意味着上一次生成是被中断的（进程重启），
+          // 没有后台任务在跑，恢复成 running 会永远转圈。
+          Object.assign(artifacts[a.id], emptyArtifact(), src,
+            src.status === 'running' ? { status: 'idle', error: '上次生成被中断，请重新生成' } : {})
+        }
+      }
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  watch([topic, subject, grade, duration, difficulty, keyPoints, referenceFiles,
+    pptTheme, animationMinutes, gameType], scheduleSync)
 
   // ---- 派生 ---------------------------------------------------------------
   const ready = computed(() => !!topic.value.trim())
@@ -182,6 +277,8 @@ export const useLessonStore = defineStore('lesson', () => {
 
   /** 换一节课：上下文与产物台账一起清空 */
   function resetLesson() {
+    taskId.value = ''
+    syncedAt.value = 0
     topic.value = ''
     subject.value = '数学'
     grade.value = '七年级'
@@ -244,10 +341,11 @@ export const useLessonStore = defineStore('lesson', () => {
 
   return {
     topic, subject, grade, duration, difficulty, keyPoints, referenceFiles, artifacts,
-    pptTheme, animationMinutes, gameType,
+    pptTheme, animationMinutes, gameType, taskId, syncedAt,
     ready, difficultyLabel, level, referenceIds, keyPointList, requirementsText,
     doneCount, runningCount,
     setContext, resetLesson, addReference, removeReference,
-    setArtifact, resetArtifact, applyQuery, toQuery, persist
+    setArtifact, resetArtifact, applyQuery, toQuery, persist,
+    syncContext, pushArtifact, restoreFromServer
   }
 })

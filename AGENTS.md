@@ -50,15 +50,19 @@ Vue3 + FastAPI 单体，后端托管前端构建产物，教案/PPT/动画/游�
 PYTHONPATH=backend uv run --project backend python scripts/smoke_safety.py             # 70 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_teaching_compliance.py # 77 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_plan.py         # 29 项
+PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_tasks.py        # 29 项
 ```
 
-**当前基线：176 项全绿（70 + 77 + 29）。跑出红色必须修到绿，或明确说明为什么基线要变。**
+**当前基线：205 项全绿（70 + 77 + 29 + 29）。跑出红色必须修到绿，或明确说明为什么基线要变。**
 
 改动前端后额外确认：`git status` 里**不应出现** `frontend/dist/`（它不在版本控制内）。
 
 ## 改动后的自检习惯
 
 - 动了生成链路（教案/PPT/动画/游戏）→ 跑对应 smoke，并确认响应里的 `compliance` 字段仍在。
+- 动了课程任务台账（`backend/app/api/lesson_tasks.py`）→ 必跑 `smoke_lesson_tasks.py`；
+  它钉死的是"台账只存指针不存正文""超配额淘汰后 tasks 与 order 仍一致"这类
+  **失败时不报错、只是静默少数据**的契约。
 - 动了 `backend/app/safety/` → 必跑 `smoke_safety.py`，它有**静态回归校验**防止插桩漏接。
 - 动了合规规则 → 必须同步补**反例测试**（历史上"重力：10N""答案：3"被误判成隐私泄露，
   正则必须加 `(?<![一-龥])` 词首锚定）。
