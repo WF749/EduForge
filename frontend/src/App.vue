@@ -71,7 +71,7 @@
     <main class="app-main">
       <router-view v-slot="{ Component }">
         <transition name="slide-fade" mode="out-in">
-          <keep-alive :include="['ChatView','CoursewareView','AnimationView','GameView','HomeView']">
+          <keep-alive :include="['ChatView','CoursewareView','AnimationView','GameView','WorkbenchView']">
             <component :is="Component" />
           </keep-alive>
         </transition>
@@ -110,30 +110,20 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useAppStore } from '@/store/app'
 import ParticleBackground from '@/components/ParticleBackground.vue'
 import DataFlowBadge from '@/components/DataFlowBadge.vue'
-import {
-  HomeFilled,
-  ChatDotRound,
-  Collection,
-  Document,
-  VideoCamera,
-  TrophyBase,
-  Setting,
-  Clock
-} from '@element-plus/icons-vue'
+// 图标是全局注册的，这里导入只为导航栏数组使用
+import { HomeFilled, Collection, Setting, Clock } from '@element-plus/icons-vue'
 
 const store = useAppStore()
 
 const hasApiKey = computed(() => store.hasApiKey)
 const currentTime = ref('')
 
+// 导航只保留"围绕一节课"的入口。旧的功能页（/chat /courseware /animation /game）
+// 路由仍然保留、可直接访问，只是不再占据导航栏——工作台出问题时有退路。
 const navItems = [
-  { path: '/', name: '首页', icon: HomeFilled },
-  { path: '/chat', name: '智能对话', icon: ChatDotRound },
+  { path: '/', name: '备课工作台', icon: HomeFilled },
   { path: '/knowledge', name: '知识库', icon: Collection },
-  { path: '/courseware', name: '课件生成', icon: Document },
-  { path: '/animation', name: '动画创意', icon: VideoCamera },
-  { path: '/game', name: '互动游戏', icon: TrophyBase },
-  { path: '/history', name: '历史记录', icon: Clock },
+  { path: '/history', name: '历史作品', icon: Clock },
   { path: '/settings', name: '设置', icon: Setting }
 ]
 

@@ -2,9 +2,14 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 const routes = [
   {
+    // 首页即工作台：打开就进入"这一节课"，不再先经过一个介绍页
     path: '/',
-    name: 'Home',
-    component: () => import('@/views/HomeView.vue')
+    name: 'Workbench',
+    component: () => import('@/views/WorkbenchView.vue')
+  },
+  {
+    path: '/workbench',
+    redirect: '/'
   },
   {
     path: '/chat',
