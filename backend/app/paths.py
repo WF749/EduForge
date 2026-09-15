@@ -16,6 +16,8 @@ CHROMA_DIR = BACKEND_DIR / "chroma_data"
 CONFIG_JSON = DATA_DIR / "runtime_config.json"
 CHAT_STORE = DATA_DIR / "chat_history.json"
 FILE_REGISTRY = DATA_DIR / "uploaded_files.json"
+# 「一节课」的任务台账：让课程上下文与四类产物在刷新/换设备后仍能找回
+LESSON_TASK_STORE = DATA_DIR / "lesson_tasks.json"
 
 
 def ensure_dirs() -> None:

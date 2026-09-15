@@ -1,0 +1,252 @@
+"""「一节课」的任务台账 API。
+
+为什么需要它
+------------
+工作台把四类产物（教案 / PPT / 动画 / 游戏）挂在"一节课"下面，但此前"这一节课"
+只存在于浏览器的 localStorage 里：
+
+  - 换浏览器、清缓存、换电脑 → 课就没了，产物也跟着失联；
+  - 产物只在各自生成目录里，没有任何地方记录"它属于哪节课"；
+  - 参考资料的关联关系同样只活在前端。
+
+本模块提供稳定的课程任务记录，前端以它为准，localStorage 降级为离线兜底。
+
+设计取舍
+--------
+1. **不存产物正文**，只存指针（task_id / download_url / preview_url）。文件仍归
+   各自的生成目录管，避免一份数据两个真源。
+2. **不接管生成流程**。这里只做台账，生成仍走各自的 /api/ppt、/api/lesson-plan
+   等接口——把台账塞进生成链路会让任何一个失败都拖垮另一个。
+3. **保存不全量覆盖**：只更新传上来的字段，避免并发的两个面板互相擦掉对方的产物状态。
+4. **配额**：最多保留 50 节课，超出丢弃最旧的。这是一个本地备课工具，不是档案系统。
+"""
+
+import time
+import uuid
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, Body, HTTPException, Path, Query
+
+from .. import persist
+from ..core.logging_setup import get_logger
+
+router = APIRouter()
+log = get_logger("lesson_tasks")
+
+MAX_TASKS = 50
+
+# 与前端 store/lesson.js 的 ARTIFACTS 保持一致
+ARTIFACT_TYPES = ("lesson_plan", "ppt", "animation", "game")
+
+
+def _now_ms() -> int:
+    return int(time.time() * 1000)
+
+
+def _slug(value: Any, max_len: int = 200) -> str:
+    return str(value or "").strip()[:max_len]
+
+
+def _empty_artifact() -> Dict[str, Any]:
+    return {
+        "status": "idle",
+        "taskId": "",
+        "downloadUrl": "",
+        "previewUrl": "",
+        "previewRoute": "",
+        "summary": "",
+        "error": "",
+        "at": 0,
+        "compliance": None,
+    }
+
+
+def _normalize_artifact(patch: Dict[str, Any]) -> Dict[str, Any]:
+    """只接受已知字段，避免把整份响应（含正文）塞进台账。"""
+    base = _empty_artifact()
+    if not isinstance(patch, dict):
+        return base
+    for key in ("status", "taskId", "downloadUrl", "previewUrl", "previewRoute", "summary", "error"):
+        value = patch.get(key)
+        if isinstance(value, str):
+            base[key] = value[:2000]
+        elif value is None:
+            base[key] = ""
+    at = patch.get("at")
+    base["at"] = int(at) if isinstance(at, (int, float)) else 0
+    # 质检结论随产物留存：它只有几 KB，但刷新后是"这节课合不合规"的唯一依据。
+    # 只接受 dict，防止把整份生成响应（含正文）塞进来。
+    compliance = patch.get("compliance")
+    base["compliance"] = compliance if isinstance(compliance, dict) else None
+    return base
+
+
+def _normalize_references(raw: Any) -> List[Dict[str, str]]:
+    if not isinstance(raw, list):
+        return []
+    out: List[Dict[str, str]] = []
+    for item in raw[:20]:
+        if isinstance(item, dict):
+            fid = _slug(item.get("file_id"), 200)
+            if fid:
+                out.append({"file_id": fid, "name": _slug(item.get("name"), 200)})
+        elif isinstance(item, str) and item.strip():
+            out.append({"file_id": _slug(item, 200), "name": ""})
+    return out
+
+
+def _normalize_options(raw: Any) -> Dict[str, Any]:
+    if not isinstance(raw, dict):
+        return {}
+    out: Dict[str, Any] = {}
+    if isinstance(raw.get("pptTheme"), str):
+        out["pptTheme"] = _slug(raw["pptTheme"], 40)
+    minutes = raw.get("animationMinutes")
+    if isinstance(minutes, (int, float)):
+        out["animationMinutes"] = max(1, min(15, int(minutes)))
+    if isinstance(raw.get("gameType"), str):
+        out["gameType"] = _slug(raw["gameType"], 40)
+    return out
+
+
+def _summary(task: Dict[str, Any]) -> Dict[str, Any]:
+    artifacts = task.get("artifacts") or {}
+    done = sum(1 for t in ARTIFACT_TYPES if (artifacts.get(t) or {}).get("status") == "done")
+    return {
+        "id": task.get("id"),
+        "topic": task.get("topic", ""),
+        "subject": task.get("subject", ""),
+        "grade": task.get("grade", ""),
+        "duration": task.get("duration", 45),
+        "artifactCount": done,
+        "updatedAt": task.get("updatedAt", 0),
+    }
+
+
+@router.get("/lesson-tasks", tags=["课程任务"])
+async def list_lesson_tasks(limit: int = Query(20, ge=1, le=MAX_TASKS)):
+    """列出最近的课程任务（最新在前），只返回摘要。"""
+    store = persist.load_lesson_task_store()
+    tasks = store.get("tasks") or {}
+    order = [i for i in (store.get("order") or []) if i in tasks]
+    # order 可能缺失/损坏：用 updatedAt 兜底排序，保证列表不会空
+    if not order:
+        order = sorted(tasks.keys(), key=lambda k: (tasks[k] or {}).get("updatedAt", 0), reverse=True)
+    return {"success": True, "tasks": [_summary(tasks[i]) for i in order[:limit]]}
+
+
+@router.post("/lesson-tasks", tags=["课程任务"])
+async def upsert_lesson_task(body: Dict[str, Any] = Body(default={})):
+    """创建或更新一节课。只更新传上来的字段，未传的保持原样。"""
+    store = persist.load_lesson_task_store()
+    tasks = store.setdefault("tasks", {})
+    order = store.setdefault("order", [])
+
+    task_id = _slug(body.get("id"), 64)
+    if task_id and task_id in tasks:
+        task = tasks[task_id]
+        created = False
+    else:
+        task_id = task_id or uuid.uuid4().hex[:16]
+        task = {
+            "id": task_id,
+            "createdAt": _now_ms(),
+            "artifacts": {t: _empty_artifact() for t in ARTIFACT_TYPES},
+        }
+        created = True
+
+    for key in ("topic", "subject", "grade", "difficulty", "keyPoints"):
+        if key in body:
+            task[key] = _slug(body[key], 2000 if key == "keyPoints" else 100)
+    if "duration" in body:
+        try:
+            task["duration"] = max(15, min(180, int(body["duration"])))
+        except (TypeError, ValueError):
+            pass
+    if "references" in body:
+        task["references"] = _normalize_references(body["references"])
+    if "options" in body:
+        merged = dict(task.get("options") or {})
+        merged.update(_normalize_options(body["options"]))
+        task["options"] = merged
+
+    task.setdefault("artifacts", {})
+    for t in ARTIFACT_TYPES:
+        task["artifacts"].setdefault(t, _empty_artifact())
+    task["updatedAt"] = _now_ms()
+
+    tasks[task_id] = task
+    if task_id in order:
+        order.remove(task_id)
+    order.insert(0, task_id)
+    # 超出配额：从最早的开始丢
+    while len(order) > MAX_TASKS:
+        tasks.pop(order.pop(), None)
+
+    persist.save_lesson_task_store(store)
+    log.info("课程任务 %s 已%s：%s", task_id, "创建" if created else "更新", task.get("topic", ""))
+    return {"success": True, "created": created, "task": task}
+
+
+@router.get("/lesson-tasks/{task_id}", tags=["课程任务"])
+async def get_lesson_task(task_id: str = Path(...)):
+    store = persist.load_lesson_task_store()
+    task = (store.get("tasks") or {}).get(_slug(task_id, 64))
+    if not task:
+        raise HTTPException(status_code=404, detail="课程任务不存在")
+    return {"success": True, "task": task}
+
+
+@router.delete("/lesson-tasks/{task_id}", tags=["课程任务"])
+async def delete_lesson_task(task_id: str = Path(...)):
+    """删除台账记录。**不会**删除已生成的文件，那些仍可在"历史作品"里下载。"""
+    task_id = _slug(task_id, 64)
+    store = persist.load_lesson_task_store()
+    tasks = store.setdefault("tasks", {})
+    order = store.setdefault("order", [])
+    if task_id not in tasks:
+        raise HTTPException(status_code=404, detail="课程任务不存在")
+    tasks.pop(task_id, None)
+    if task_id in order:
+        order.remove(task_id)
+    persist.save_lesson_task_store(store)
+    return {"success": True, "deleted": task_id}
+
+
+@router.put("/lesson-tasks/{task_id}/artifacts/{artifact_type}", tags=["课程任务"])
+async def put_artifact(
+    task_id: str = Path(...),
+    artifact_type: str = Path(...),
+    body: Dict[str, Any] = Body(default={}),
+):
+    """登记/更新某一类产物的状态。生成成功、失败、重新生成都会调这里。"""
+    if artifact_type not in ARTIFACT_TYPES:
+        raise HTTPException(status_code=400, detail=f"未知产物类型：{artifact_type}")
+    task_id = _slug(task_id, 64)
+    store = persist.load_lesson_task_store()
+    tasks = store.setdefault("tasks", {})
+    task = tasks.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="课程任务不存在")
+
+    task.setdefault("artifacts", {})
+    task["artifacts"][artifact_type] = _normalize_artifact(body)
+    task["updatedAt"] = _now_ms()
+    persist.save_lesson_task_store(store)
+    return {"success": True, "artifact": task["artifacts"][artifact_type]}
+
+
+@router.delete("/lesson-tasks/{task_id}/artifacts/{artifact_type}", tags=["课程任务"])
+async def clear_artifact(task_id: str = Path(...), artifact_type: str = Path(...)):
+    """清除某一类产物的记录（用于"重新生成"前先归零）。"""
+    if artifact_type not in ARTIFACT_TYPES:
+        raise HTTPException(status_code=400, detail=f"未知产物类型：{artifact_type}")
+    task_id = _slug(task_id, 64)
+    store = persist.load_lesson_task_store()
+    task = (store.get("tasks") or {}).get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="课程任务不存在")
+    task.setdefault("artifacts", {})[artifact_type] = _empty_artifact()
+    task["updatedAt"] = _now_ms()
+    persist.save_lesson_task_store(store)
+    return {"success": True, "artifact": task["artifacts"][artifact_type]}

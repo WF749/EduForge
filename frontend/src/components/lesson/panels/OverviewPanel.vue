@@ -52,8 +52,18 @@
     </div>
 
     <p class="ov-foot">
-      换一台电脑或刷新页面后，已生成的产物记录会保留；文件本身仍在后端，
-      可到「历史作品」重新下载。
+      <el-tag v-if="store.taskId" type="success" size="small" effect="plain">
+        已记入本机台账
+      </el-tag>
+      <el-tag v-else-if="store.ready" type="info" size="small" effect="plain">
+        填写主题后自动建课
+      </el-tag>
+      <span v-if="store.taskId">
+        刷新、换浏览器后凭台账找回这一节课；文件本身仍在后端，也可到「历史作品」重新下载。
+      </span>
+      <span v-else>
+        台账按主题建立，用于把四类产物归到同一节课下。
+      </span>
     </p>
   </section>
 </template>
@@ -210,6 +220,10 @@ async function runBatch() {
 }
 
 .ov-foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
   font-size: 12px;
   color: rgba(255, 255, 255, 0.32);
 }

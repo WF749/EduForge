@@ -72,6 +72,7 @@ backend/data/runtime_config.json.bak
 backend/data/*.bak
 backend/data/chat_history.json
 backend/data/uploaded_files.json
+backend/data/lesson_tasks.json
 backend/data/history/
 
 # SQLite LLM 配置（可能含加密后的密钥列）

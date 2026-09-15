@@ -3,7 +3,7 @@ from typing import Any, Dict, Optional
 
 from .core.json_store import atomic_write_json, read_json, update_json
 from .core.providers import get_provider, resolve_base_url
-from .paths import CHAT_STORE, CONFIG_JSON, FILE_REGISTRY
+from .paths import CHAT_STORE, CONFIG_JSON, FILE_REGISTRY, LESSON_TASK_STORE
 
 _lock = threading.RLock()
 
@@ -123,6 +123,16 @@ def load_file_registry() -> Dict[str, Any]:
 def save_file_registry(reg: Dict[str, Any]) -> None:
     with _lock:
         _write_json(FILE_REGISTRY, reg)
+
+
+def load_lesson_task_store() -> Dict[str, Any]:
+    with _lock:
+        return _read_json(LESSON_TASK_STORE, {"tasks": {}, "order": []})
+
+
+def save_lesson_task_store(store: Dict[str, Any]) -> None:
+    with _lock:
+        _write_json(LESSON_TASK_STORE, store)
 
 
 def get_active_llm_settings() -> Dict[str, Any]:
