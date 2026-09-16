@@ -180,6 +180,28 @@ def test_archive() -> None:
     check("可以取消归档", unarchived["archived"] is False)
 
 
+def test_file_index() -> None:
+    """历史作品归组所依赖的反查表：目录名 / 文件名 → 所属课程。"""
+    print("\n== 9. 产物归属反查表（历史作品按课程归组）==")
+    task = asyncio.run(lt.upsert_lesson_task({"topic": "浮力"}))["task"]
+    tid = task["id"]
+    asyncio.run(lt.put_artifact(tid, "ppt", {
+        "status": "done", "originDir": "浮力_20260916_abcd1234"}))
+    asyncio.run(lt.put_artifact(tid, "animation", {
+        "status": "done", "originDir": "浮力_20260916_efgh5678"}))
+    asyncio.run(lt.put_artifact(tid, "lesson_plan", {
+        "status": "done", "fileName": "浮力教案.docx"}))
+
+    index = lt.build_file_index()
+    check("目录名可反查到课程", index["dirs"].get("浮力_20260916_abcd1234", {}).get("id") == tid)
+    check("动画目录同样可反查", index["dirs"].get("浮力_20260916_efgh5678", {}).get("id") == tid)
+    check("反查结果带课程主题",
+          index["dirs"].get("浮力_20260916_abcd1234", {}).get("topic") == "浮力")
+    check("教案按文件名反查（平铺目录无任务目录）",
+          index["files"].get("浮力教案.docx", {}).get("id") == tid)
+    check("无归属的目录查不到", index["dirs"].get("不存在的目录") is None)
+
+
 def main() -> int:
     print("课程任务台账冒烟测试（不调模型、不启服务）")
     use_temp_store()
@@ -191,6 +213,7 @@ def main() -> int:
     test_list_and_quota()
     test_clear_artifact()
     test_archive()
+    test_file_index()
 
     print(f"\n{'=' * 64}")
     print(f"通过 {len(PASS)} 项，失败 {len(FAIL)} 项")

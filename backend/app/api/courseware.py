@@ -10,6 +10,7 @@ from ..services.courseware_generator import CoursewareGenerator
 from ..services.game_generator import GameGenerator
 from ..services.animation_generator import AnimationGenerator
 from ..services.teaching_compliance import run_compliance_gate
+from . import lesson_tasks as lesson_tasks_api
 
 router = APIRouter()
 
@@ -481,6 +482,8 @@ async def list_files(
     """列出生成的文件"""
     try:
         files = []
+        # 反查表：把产物归到它所属的那节课（读不到就按"未归档"展示，不影响列表）
+        index = lesson_tasks_api.build_file_index()
 
         sources = [
             (OUTPUT_DIR, "课件", "generated_courseware"),
@@ -512,7 +515,8 @@ async def list_files(
                                 "dir": item,
                                 "label": dir_label,
                                 "delete_url": f"/api/courseware/files/{quote(item)}?source={quote(mount_name)}",
-                                "files": item_files
+                                "files": item_files,
+                                "lesson": index["dirs"].get(item)
                             })
 
         if os.path.exists(LESSON_PLANS_DIR):
@@ -532,6 +536,7 @@ async def list_files(
                         "download_url": artifact_url,
                         "preview_url": None,
                     }],
+                    "lesson": index["files"].get(filename),
                 })
 
         return {
