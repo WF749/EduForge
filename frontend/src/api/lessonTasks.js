@@ -41,9 +41,19 @@ export async function fetchTask(taskId) {
   return data.task
 }
 
-export async function fetchTasks(limit = 20) {
-  const data = await request(`${BASE()}/lesson-tasks?limit=${limit}`)
+export async function fetchTasks(limit = 20, archived = null) {
+  const params = new URLSearchParams({ limit: String(limit) })
+  if (archived !== null) params.set('archived', archived ? 'true' : 'false')
+  const data = await request(`${BASE()}/lesson-tasks?${params.toString()}`)
   return data.tasks || []
+}
+
+/** 归档/取消归档。归档只影响列表可见性，文件与产物链接都还在。 */
+export async function archiveTask(taskId, archived = true) {
+  return request(
+    `${BASE()}/lesson-tasks`,
+    json('POST', { id: taskId, archived })
+  )
 }
 
 export async function deleteTask(taskId) {

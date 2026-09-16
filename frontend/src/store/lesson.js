@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, reactive, computed, watch } from 'vue'
-import { upsertTask, fetchTask, putArtifact } from '@/api/lessonTasks'
+import { upsertTask, fetchTask, putArtifact, fetchTasks, archiveTask } from '@/api/lessonTasks'
 
 /**
  * 「一节课」的上下文与产物台账。
@@ -82,6 +82,8 @@ export const useLessonStore = defineStore('lesson', () => {
   // 后端台账里的课程任务 ID。空表示还没建过（要等主题填了才建，避免留下一堆空课）。
   const taskId = ref('')
   const syncedAt = ref(0)
+  // 最近课程（未归档），用于课程切换器
+  const recentTasks = ref([])
 
   // 面板级选项也放在这里：批量生成要用和单个面板完全相同的参数，
   // 否则"一键生成全部"和"进面板单独生成"会产出两套东西。
@@ -178,8 +180,11 @@ export const useLessonStore = defineStore('lesson', () => {
           gameType: gameType.value
         }
       })
+      const isNew = !taskId.value
       taskId.value = task.id
       syncedAt.value = Date.now()
+      // 只在"第一次建课"时刷新列表：之后每次输入都刷会让接口被防抖流淹没
+      if (isNew) await loadRecent()
     } catch {
       /* 台账写不进去不影响本地备课，静默降级 */
     }
@@ -196,6 +201,43 @@ export const useLessonStore = defineStore('lesson', () => {
       await putArtifact(taskId.value, id, artifacts[id])
     } catch {
       /* 同上：记账失败不打断备课 */
+    }
+  }
+
+  /** 拉取最近课程（未归档），用于课程切换器 */
+  async function loadRecent(limit = 12) {
+    try {
+      recentTasks.value = await fetchTasks(limit, false)
+    } catch {
+      recentTasks.value = []
+    }
+    return recentTasks.value
+  }
+
+  /**
+   * 切换到另一节课。
+   * 顺序很关键：**先**把当前课同步回台账，**再**改 taskId ——
+   * 反了的话当前课的上下文会写进即将切换到的那节课上，直接覆盖掉它。
+   */
+  async function switchTask(id) {
+    if (!id || id === taskId.value) return true
+    if (topic.value.trim()) await syncContext()
+    taskId.value = id
+    const ok = await restoreFromServer()
+    await loadRecent()
+    return ok
+  }
+
+  /** 归档/取消归档当前课。归档后清空工作台，方便开始下一节。 */
+  async function setArchived(archived) {
+    if (!taskId.value) return false
+    try {
+      await archiveTask(taskId.value, archived)
+      if (archived) resetLesson()
+      await loadRecent()
+      return true
+    } catch {
+      return false
     }
   }
 
@@ -344,8 +386,10 @@ export const useLessonStore = defineStore('lesson', () => {
     pptTheme, animationMinutes, gameType, taskId, syncedAt,
     ready, difficultyLabel, level, referenceIds, keyPointList, requirementsText,
     doneCount, runningCount,
+    recentTasks,
     setContext, resetLesson, addReference, removeReference,
     setArtifact, resetArtifact, applyQuery, toQuery, persist,
-    syncContext, pushArtifact, restoreFromServer
+    syncContext, pushArtifact, restoreFromServer,
+    loadRecent, switchTask, setArchived
   }
 })
