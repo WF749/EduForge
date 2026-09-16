@@ -28,7 +28,7 @@ Vue3 + FastAPI 单体，后端托管前端构建产物，教案/PPT/动画/游�
 8. **不要为了"顺手"引入新依赖**。先查 `pyproject.toml` / `frontend/package.json`，
    能复用现有能力就复用；确需新增，在 PR/提交信息里说明理由。
 9. **不要擅自 `git commit` 或 `git push`**。改动留在工作区，由用户自己验证后再决定提交；
-   只有用户明确说"提交""推送"时才执行。**提交前先跑通下面的 211 项验证。**
+   只有用户明确说"提交""推送"时才执行。**提交前先跑通下面的 216 项验证。**
 
 ## 目录地图（按需读，不要全读）
 
@@ -50,10 +50,10 @@ Vue3 + FastAPI 单体，后端托管前端构建产物，教案/PPT/动画/游�
 PYTHONPATH=backend uv run --project backend python scripts/smoke_safety.py             # 70 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_teaching_compliance.py # 77 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_plan.py         # 29 项
-PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_tasks.py        # 35 项
+PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_tasks.py        # 40 项
 ```
 
-**当前基线：211 项全绿（70 + 77 + 29 + 35）。跑出红色必须修到绿，或明确说明为什么基线要变。**
+**当前基线：216 项全绿（70 + 77 + 29 + 40）。跑出红色必须修到绿，或明确说明为什么基线要变。**
 
 改动前端后额外确认：`git status` 里**不应出现** `frontend/dist/`（它不在版本控制内）。
 

@@ -54,6 +54,12 @@ def _empty_artifact() -> Dict[str, Any]:
         "downloadUrl": "",
         "previewUrl": "",
         "previewRoute": "",
+        # 产物落在哪个生成目录 / 哪个文件名。
+        # 存在的理由：历史作品是按文件目录组织的，要把它们归到"某一节课"，
+        # 就必须有一个目录名 ←→ 课程 的对应关系。生成接口不知道课程 ID，
+        # 所以由前端在生成完成后回填（生成响应里本来就有 task_dir / filename）。
+        "originDir": "",
+        "fileName": "",
         "summary": "",
         "error": "",
         "at": 0,
@@ -66,7 +72,8 @@ def _normalize_artifact(patch: Dict[str, Any]) -> Dict[str, Any]:
     base = _empty_artifact()
     if not isinstance(patch, dict):
         return base
-    for key in ("status", "taskId", "downloadUrl", "previewUrl", "previewRoute", "summary", "error"):
+    for key in ("status", "taskId", "downloadUrl", "previewUrl", "previewRoute",
+                "summary", "error", "originDir", "fileName"):
         value = patch.get(key)
         if isinstance(value, str):
             base[key] = value[:2000]
@@ -122,6 +129,33 @@ def _summary(task: Dict[str, Any]) -> Dict[str, Any]:
         "archived": bool(task.get("archived")),
         "updatedAt": task.get("updatedAt", 0),
     }
+
+
+def build_file_index() -> Dict[str, Dict[str, Dict[str, str]]]:
+    """给"历史作品"用的反查表：生成目录名 / 文件名 → 所属课程。
+
+    只读不写，且台账读不出来时返回空表而不是抛错 ——
+    历史作品没有归属也能用，不该因为台账坏了就整个列表打不开。
+    """
+    index: Dict[str, Dict[str, Dict[str, str]]] = {"dirs": {}, "files": {}}
+    try:
+        store = persist.load_lesson_task_store()
+    except Exception:
+        return index
+    for task in (store.get("tasks") or {}).values():
+        lesson = {"id": task.get("id", ""), "topic": task.get("topic", "")}
+        if not lesson["id"]:
+            continue
+        for art in (task.get("artifacts") or {}).values():
+            if not isinstance(art, dict):
+                continue
+            origin = str(art.get("originDir") or "").strip()
+            if origin:
+                index["dirs"][origin] = lesson
+            name = str(art.get("fileName") or "").strip()
+            if name:
+                index["files"][name] = lesson
+    return index
 
 
 @router.get("/lesson-tasks", tags=["课程任务"])

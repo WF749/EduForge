@@ -105,8 +105,14 @@ async function switchTo(id) {
 // 这条路径不会重新触发 onMounted，只靠它会静默丢掉传过来的主题。
 watch(
   () => route.query,
-  (q) => {
-    if (q && (q.topic || q.subject)) store.applyQuery(q)
+  async (q) => {
+    if (!q) return
+    // 历史作品点"在工作台打开"：按课程 ID 直接切换过去
+    if (q.lesson) {
+      await store.switchTask(String(q.lesson))
+      return
+    }
+    if (q.topic || q.subject) store.applyQuery(q)
   },
   { immediate: true }
 )

@@ -55,6 +55,8 @@ export async function generateLessonPlan(ctx) {
 
   return {
     downloadUrl: exported.download_url,
+    // 教案是平铺文件（没有任务目录），用文件名作为归属依据
+    fileName: exported.filename || '',
     compliance: created.compliance || null,
     summary: 'Word 教案已导出'
   }
@@ -62,6 +64,12 @@ export async function generateLessonPlan(ctx) {
 
 // ---- PPT ------------------------------------------------------------------
 const PPT_MAX_ATTEMPTS = 300
+
+/** 从后端给的绝对路径里取目录名，用于把产物归到某一节课 */
+function dirNameOf(path) {
+  const p = String(path || '').replace(/\\/g, '/').replace(/\/+$/, '')
+  return p ? p.split('/').pop() : ''
+}
 
 export async function generatePpt(ctx, { themeColor = '蓝色系', onProgress } = {}) {
   const created = await readJson(await post('/ppt/generate', {
@@ -92,6 +100,7 @@ export async function generatePpt(ctx, { themeColor = '蓝色系', onProgress } 
         taskId: created.task_id,
         downloadUrl: `${BASE()}/ppt/download/${encodeURIComponent(created.task_id)}`,
         previewRoute: `/preview/${encodeURIComponent(created.task_id)}`,
+        originDir: dirNameOf(status.result.task_dir),
         compliance: status.result.compliance || null,
         summary: `共 ${countSlides(status.result)} 页`
       }
@@ -135,6 +144,7 @@ export async function generateAnimation(ctx, { minutes = 5 } = {}) {
     taskId: a.task_id || '',
     downloadUrl,
     previewUrl: downloadUrl,
+    originDir: dirNameOf(a.task_dir),
     compliance: data.compliance || null,
     summary: a.scenes?.length ? `${a.scenes.length} 个场景` : 'HTML5 动画'
   }
@@ -161,6 +171,7 @@ export async function generateGame(ctx, { gameType } = {}) {
     taskId: g.task_id || '',
     downloadUrl,
     previewUrl: downloadUrl,
+    originDir: dirNameOf(g.task_dir),
     compliance: data.compliance || null,
     summary: count ? `${count} 道题` : 'HTML5 可玩游戏'
   }
