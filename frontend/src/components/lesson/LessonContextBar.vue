@@ -1,6 +1,25 @@
 <template>
   <div class="ctx-bar">
     <div class="ctx-row ctx-row-main">
+      <el-select
+        v-model="switchTo"
+        class="ctx-switch"
+        size="large"
+        filterable
+        placeholder="最近课程"
+        @change="onSwitch"
+      >
+        <el-option
+          v-for="t in store.recentTasks"
+          :key="t.id"
+          :label="t.topic || '（未命名课程）'"
+          :value="t.id"
+        >
+          <span class="sw-topic">{{ t.topic || '（未命名课程）' }}</span>
+          <span class="sw-meta">{{ t.subject }} · {{ t.grade }} · {{ t.artifactCount }}/4</span>
+        </el-option>
+      </el-select>
+
       <el-input
         v-model="store.topic"
         class="ctx-topic"
@@ -28,6 +47,13 @@
       </el-select>
 
       <el-button size="large" :icon="RefreshLeft" @click="confirmReset">换一节课</el-button>
+      <el-button
+        v-if="store.taskId"
+        size="large"
+        :icon="FolderChecked"
+        title="归档后从最近课程列表移除，产物链接仍可下载"
+        @click="confirmArchive"
+      >归档本课</el-button>
     </div>
 
     <div class="ctx-row ctx-row-sub">
@@ -71,9 +97,9 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { EditPen, RefreshLeft, UploadFilled, Document } from '@element-plus/icons-vue'
+import { EditPen, RefreshLeft, UploadFilled, Document, FolderChecked } from '@element-plus/icons-vue'
 import { useLessonStore, SUBJECTS, GRADES, DIFFICULTIES } from '@/store/lesson'
 import { resolveApiBaseURL } from '@/api/baseUrl'
 
@@ -92,6 +118,35 @@ function onUploaded(response) {
 function onUploadError() {
   ElMessage.error('上传失败：网络错误')
 }
+
+// 切换器只作"动作入口"：选完立刻清空，避免它显示成一个常驻的下拉框，
+// 让人误以为当前课程是"下拉里选中的那一项"。当前课始终由顶部主题输入框表示。
+const switchTo = ref('')
+
+async function onSwitch(id) {
+  switchTo.value = ''
+  if (!id || id === store.taskId) return
+  const ok = await store.switchTask(id)
+  if (ok) ElMessage.success('已切换到该课程')
+  else ElMessage.error('切换失败：读不到这节课的记录')
+}
+
+async function confirmArchive() {
+  try {
+    await ElMessageBox.confirm(
+      '归档后这节课会从「最近课程」移除，已生成的文件仍可在「历史作品」下载。归档后会清空工作台，方便开始下一节。',
+      '归档当前课程？',
+      { type: 'warning', confirmButtonText: '归档并新建', cancelButtonText: '取消' }
+    )
+  } catch {
+    return
+  }
+  const ok = await store.setArchived(true)
+  if (ok) ElMessage.success('已归档，工作台已清空')
+  else ElMessage.error('归档失败，请稍后重试')
+}
+
+onMounted(() => { store.loadRecent() })
 
 async function confirmReset() {
   const hasWork = store.doneCount > 0
@@ -132,6 +187,14 @@ async function confirmReset() {
   .ctx-topic { flex: 1 1 320px; min-width: 240px; }
   .ctx-field { width: 130px; }
   .ctx-diff { width: 130px; }
+  .ctx-switch { width: 150px; }
+}
+
+.sw-meta {
+  float: right;
+  margin-left: 12px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
 }
 
 .ctx-duration {

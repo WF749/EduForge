@@ -17,13 +17,26 @@
           <span v-if="statusOf(tab.id)" class="rail-dot" :class="`dot-${statusOf(tab.id)}`" />
         </button>
 
+        <!-- 知识库 / 历史作品 已从这里移除：顶部导航里有，两处都放只是重复入口 -->
         <div class="rail-foot">
-          <router-link to="/knowledge" class="rail-link">
-            <el-icon :size="16"><Collection /></el-icon> 知识库
-          </router-link>
-          <router-link to="/history" class="rail-link">
-            <el-icon :size="16"><Clock /></el-icon> 历史作品
-          </router-link>
+          <div class="rail-title">
+            <span>最近课程</span>
+            <el-button text size="small" :icon="Refresh" @click="store.loadRecent()" />
+          </div>
+          <p v-if="!store.recentTasks.length" class="rail-empty">
+            还没有课程记录。填好教学主题后自动建立。
+          </p>
+          <button
+            v-for="t in store.recentTasks"
+            :key="t.id"
+            type="button"
+            class="rail-recent"
+            :class="{ current: t.id === store.taskId }"
+            @click="switchTo(t.id)"
+          >
+            <span class="rr-topic">{{ t.topic || '（未命名课程）' }}</span>
+            <span class="rr-meta">{{ t.subject }} · {{ t.grade }} · {{ t.artifactCount }}/4</span>
+          </button>
         </div>
       </aside>
 
@@ -42,8 +55,9 @@ export default { name: 'WorkbenchView' }
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import {
-  HomeFilled, Files, Document, VideoCamera, TrophyBase, Collection, Clock
+  HomeFilled, Files, Document, VideoCamera, TrophyBase, Refresh
 } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import LessonContextBar from '@/components/lesson/LessonContextBar.vue'
 import OverviewPanel from '@/components/lesson/panels/OverviewPanel.vue'
 import LessonPlanPanel from '@/components/lesson/panels/LessonPlanPanel.vue'
@@ -79,6 +93,13 @@ function statusOf(id) {
   return store.artifacts[id]?.status || 'idle'
 }
 
+async function switchTo(id) {
+  if (!id || id === store.taskId) return
+  const ok = await store.switchTask(id)
+  if (ok) ElMessage.success('已切换到该课程')
+  else ElMessage.error('切换失败：读不到这节课的记录')
+}
+
 // 从对话页带 query 跳过来时（/?topic=...）填进这一节课。
 // 用 watch 而不是 onMounted：本页被 keep-alive 缓存，"已访问过工作台 → 去对话 → 再回来"
 // 这条路径不会重新触发 onMounted，只靠它会静默丢掉传过来的主题。
@@ -95,6 +116,7 @@ watch(
 onMounted(async () => {
   if (store.taskId) await store.restoreFromServer()
   else if (store.ready) await store.syncContext()
+  await store.loadRecent()
 })
 </script>
 
@@ -181,20 +203,58 @@ onMounted(async () => {
   padding-top: 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 
-  .rail-link {
+  .rail-title {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 14px;
-    border-radius: 8px;
-    color: rgba(255, 255, 255, 0.45);
-    font-size: 13px;
-    text-decoration: none;
+    justify-content: space-between;
+    padding: 0 6px 4px 14px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.35);
+  }
 
-    &:hover {
-      background: rgba(0, 200, 255, 0.08);
-      color: #fff;
-    }
+  .rail-empty {
+    padding: 4px 14px 8px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.28);
+  }
+}
+
+.rail-recent {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 14px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.6);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba(0, 200, 255, 0.08);
+    color: #fff;
+  }
+
+  &.current {
+    background: rgba(0, 200, 255, 0.12);
+    border-color: rgba(0, 200, 255, 0.32);
+    color: #fff;
+  }
+
+  .rr-topic {
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .rr-meta {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.35);
   }
 }
 

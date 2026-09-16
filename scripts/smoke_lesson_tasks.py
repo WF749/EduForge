@@ -154,6 +154,32 @@ def test_clear_artifact() -> None:
     check("清除后旧 taskId 不再残留", art["taskId"] == "")
 
 
+def test_archive() -> None:
+    print("\n== 8. 归档（只影响列表可见性，不删数据）==")
+    open_task = asyncio.run(lt.upsert_lesson_task({"topic": "进行中的课"}))["task"]
+    done_task = asyncio.run(lt.upsert_lesson_task({"topic": "已归档的课"}))["task"]
+    asyncio.run(lt.upsert_lesson_task({"id": done_task["id"], "archived": True}))
+
+    active = asyncio.run(lt.list_lesson_tasks(limit=50, archived=False))
+    archived = asyncio.run(lt.list_lesson_tasks(limit=50, archived=True))
+    every = asyncio.run(lt.list_lesson_tasks(limit=50))
+
+    active_ids = [t["id"] for t in active["tasks"]]
+    archived_ids = [t["id"] for t in archived["tasks"]]
+    check("未归档列表不含已归档课程", done_task["id"] not in active_ids)
+    check("未归档列表含进行中的课程", open_task["id"] in active_ids)
+    check("归档列表只含已归档课程", archived_ids == [done_task["id"]],
+          f"(实际 {archived_ids})")
+    check("不过滤时两者都在", len(every["tasks"]) >= 2)
+
+    got = asyncio.run(lt.get_lesson_task(done_task["id"]))["task"]
+    check("归档后课程仍可读取（归档不是删除）", got["topic"] == "已归档的课")
+
+    unarchived = asyncio.run(lt.upsert_lesson_task(
+        {"id": done_task["id"], "archived": False}))["task"]
+    check("可以取消归档", unarchived["archived"] is False)
+
+
 def main() -> int:
     print("课程任务台账冒烟测试（不调模型、不启服务）")
     use_temp_store()
@@ -164,6 +190,7 @@ def main() -> int:
     test_not_found()
     test_list_and_quota()
     test_clear_artifact()
+    test_archive()
 
     print(f"\n{'=' * 64}")
     print(f"通过 {len(PASS)} 项，失败 {len(FAIL)} 项")

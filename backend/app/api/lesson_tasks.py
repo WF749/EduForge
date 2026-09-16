@@ -119,20 +119,37 @@ def _summary(task: Dict[str, Any]) -> Dict[str, Any]:
         "grade": task.get("grade", ""),
         "duration": task.get("duration", 45),
         "artifactCount": done,
+        "archived": bool(task.get("archived")),
         "updatedAt": task.get("updatedAt", 0),
     }
 
 
 @router.get("/lesson-tasks", tags=["课程任务"])
-async def list_lesson_tasks(limit: int = Query(20, ge=1, le=MAX_TASKS)):
+async def list_lesson_tasks(
+    limit: int = Query(20, ge=1, le=MAX_TASKS),
+    archived: Optional[bool] = Query(None, description="按归档状态过滤；不传表示都要"),
+):
     """列出最近的课程任务（最新在前），只返回摘要。"""
+    # 直接调用本函数（测试、内部复用）时，带 Query(...) 默认值的参数拿到的是
+    # Query 对象而不是 None。若不归一化，下面的判断会恒为真 → 静默返回空列表，
+    # 这类"不报错但没数据"的问题正是本项目反复踩过的坑。
+    if not isinstance(archived, bool):
+        archived = None
     store = persist.load_lesson_task_store()
     tasks = store.get("tasks") or {}
     order = [i for i in (store.get("order") or []) if i in tasks]
     # order 可能缺失/损坏：用 updatedAt 兜底排序，保证列表不会空
     if not order:
         order = sorted(tasks.keys(), key=lambda k: (tasks[k] or {}).get("updatedAt", 0), reverse=True)
-    return {"success": True, "tasks": [_summary(tasks[i]) for i in order[:limit]]}
+    out = []
+    for i in order:
+        task = tasks[i]
+        if archived is not None and bool(task.get("archived")) != archived:
+            continue
+        out.append(_summary(task))
+        if len(out) >= limit:
+            break
+    return {"success": True, "tasks": out}
 
 
 @router.post("/lesson-tasks", tags=["课程任务"])
@@ -165,6 +182,8 @@ async def upsert_lesson_task(body: Dict[str, Any] = Body(default={})):
             pass
     if "references" in body:
         task["references"] = _normalize_references(body["references"])
+    if "archived" in body:
+        task["archived"] = bool(body["archived"])
     if "options" in body:
         merged = dict(task.get("options") or {})
         merged.update(_normalize_options(body["options"]))
