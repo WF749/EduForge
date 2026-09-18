@@ -7,6 +7,7 @@ from typing import Optional, List, Dict, Any
 from urllib.parse import quote
 from ..document_extract import resolve_uploaded_references
 from ..paths import GENERATED_LP
+from ..services import artifact_versions
 from ..services.llm_lesson_plan_all_stages import LessonPlanGenerator
 from ..services.university_major_config import UniversityMajorConfig
 from ..services.teaching_compliance import (
@@ -131,35 +132,124 @@ async def validate_lesson_plan_compliance(
         }
 
 
-@router.post("/lesson-plan/modify", tags=["教案-全学段流程"])
-async def modify_lesson_plan(
-    existing_lesson_plan: Dict[str, Any] = Body(..., description="已有教案内容"),
+def _merge_missing_modules(base: Dict[str, Any], modified: Dict[str, Any]):
+    """模型漏掉的模块用原版补回，返回 (合并结果, 被补回的模块名)。
+
+    为什么不直接信模型：教案有 12 个模块，模型做"增量修改"时经常只回它改动的
+    那几个模块，其余直接省略。早期 `_ensure_content_completeness` 的教训是——
+    遇到缺项就置空，会让教师看到"改完少了一半"。这里反过来：**缺了就补旧的**，
+    宁可保留没改到的原文，也不能让内容凭空消失。补回了什么如实写进 change_log。
+    """
+    merged = dict(modified)
+    filled = []
+    for key, value in (base or {}).items():
+        current = merged.get(key)
+        empty = current is None or current == "" or current == [] or current == {}
+        if key not in merged or empty:
+            if value not in (None, "", [], {}):
+                merged[key] = value
+                filled.append(key)
+    return merged, filled
+
+
+@router.post("/lesson-plan/revise", tags=["教案-迭代修改"])
+async def revise_lesson_plan(
+    lesson_id: str = Body(..., description="课程 id（决定改的是哪一节课的教案）"),
+    instruction: str = Body(..., description="修改指令，例如「第三段太难，换成生活里的例子」"),
     level: str = Body(..., description="学段"),
     subject: str = Body(..., description="学科/专业"),
     grade: str = Body(..., description="年级/课型"),
-    modification_requirements: str = Body(..., description="修改需求")
+    base_version: Optional[int] = Body(None, description="基于哪一版修改，默认当前版本"),
+    duration: Optional[int] = Body(None, description="课时（用于合规复检，可省略）"),
 ):
-    """阶段5：迭代修改与版本管理"""
+    """按教师的一句话指令增量修改教案，并把结果记为新版本。
+
+    与旧的 ``/lesson-plan/modify`` 的三点区别：
+      1. 基线从版本链里读，不由前端回传 —— 刷新/换设备后仍知道在改哪一版；
+      2. 结果落盘为新版本，可回退（改坏了能回到上一版）；
+      3. 模型没给出完整教案时**不覆盖**，保留原版本并如实报错，
+         避免重演"生成成功但内容全空"那类静默事故。
+    """
+    # FastAPI 的 Body(...) 默认值在被**直接调用**（测试、内部复用）时拿到的是 Body 对象
+    # 而不是 None，直接往下传会在 int() 处炸。这里按 project 既有做法归一化。
+    if base_version is not None and not isinstance(base_version, int):
+        base_version = None
+    if duration is not None and not isinstance(duration, int):
+        duration = None
+
+    instruction = (instruction or "").strip()
+    if not instruction:
+        return {"success": False, "message": "请说明要改什么，例如「把导入环节换成生活实例」"}
+
     try:
-        modification_result = lesson_plan_generator.modify_lesson_plan(
-            existing_lesson_plan=existing_lesson_plan,
+        base = artifact_versions.get_content(lesson_id, "lesson_plan", base_version)
+    except Exception as e:  # noqa: BLE001 - id/kind 非法也算"改不了"，如实返回
+        return {"success": False, "message": f"读取基线版本失败: {e}"}
+
+    if not isinstance(base, dict) or not base:
+        return {
+            "success": False,
+            "message": "这门课还没有可修改的教案版本，请先生成教案",
+        }
+
+    try:
+        result = lesson_plan_generator.modify_lesson_plan(
+            existing_lesson_plan=base,
             level=level,
             subject=subject,
             grade=grade,
-            modification_requirements=modification_requirements
+            modification_requirements=instruction,
         )
-
-        return {
-            "success": True,
-            "message": "教案修改成功",
-            "modification_result": modification_result
-        }
-
     except Exception as e:
+        return {"success": False, "message": f"教案修改失败: {e}"}
+
+    result = result if isinstance(result, dict) else {}
+    modified = result.get("modified_lesson_plan")
+
+    if not isinstance(modified, dict) or not modified:
         return {
             "success": False,
-            "message": f"教案修改失败: {str(e)}"
+            "message": "模型没有返回修改后的完整教案，已保留原版本（原版本未被改动）",
+            "detail": {
+                "raw_keys": list(result.keys()),
+                "change_log": result.get("change_log"),
+            },
         }
+
+    merged, filled = _merge_missing_modules(base, modified)
+
+    try:
+        version_info = artifact_versions.save_version(
+            lesson_id, "lesson_plan", merged, note=instruction, author="model"
+        )
+    except Exception as e:
+        return {"success": False, "message": f"修改已生成但存版本失败: {e}"}
+
+    compliance = run_compliance_gate(
+        "lesson_plan",
+        merged,
+        {
+            "level": level, "subject": subject, "grade": grade, "duration": duration,
+            "objectives_text": flatten_to_text(merged.get("教学目标")),
+            "assessment_text": pick_assessment_text(merged),
+        },
+    )
+
+    change_log = result.get("change_log")
+    if not isinstance(change_log, list):
+        change_log = []
+    if filled:
+        change_log = list(change_log) + [f"自动保留未改动的模块：{'、'.join(filled)}"]
+
+    return {
+        "success": True,
+        "message": f"已按指令修改并记为 v{version_info['version']}",
+        "lesson_plan": merged,
+        "version": version_info,
+        "change_log": change_log,
+        "ppt_modification_suggestions": result.get("ppt_modification_suggestions"),
+        "compliance": compliance,
+    }
 
 
 @router.post("/lesson-plan/export", tags=["教案-全学段流程"])
@@ -244,7 +334,8 @@ async def generate_full_lesson_plan(
     topic: str = Body(..., description="教学主题"),
     duration: int = Body(45, description="授课时长（分钟）"),
     requirements: str = Body("", description="补充需求"),
-    reference_files: Optional[List[str]] = Body(None, description="上传参考资料的文件ID")
+    reference_files: Optional[List[str]] = Body(None, description="上传参考资料的文件ID"),
+    lesson_id: Optional[str] = Body(None, description="所属课程 id（给了就把成品存为该课教案的 v1）")
 ):
     """完整教案生成流程"""
     try:
@@ -292,6 +383,20 @@ async def generate_full_lesson_plan(
             },
         )
 
+        # 阶段6：把成品存为该课教案的版本链起点
+        # 存版本失败不能让"生成"失败——内容已经在手里了，丢掉版本只是少了回退能力，
+        # 但让生成接口报错等于白跑一次模型。失败如实挂在 version_error 上。
+        version_info = None
+        version_error = None
+        if lesson_id:
+            try:
+                version_info = artifact_versions.save_version(
+                    lesson_id, "lesson_plan", corrected_lesson_plan,
+                    note=f"首次生成：{topic}", author="model",
+                )
+            except Exception as e:  # noqa: BLE001 - 见上方说明
+                version_error = str(e)
+
         return {
             "success": True,
             "message": "完整教案生成成功",
@@ -301,7 +406,9 @@ async def generate_full_lesson_plan(
                 "validation_report": validation_result["validation_report"]
             },
             "lesson_plan": corrected_lesson_plan,
-            "compliance": compliance
+            "compliance": compliance,
+            "version": version_info,
+            "version_error": version_error,
         }
 
     except Exception as e:

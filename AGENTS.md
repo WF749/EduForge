@@ -28,7 +28,7 @@ Vue3 + FastAPI 单体，后端托管前端构建产物，教案/PPT/动画/游�
 8. **不要为了"顺手"引入新依赖**。先查 `pyproject.toml` / `frontend/package.json`，
    能复用现有能力就复用；确需新增，在 PR/提交信息里说明理由。
 9. **不要擅自 `git commit` 或 `git push`**。改动留在工作区，由用户自己验证后再决定提交；
-   只有用户明确说"提交""推送"时才执行。**提交前先跑通下面的 276 项验证。**
+   只有用户明确说"提交""推送"时才执行。**提交前先跑通下面的 313 项验证。**
 
 ## 目录地图（按需读，不要全读）
 
@@ -53,9 +53,10 @@ PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_plan.py 
 PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_tasks.py        # 40 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_llm_service.py         # 14 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_artifact_versions.py   # 46 项
+PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_plan_revise.py  # 37 项
 ```
 
-**当前基线：276 项全绿（70 + 77 + 29 + 40 + 14 + 46）。跑出红色必须修到绿，或明确说明为什么基线要变。**
+**当前基线：313 项全绿（70 + 77 + 29 + 40 + 14 + 46 + 37）。跑出红色必须修到绿，或明确说明为什么基线要变。**
 
 改动前端后额外确认：`git status` 里**不应出现** `frontend/dist/`（它不在版本控制内）。
 
@@ -72,6 +73,9 @@ PYTHONPATH=backend uv run --project backend python scripts/smoke_artifact_versio
 - 动了成品版本链（`backend/app/services/artifact_versions.py`）→ 必跑 `smoke_artifact_versions.py`；
   它钉死的是"回退不删历史""正文形态原样往返""非法 id 不能拼进路径"这三类
   **丢了内容才发现**的契约。
+- 动了教案迭代修改（`backend/app/api/lesson_plan.py` 的 `revise`）→ 必跑
+  `smoke_lesson_plan_revise.py`；它钉死的是"模型没给完整教案时绝不覆盖"
+  "模型漏模块要用原文补回""改坏了能回退"这三条 —— 都是**界面显示成功、内容其实没了**的事故。
 - 动了 LLM 服务的调用/兜底逻辑 → 必跑 `smoke_llm_service.py`；它钉死的是
   "模型失败后绝不静默切演示模板"以及"降级提示必须先于模板内容"，
   这类问题**不报错、不进日志**，只能靠测试发现。
