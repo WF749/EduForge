@@ -36,6 +36,22 @@
         :report="artifact.compliance"
         :label="meta.name"
       />
+
+      <!-- 离线可用性：现在不说，等拷到教室电脑才发现打不开就晚了 -->
+      <el-alert
+        v-if="needsNetwork"
+        class="ac-offline"
+        type="warning"
+        :closable="false"
+        show-icon
+        :title="artifact.offline.message"
+      >
+        <ul class="ac-offline-refs">
+          <li v-for="r in artifact.offline.refs.slice(0, 3)" :key="r.url">
+            {{ r.kind }} · {{ r.url }}
+          </li>
+        </ul>
+      </el-alert>
     </div>
 
     <div class="ac-actions">
@@ -94,6 +110,12 @@ const previewing = ref(false)
 
 const meta = computed(
   () => ARTIFACTS.find(a => a.id === props.typeId) || { name: props.typeId, icon: 'Document', grad: 'files' }
+)
+
+// 只在"确实扫出外链"时才提示。没扫过（checked=false）时不吭声 ——
+// 一个说不清的检查结果比没有更吵，而且会让人以为产物有问题。
+const needsNetwork = computed(
+  () => Boolean(props.artifact.offline?.checked && props.artifact.offline.offline_ready === false)
 )
 
 function openUrl(url) {
@@ -201,6 +223,18 @@ async function openPreview() {
 
 .ac-error {
   margin-top: 10px;
+}
+
+.ac-offline {
+  margin-top: 10px;
+}
+
+.ac-offline-refs {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.7;
+  word-break: break-all;
 }
 
 .ac-actions {

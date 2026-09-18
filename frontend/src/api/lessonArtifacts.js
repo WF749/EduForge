@@ -225,6 +225,7 @@ export async function generateAnimation(ctx, { minutes = 5 } = {}) {
     previewUrl: downloadUrl,
     originDir: dirNameOf(a.task_dir),
     compliance: data.compliance || null,
+    offline: data.offline || null,
     summary: a.scenes?.length ? `${a.scenes.length} 个场景` : 'HTML5 动画'
   }
 }
@@ -252,6 +253,7 @@ export async function generateGame(ctx, { gameType } = {}) {
     previewUrl: downloadUrl,
     originDir: dirNameOf(g.task_dir),
     compliance: data.compliance || null,
+    offline: data.offline || null,
     summary: count ? `${count} 道题` : 'HTML5 可玩游戏'
   }
 }

@@ -10,6 +10,7 @@ from ..services.courseware_generator import CoursewareGenerator
 from ..services.game_generator import GameGenerator
 from ..services.animation_generator import AnimationGenerator
 from ..services.teaching_compliance import run_compliance_gate
+from ..services.offline_artifact import check_offline
 from . import lesson_tasks as lesson_tasks_api
 
 router = APIRouter()
@@ -123,11 +124,16 @@ async def generate_game(
             {"level": audience, "topic": topic},
         )
 
+        # 游戏 HTML 目前是模板渲染（离线安全），但模型只出 JSON 设计、
+        # 将来若改成自由生成 HTML，这个检查会自动生效
+        offline = check_offline(game_payload.get("html_content"))
+
         return {
             "success": True,
             "message": "游戏生成成功",
             "game": game_payload,
-            "compliance": compliance
+            "compliance": compliance,
+            "offline": offline
         }
 
     except Exception as e:
@@ -257,11 +263,16 @@ async def generate_animation(
             {"level": audience, "topic": topic, "duration": duration},
         )
 
+        # 离线可用性：模型被要求不许引 CDN，但它不总听话。
+        # 拷到没网的教室电脑上才发现打不开就晚了，所以这里当场扫一遍（只报告不阻断）。
+        offline = check_offline(animation_payload.get("html_content"))
+
         return {
             "success": True,
             "message": "动画生成成功",
             "animation": animation_payload,
-            "compliance": compliance
+            "compliance": compliance,
+            "offline": offline
         }
 
     except Exception as e:
