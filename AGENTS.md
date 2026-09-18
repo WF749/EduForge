@@ -56,9 +56,10 @@ PYTHONPATH=backend uv run --project backend python scripts/smoke_artifact_versio
 PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_plan_revise.py  # 37 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_api_contract.py        #  8 项
 node scripts/smoke_chat_action.mjs                                                      # 25 项
+node scripts/smoke_dialogue_fields.mjs                                                  # 25 项
 ```
 
-**当前基线：353 项全绿（70 + 77 + 29 + 40 + 14 + 53 + 37 + 8 + 25）。跑出红色必须修到绿，或明确说明为什么基线要变。**
+**当前基线：378 项全绿（70 + 77 + 29 + 40 + 14 + 53 + 37 + 8 + 25 + 25）。跑出红色必须修到绿，或明确说明为什么基线要变。**
 
 改动前端后额外确认：`git status` 里**不应出现** `frontend/dist/`（它不在版本控制内）。
 
@@ -84,6 +85,10 @@ node scripts/smoke_chat_action.mjs                                              
   axios 实例的相对路径）→ 必跑 `smoke_api_contract.py`；它把前端写的路径逐个拿到后端路由表里查，
   钉死的是"路径写错 → POST 打到 SPA 兜底返回 405 → 前端 catch 住只说一句服务没响应"
   这种**两边各自都对、合起来静默失效**的事故（`/chat/dialogue` 就是这么坏掉的）。
+- 动了缺字段的中文映射（`frontend/src/utils/dialogueFields.js`）→ 必跑
+  `node scripts/smoke_dialogue_fields.mjs`；它钉死的是"译不出来就原样返回、绝不编造"——
+  `missing_fields` 是模型自由生成的，写死对照表必漏，而漏了的表现只是
+  教师看到一串英文，**没人会报错**。
 - 动了 LLM 服务的调用/兜底逻辑 → 必跑 `smoke_llm_service.py`；它钉死的是
   "模型失败后绝不静默切演示模板"以及"降级提示必须先于模板内容"，
   这类问题**不报错、不进日志**，只能靠测试发现。

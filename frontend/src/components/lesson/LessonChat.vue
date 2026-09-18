@@ -77,6 +77,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useLessonStore } from '@/store/lesson'
 import { detectKind, routeUserMessage } from '@/utils/chatAction'
+import { fieldLabels } from '@/utils/dialogueFields'
 import { postDialogue, resetDialogue } from '@/api/lessonChat'
 import { listVersions } from '@/api/lessonArtifacts'
 
@@ -108,18 +109,6 @@ const quickActions = [
 
 const KIND_NAME = {
   lesson_plan: '教案', ppt: 'PPT', animation: '动画', game: '游戏'
-}
-
-// 后端 missing_fields 用的是英文字段名，直接显示没法看
-const FIELD_LABELS = {
-  topic: '主题',
-  target_audience: '教学对象',
-  duration: '时长',
-  key_points: '要点',
-  resource_type: '资源类型',
-  requirements: '具体要求',
-  specific_question: '具体问题',
-  specific_issue: '具体问题'
 }
 
 function push(role, text, chips = [], hint = '') {
@@ -204,7 +193,8 @@ async function chatFallback(text) {
 
     // 澄清：把"还缺什么"明说出来，同时留一个直接开干的出口 —— 追问不能把人卡死
     if (r.action === 'clarify') {
-      const missing = r.missingFields.map((f) => FIELD_LABELS[f] || f)
+      // 后端 message 常常只是一句"请提供更多信息。"，真正有用的信息在缺字段里
+      const missing = fieldLabels(r.missingFields)
       push(
         'agent',
         r.message || '还差一点信息才能开始。',
