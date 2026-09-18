@@ -115,7 +115,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { View, Hide, Server, Globe, Cpu, Code, InfoFilled } from '@element-plus/icons-vue'
-import { useLLMStore } from '../stores/llm'
+import { useLLMStore } from '../store/llm'
 import { llmApi } from '../api/llm'
 
 // 状态管理
