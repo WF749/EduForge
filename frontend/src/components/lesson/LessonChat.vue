@@ -14,7 +14,10 @@
       </p>
 
       <div v-for="(m, i) in messages" :key="i" class="lc-msg" :class="`is-${m.role}`">
-        <div class="lc-bubble">{{ m.text }}</div>
+        <div class="lc-bubble">
+          {{ m.text }}
+          <span v-if="m.hint" class="lc-hint">{{ m.hint }}</span>
+        </div>
         <div v-if="m.chips && m.chips.length" class="lc-chips">
           <button v-for="c in m.chips" :key="c" type="button" class="lc-chip" @click="send(c)">
             {{ c }}
@@ -73,8 +76,8 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useLessonStore } from '@/store/lesson'
-import { routeUserMessage } from '@/utils/chatAction'
-import { postDialogue } from '@/api/lessonChat'
+import { detectKind, routeUserMessage } from '@/utils/chatAction'
+import { postDialogue, resetDialogue } from '@/api/lessonChat'
 import { listVersions } from '@/api/lessonArtifacts'
 
 const props = defineProps({
@@ -107,8 +110,20 @@ const KIND_NAME = {
   lesson_plan: '教案', ppt: 'PPT', animation: '动画', game: '游戏'
 }
 
-function push(role, text, chips = []) {
-  messages.value.push({ role, text, chips })
+// 后端 missing_fields 用的是英文字段名，直接显示没法看
+const FIELD_LABELS = {
+  topic: '主题',
+  target_audience: '教学对象',
+  duration: '时长',
+  key_points: '要点',
+  resource_type: '资源类型',
+  requirements: '具体要求',
+  specific_question: '具体问题',
+  specific_issue: '具体问题'
+}
+
+function push(role, text, chips = [], hint = '') {
+  messages.value.push({ role, text, chips, hint })
   nextTick(scrollToBottom)
 }
 
@@ -117,8 +132,14 @@ function scrollToBottom() {
   if (el) el.scrollTop = el.scrollHeight
 }
 
-function clear() {
+async function clear() {
   messages.value = []
+  // 后端上下文也得清：否则本地清空了，服务端还停在"等你确认"的状态
+  try {
+    await resetDialogue(conversationId.value)
+  } catch {
+    // 重置失败不影响本地继续用，最多是追问节奏对不上
+  }
 }
 
 async function refreshVersion() {
@@ -162,15 +183,62 @@ function dispatch(text, route) {
   chatFallback(text)
 }
 
+/** 后端说的"意图"能不能落到某一种成品上；落不到就老实聊天，不硬凑 */
+function kindFromResult(r) {
+  if (r.intentType === 'course_design') return 'lesson_plan'
+  if (r.intentType === 'resource_generation') {
+    return detectKind(String(r.fields.resource_type || '')) || null
+  }
+  return null
+}
+
+function requestGenerate(kind) {
+  if (kind !== props.activeKind) emit('switch-kind', kind)
+  emit('generate', kind)
+}
+
 async function chatFallback(text) {
   thinking.value = true
   try {
     const r = await postDialogue(conversationId.value, text)
+
+    // 澄清：把"还缺什么"明说出来，同时留一个直接开干的出口 —— 追问不能把人卡死
+    if (r.action === 'clarify') {
+      const missing = r.missingFields.map((f) => FIELD_LABELS[f] || f)
+      push(
+        'agent',
+        r.message || '还差一点信息才能开始。',
+        ['生成教案'],
+        missing.length ? `还缺：${missing.join('、')}` : ''
+      )
+      return
+    }
+
+    // 确认：把"确认/取消"做成按钮，别让教师猜该回哪个词
+    if (r.action === 'confirm') {
+      push('agent', r.message || '请确认我理解得对不对。', ['确认', '取消'])
+      return
+    }
+
+    if (r.action === 'reset') {
+      push('agent', r.message || '好的，请重新描述你的需求。')
+      return
+    }
+
+    // 执行：确认过的直接开做；没确认过的只给入口，不能说"我已经做了"
+    const kind = kindFromResult(r)
+    if (r.confirmed && kind) {
+      push('agent', `确认收到，开始生成${KIND_NAME[kind]}。右侧会显示进度。`)
+      requestGenerate(kind)
+      return
+    }
+
     if (r.message) {
       push('agent', r.message, r.suggestions.slice(0, 3))
       return
     }
-    // 后端判定"可以直接执行"时没有话要说，如实告知而不是编一句
+
+    // 后端判定"可以直接执行"但没话要说，如实告知而不是编一句
     push('agent', '我理解了你的需求。你可以直接说要生成什么，例如「生成教案」。',
       ['生成教案', '生成 PPT'])
   } catch (e) {
@@ -281,6 +349,13 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
 }
 
 .lc-typing { color: rgba(255, 255, 255, 0.45); font-size: 12px; }
+
+.lc-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgba(0, 200, 255, 0.7);
+}
 
 .lc-chips {
   display: flex;
