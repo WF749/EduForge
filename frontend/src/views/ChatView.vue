@@ -515,6 +515,7 @@ import { marked } from 'marked'
 // 按需注册语言，避免把 highlight.js 全部 190+ 语言打进包（原 ChatView 产物 1MB）
 import hljs from '@/utils/highlight'
 import { renderMathInText } from '@/utils/mathRender'
+import { useSpeech } from '@/composables/useSpeech'
 import 'katex/dist/katex.min.css'
 import {
   Plus, Delete, ChatDotRound, ChatLineRound, Upload, Document,
@@ -549,9 +550,16 @@ const uploadedFiles = ref([])
 const currentConversationId = ref(null)
 const conversations = ref([])
 const showRequirements = ref(false)
-const isSpeaking = ref(false)
+// 语音能力（与备课对话共用同一份实现，避免两处各自漂移）
+const {
+  listening: isVoiceListening,
+  speaking: isSpeaking,
+  toggleListening: _toggleListening,
+  stopListening: _stopListening,
+  speak: _speak,
+  stopSpeaking: _stopSpeaking
+} = useSpeech()
 const autoSpeak = ref(false)
-const isVoiceListening = ref(false)
 const summarizing = ref(false)
 const deepThinkingEnabled = ref(false)
 const smartSearchEnabled = ref(false)
@@ -1014,19 +1022,14 @@ async function addFilesToKnowledge() {
 }
 
 // ====== 语音 ======
+// STT/TTS 的实现收在 useSpeech 里，备课对话用的是同一份，
+// 这里只保留"自动朗读"这个本页特有的策略。
 function speakText(text) {
-  if (!window.speechSynthesis) return
-  window.speechSynthesis.cancel()
-  const u = new SpeechSynthesisUtterance(text.replace(/[#*`\[\]]/g, ''))
-  u.lang = 'zh-CN'
-  u.onstart = () => { isSpeaking.value = true }
-  u.onend = u.onerror = () => { isSpeaking.value = false }
-  window.speechSynthesis.speak(u)
+  _speak(text)
 }
 
 function stopSpeaking() {
-  window.speechSynthesis?.cancel()
-  isSpeaking.value = false
+  _stopSpeaking()
 }
 
 function toggleAutoSpeak() {
@@ -1034,93 +1037,15 @@ function toggleAutoSpeak() {
   ElMessage.success(autoSpeak.value ? '已开启自动朗读' : '已关闭自动朗读')
 }
 
-// ====== 语音输入(STT) ======
-let speechRecognition = null
-
 function toggleVoiceInput() {
-  if (isVoiceListening.value) {
-    stopVoiceInput()
-  } else {
-    startVoiceInput()
-  }
-}
-
-function startVoiceInput() {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-  if (!SpeechRecognition) {
-    ElMessage.warning('当前浏览器不支持语音识别，请使用Chrome浏览器')
-    return
-  }
-
-  // 检查是否在安全上下文中（HTTPS或localhost）
-  if (!window.isSecureContext) {
-    ElMessage.warning('语音识别需要HTTPS环境或localhost访问，当前环境不支持')
-    return
-  }
-
-  // 先请求麦克风权限
-  navigator.mediaDevices.getUserMedia({ audio: true }).then(() => {
-    _doStartVoiceInput(SpeechRecognition)
-  }).catch((err) => {
-    if (err.name === 'NotAllowedError') {
-      ElMessage.error('麦克风权限被拒绝，请在浏览器设置中允许麦克风访问')
-    } else if (err.name === 'NotFoundError') {
-      ElMessage.error('未检测到麦克风设备，请连接麦克风后重试')
-    } else {
-      ElMessage.error('无法访问麦克风: ' + err.message)
+  _toggleListening({
+    onText: (text) => { inputText.value = text },
+    onError: (msg, code) => {
+      // 环境不支持不是教师的错，用 warning；操作失败才用 error
+      if (code === 'unsupported' || code === 'insecure') ElMessage.warning(msg)
+      else ElMessage.error(msg)
     }
   })
-}
-
-function _doStartVoiceInput(SpeechRecognition) {
-  speechRecognition = new SpeechRecognition()
-  speechRecognition.lang = 'zh-CN'
-  speechRecognition.continuous = true
-  speechRecognition.interimResults = true
-
-  speechRecognition.onstart = () => {
-    isVoiceListening.value = true
-    ElMessage.success('语音输入已开启，请说话...')
-  }
-
-  speechRecognition.onresult = (event) => {
-    let finalText = ''
-    let interimText = ''
-    for (let i = 0; i < event.results.length; i++) {
-      const transcript = event.results[i][0].transcript
-      if (event.results[i].isFinal) {
-        finalText += transcript
-      } else {
-        interimText += transcript
-      }
-    }
-    inputText.value = finalText + interimText
-  }
-
-  speechRecognition.onerror = (event) => {
-    if (event.error === 'not-allowed') {
-      ElMessage.error('麦克风权限被拒绝，请在浏览器地址栏左侧点击锁图标，允许麦克风权限后重试')
-    } else if (event.error === 'network') {
-      ElMessage.error('语音识别网络错误，请检查网络连接')
-    } else if (event.error !== 'no-speech' && event.error !== 'aborted') {
-      ElMessage.warning('语音识别: ' + event.error)
-    }
-    isVoiceListening.value = false
-  }
-
-  speechRecognition.onend = () => {
-    isVoiceListening.value = false
-  }
-
-  speechRecognition.start()
-}
-
-function stopVoiceInput() {
-  if (speechRecognition) {
-    speechRecognition.stop()
-    speechRecognition = null
-  }
-  isVoiceListening.value = false
 }
 
 // ====== 需求总结确认 ======
@@ -1354,7 +1279,7 @@ onActivated(async () => {
 onBeforeUnmount(() => {
   persistChatSession()
   cleanupSpeech()
-  stopVoiceInput()
+  _stopListening()
   window.removeEventListener('beforeunload', cleanupSpeech)
 })
 </script>
