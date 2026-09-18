@@ -136,6 +136,31 @@ def test_atomic_and_files() -> None:
           "meta" in __import__("json").loads((d / "v1.json").read_text(encoding="utf-8")))
 
 
+def test_delete_chain() -> None:
+    print("\n== 9. 删课时清掉版本正文 ==")
+    lid = "lesson-del"
+    av.save_version(lid, "lesson_plan", {"教学目标": ["x"]})
+    av.save_version(lid, "animation", "<html></html>")
+    check("两条链都建好了",
+          av.get_content(lid, "lesson_plan") is not None
+          and av.get_content(lid, "animation") is not None)
+
+    check("删除 lesson_plan 链成功", av.delete_chain(lid, "lesson_plan") is True)
+    check("删完读不到内容", av.get_content(lid, "lesson_plan") is None)
+    check("删一条不影响另一条", av.get_content(lid, "animation") == "<html></html>")
+    check("删不存在的链返回 False", av.delete_chain(lid, "game") is False)
+
+    from app import persist
+    from app.api import lesson_tasks as lt
+    # 台账也要指到临时目录，别动真实数据
+    persist.LESSON_TASK_STORE = Path(paths.DATA_DIR) / "lesson_tasks.json"
+    asyncio.run(lt.upsert_lesson_task({"id": lid, "topic": "待删除的课"}))
+    av.save_version(lid, "game", "<html>g</html>")
+    r = asyncio.run(lt.delete_lesson_task(lid))
+    check("删课接口顺带清掉了剩余版本链", "game" in r["cleaned_chains"], f"got={r['cleaned_chains']}")
+    check("删课后 game 链也没了", av.get_content(lid, "game") is None)
+
+
 def test_api_layer() -> None:
     print("\n== 8. API 层（用独立课程，避免依赖前面的版本号）==")
     lid = "lesson-api"
@@ -181,6 +206,7 @@ def main() -> int:
             test_missing_version_returns_none,
             test_id_and_kind_guard,
             test_atomic_and_files,
+            test_delete_chain,
             test_api_layer,
         ):
             fn()

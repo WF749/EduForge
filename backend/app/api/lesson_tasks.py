@@ -29,6 +29,7 @@ from fastapi import APIRouter, Body, HTTPException, Path, Query
 
 from .. import persist
 from ..core.logging_setup import get_logger
+from ..services import artifact_versions
 
 router = APIRouter()
 log = get_logger("lesson_tasks")
@@ -252,7 +253,11 @@ async def get_lesson_task(task_id: str = Path(...)):
 
 @router.delete("/lesson-tasks/{task_id}", tags=["课程任务"])
 async def delete_lesson_task(task_id: str = Path(...)):
-    """删除台账记录。**不会**删除已生成的文件，那些仍可在"历史作品"里下载。"""
+    """删除台账记录。**不会**删除已导出的文件，那些仍可在"历史作品"里下载。
+
+    但会连带清掉这门课的**成品版本链**：版本里存的是每一版的完整正文，
+    属于内部副本，课程都删了还留着就是没人认领的数据。
+    """
     task_id = _slug(task_id, 64)
     store = persist.load_lesson_task_store()
     tasks = store.setdefault("tasks", {})
@@ -263,7 +268,16 @@ async def delete_lesson_task(task_id: str = Path(...)):
     if task_id in order:
         order.remove(task_id)
     persist.save_lesson_task_store(store)
-    return {"success": True, "deleted": task_id}
+
+    cleaned = []
+    for kind in artifact_versions.KINDS:
+        try:
+            if artifact_versions.delete_chain(task_id, kind):
+                cleaned.append(kind)
+        except Exception:
+            # 清版本链失败不影响台账本身已删除
+            pass
+    return {"success": True, "deleted": task_id, "cleaned_chains": cleaned}
 
 
 @router.put("/lesson-tasks/{task_id}/artifacts/{artifact_type}", tags=["课程任务"])
