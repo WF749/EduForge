@@ -59,9 +59,10 @@ PYTHONPATH=backend uv run --project backend python scripts/smoke_offline_artifac
 PYTHONPATH=backend uv run --project backend python scripts/smoke_teaching_review.py     # 27 项
 node scripts/smoke_chat_action.mjs                                                      # 25 项
 node scripts/smoke_dialogue_fields.mjs                                                  # 25 项
+node scripts/smoke_speech.mjs                                                           # 21 项
 ```
 
-**当前基线：437 项全绿（70 + 77 + 29 + 40 + 14 + 53 + 37 + 13 + 27 + 27 + 25 + 25）。跑出红色必须修到绿，或明确说明为什么基线要变。**
+**当前基线：458 项全绿（70 + 77 + 29 + 40 + 14 + 53 + 37 + 13 + 27 + 27 + 25 + 25 + 21）。跑出红色必须修到绿，或明确说明为什么基线要变。**
 
 改动前端后额外确认：`git status` 里**不应出现** `frontend/dist/`（它不在版本控制内）。
 
@@ -91,6 +92,9 @@ node scripts/smoke_dialogue_fields.mjs                                          
   `smoke_offline_artifact.py`；它同时钉死**漏报**（CDN 引库写法一个都不能放走，
   否则拷到没网的教室才发现打不开）和**误报**（注释里的示例链接、data: URI、相对路径
   一个都不能报 —— 误报一多，这个提示就没人看了）。
+- 动了语音能力（`frontend/src/composables/useSpeech.js`）→ 必跑 `node scripts/smoke_speech.mjs`。
+  语音**没法在 CI 里真跑**（要麦克风、要 HTTPS、要 Chrome），所以能抽成纯逻辑的部分
+  （错误码翻译、朗读前文本清洗）必须抽出来测，否则它就是一片无人验证的代码。
 - 动了模型深度复查（`backend/app/services/teaching_review.py`）→ 必跑
   `smoke_teaching_review.py`。它默认关闭、平时没人触发，**正是最容易腐化成死代码的那种功能**
   （上一个这么死掉的是 `content_version_manager`），所以测试里直接开开关 + 注入假 LLM 跑通全链路。

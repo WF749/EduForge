@@ -56,6 +56,25 @@
       <el-button type="primary" :loading="thinking" :disabled="thinking || !draft.trim()" @click="send()">
         发送
       </el-button>
+
+      <!--
+        语音：教师站在讲台边、手上拿着教具时，说话比打字快得多。
+        不支持时（非 Chrome / 非 HTTPS）直接不给按钮，而不是点了才报错。
+      -->
+      <el-button
+        v-if="sttSupported"
+        :type="listening ? 'danger' : 'default'"
+        :icon="Microphone"
+        :title="listening ? '停止录音' : '语音输入'"
+        @click="toggleVoice"
+      />
+      <el-button
+        v-if="ttsSupported && lastAgentText"
+        :type="speaking ? 'danger' : 'default'"
+        :icon="speaking ? VideoPause : VideoPlay"
+        :title="speaking ? '停止朗读' : '朗读最后一句'"
+        @click="toggleSpeak"
+      />
     </div>
   </section>
 </template>
@@ -76,8 +95,10 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useLessonStore } from '@/store/lesson'
+import { Microphone, VideoPause, VideoPlay } from '@element-plus/icons-vue'
 import { detectKind, routeUserMessage } from '@/utils/chatAction'
 import { fieldLabels } from '@/utils/dialogueFields'
+import { useSpeech } from '@/composables/useSpeech'
 import { postDialogue, resetDialogue } from '@/api/lessonChat'
 import { listVersions } from '@/api/lessonArtifacts'
 
@@ -99,6 +120,31 @@ const currentVersion = ref(0)
 
 const conversationId = computed(() => `lesson-${store.taskId || 'local'}`)
 const reviseSupported = computed(() => props.reviseKinds.includes(props.activeKind))
+
+const {
+  listening, speaking, sttSupported, ttsSupported,
+  toggleListening, stopListening, speak, stopSpeaking
+} = useSpeech()
+
+/** 朗读的对象是"智能体最后说的一句"，读用户自己的话没意义 */
+const lastAgentText = computed(() => {
+  for (let i = messages.value.length - 1; i >= 0; i--) {
+    if (messages.value[i].role === 'agent') return messages.value[i].text
+  }
+  return ''
+})
+
+function toggleVoice() {
+  toggleListening({
+    // 实时回灌到输入框：教师能看到自己说的话被识别成什么，错了可以手改
+    onText: (text) => { draft.value = text },
+    onError: (msg) => ElMessage.error(msg)
+  })
+}
+
+function toggleSpeak() {
+  speaking.value ? stopSpeaking() : speak(lastAgentText.value)
+}
 
 const quickActions = [
   { label: '生成教案', action: 'generate', kind: 'lesson_plan' },
@@ -122,6 +168,8 @@ function scrollToBottom() {
 }
 
 async function clear() {
+  stopListening()
+  stopSpeaking()
   messages.value = []
   // 后端上下文也得清：否则本地清空了，服务端还停在"等你确认"的状态
   try {
@@ -242,6 +290,8 @@ async function chatFallback(text) {
 function send(text) {
   const content = String(text ?? draft.value).trim()
   if (!content || thinking.value) return
+  // 发送时还开着麦克风的话，下一句会被继续灌进输入框
+  if (listening.value) stopListening()
   draft.value = ''
 
   const route = routeUserMessage(content, {
