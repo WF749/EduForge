@@ -289,6 +289,33 @@ PPT 走后台任务，报告写在 `task.result.compliance`，随 `/api/ppt/stat
 
 ---
 
+## 验收边界
+
+> 边界先讲清楚，免得拿教务系统的尺子来量它。
+
+**它是什么**：一个给 K-12 教师用的**备课**工作台 —— 把一节课要用的教案、PPT、动画、游戏
+在一次对话里迭代出来，过程中有两道自动质检（教学合规、数据出校），产物可回退。
+
+**验收看三条**：
+
+| 维度 | 具体判据 |
+|---|---|
+| 能跑 | 装好就能跑：无外部服务依赖，模型可换，断网也能生成（产物不依赖 CDN） |
+| 可验证 | 生成完自动出质检报告（R1–R8），指出哪一条不合格、怎么改，而不只是打个分 |
+| 可回退 | 每一次"按这句改"都留一版，回退不删历史，改坏了能再回退回来 |
+
+**明确不做**（不是没做完，是刻意不进这个项目）：
+
+- 班级/学生成绩档案、知识点掌握度长期画像 —— 属于教务域，且是高敏感数据
+- 三角色审批流（教师/教研/学生）—— 会把系统边界撑爆
+- 作业批改与考试系统 —— 与"备课"不是一个环节
+
+**质量保证怎么自证**：378 项离线冒烟测试（不消耗模型额度、秒级跑完），
+覆盖数据合规、教学合规、教案健壮性、版本链、迭代修改、前后端接口路径契约、对话意图路由。
+另有 100 条自建 RAG 评测集（`make eval` 可复现）。
+
+---
+
 ## 路线图
 
 1. ✅ **企业级 RAG**：本地 bge-zh embedding + 混合检索（BM25+向量）+ **本地 rerank** + 拒答闸门 + 引用溯源 + 100 条评测集。
@@ -315,6 +342,8 @@ PPT 走后台任务，报告写在 `task.result.compliance`，随 `/api/ppt/stat
 
 欢迎 Issue 与 PR。提交前请运行冒烟测试（均在项目根目录，不消耗模型额度）：
 
+全部 378 项，均不消耗模型额度、秒级跑完（完整清单见 [`AGENTS.md`](AGENTS.md#提交前必须跑通的验证)）：
+
 ```bash
 PYTHONPATH=backend uv run --project backend python scripts/smoke_safety.py
 #   数据合规：70 项（分级 / 脱敏 / 阻断 / 调用链路插桩）
@@ -324,6 +353,15 @@ PYTHONPATH=backend uv run --project backend python scripts/smoke_teaching_compli
 
 PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_plan.py
 #   教案健壮性：29 项（输出上限防截断 / 补全不丢内容 / 各 provider 统一上限）
+
+PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_tasks.py        # 40 项：课程台账
+PYTHONPATH=backend uv run --project backend python scripts/smoke_llm_service.py         # 14 项：模型降级不静默
+PYTHONPATH=backend uv run --project backend python scripts/smoke_artifact_versions.py   # 53 项：成品版本链
+PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_plan_revise.py  # 37 项：按指令迭代修改
+PYTHONPATH=backend uv run --project backend python scripts/smoke_api_contract.py        #  8 项：前后端接口路径契约
+
+node scripts/smoke_chat_action.mjs       # 25 项：一句话判 改/生成/聊天
+node scripts/smoke_dialogue_fields.mjs   # 25 项：缺字段中文映射（译不出不编造）
 
 cd backend && uv run python tests/test_harness.py   # Harness 离线自测
 ```
