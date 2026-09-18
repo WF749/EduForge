@@ -51,6 +51,35 @@ def _redact_history(history: Optional[List[Dict]]) -> List[Dict]:
     return out
 
 
+def _demo_fallback_allowed() -> bool:
+    """真实模型失败后，是否允许降级到演示模板。**默认关闭**。
+
+    理由（与 docs/CONSTRAINTS.md D2 一致，此前代码没做到）：把失败包装成
+    "生成成功"比直接报错危险得多 —— 教师会拿着模板内容去上课，还以为模型
+    真的给了建议。需要降级时必须显式开启 EDUFORGE_LLM_FALLBACK_TO_DEMO=true。
+    """
+    raw = (os.getenv("EDUFORGE_LLM_FALLBACK_TO_DEMO", "") or "").strip().lower()
+    return raw in ("1", "true", "yes", "on")
+
+
+def _failure_notice(reason: str) -> str:
+    """模型不可用的提示。这里是生成器，抛异常会截断 SSE，所以产出提示文本。"""
+    return (
+        "\n\n[生成失败] 真实模型调用失败，**没有产出任何内容**。\n"
+        f"- 原因：{reason}\n"
+        "- 建议：到设置页检查模型配置与 API Key，或换一个模型后重试\n"
+    )
+
+
+def _demo_notice(reason: str) -> str:
+    """允许降级时的提示：必须先说清这是模板，再给内容 —— 顺序不能反。"""
+    return (
+        "\n\n[演示模式兜底] 真实模型调用失败，以下内容为**模板示例**，并非真实模型输出。\n"
+        f"- 原因：{reason}\n"
+        "- 提示：如需关闭降级，移除环境变量 EDUFORGE_LLM_FALLBACK_TO_DEMO\n"
+    )
+
+
 class LLMService:
     """LLM服务全局单例"""
     _instance = None
@@ -348,7 +377,8 @@ class LLMService:
                 prompt = _redact_text(prompt)
                 history = _redact_history(history)
             # 尝试调用，失败自动重试2次
-            for i in range(3):
+            last_error = None
+            for _ in range(3):
                 try:
                     for chunk in provider_instance.stream_chat_completions(
                         prompt=prompt,
@@ -360,27 +390,26 @@ class LLMService:
                     ):
                         yield chunk
                     return
-                except Exception as e:
-                    if i == 2:
-                        # 最后一次失败，使用演示模式兜底
-                        demo_provider = self.get_provider('demo')
-                        for chunk in demo_provider.stream_chat_completions(
-                            prompt=prompt,
-                            history=history,
-                            temperature=runtime["temperature"]
-                        ):
-                            yield chunk
-                        return
+                except Exception as e:  # noqa: BLE001
+                    last_error = e
                     continue
-        except Exception as e:
-            # 兜底到演示模式
-            demo_provider = self.get_provider('demo')
-            for chunk in demo_provider.stream_chat_completions(
-                prompt=prompt,
-                history=history,
-                temperature=temperature or 0.7
-            ):
-                yield chunk
+
+            reason = f"{type(last_error).__name__}: {last_error}"
+            # 用户显式选的就是演示模式 → 它失败就是真失败，不能再"兜底"成它自己
+            if _demo_fallback_allowed() and runtime["provider"] != "demo":
+                yield _demo_notice(reason)
+                for chunk in self.get_provider('demo').stream_chat_completions(
+                    prompt=prompt,
+                    history=history,
+                    temperature=runtime["temperature"]
+                ):
+                    yield chunk
+                return
+            yield _failure_notice(reason)
+        except Exception as e:  # noqa: BLE001
+            # 配置/初始化异常同样如实暴露：注释与非流式 chat_completions 保持一致，
+            # 不再拿模板内容冒充成功。
+            yield _failure_notice(f"{type(e).__name__}: {e}")
     
     def stream_vision_chat(
         self,
