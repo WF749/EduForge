@@ -19,7 +19,6 @@ from .core.logging_setup import get_logger
 from .core.providers import get_provider, resolve_base_url
 from .document_extract import extract_text, resolve_uploaded_references
 from .services.dialogue_manager import dialogue_manager
-from .services.content_version_manager import content_version_manager
 from .services.multimodal_analyzer import multimodal_analyzer, ModalityType
 from .pathutil import resolve_under_roots
 from .paths import (
@@ -603,114 +602,6 @@ async def chat_intent(body: Dict[str, Any]):
             out["topic"] = msg[:80]
             out["notes"] = "解析失败，已回退为通用意图"
     return {"success": True, "intent": out.get("intent", "general"), "details": out}
-
-
-@router.post("/content/create")
-async def create_content(body: Dict[str, Any]):
-    """创建内容项并保存到版本管理"""
-    content_type = body.get("type", "unknown")
-    title = body.get("title", "未命名")
-    content = body.get("content", "")
-    tags = body.get("tags", [])
-    metadata = body.get("metadata", {})
-    
-    item_id = content_version_manager.create_item(
-        content_type=content_type,
-        title=title,
-        content=content,
-        tags=tags,
-        metadata=metadata
-    )
-    
-    return {
-        "success": True,
-        "item_id": item_id,
-        "message": "内容已保存，后续修改将自动记录版本并回流知识库"
-    }
-
-
-@router.get("/content/list")
-async def list_content(
-    type: Optional[str] = None,
-    limit: int = 50,
-    offset: int = 0
-):
-    """列出内容项"""
-    result = content_version_manager.list_items(
-        content_type=type,
-        limit=limit,
-        offset=offset
-    )
-    return {"success": True, **result}
-
-
-@router.get("/content/{item_id}")
-async def get_content(item_id: str, version: Optional[str] = None):
-    """获取内容"""
-    item = content_version_manager.get_item(item_id)
-    if not item:
-        raise HTTPException(status_code=404, detail="内容不存在")
-    
-    content = content_version_manager.get_content(item_id, version)
-    history = content_version_manager.get_version_history(item_id)
-    
-    return {
-        "success": True,
-        "item": item,
-        "content": content,
-        "version_history": history
-    }
-
-
-@router.post("/content/{item_id}/update")
-async def update_content(item_id: str, body: Dict[str, Any]):
-    """更新内容（创建新版本）"""
-    content = body.get("content", "")
-    author = body.get("author", "user")
-    note = body.get("note", "")
-    auto_backflow = body.get("auto_backflow", True)
-    
-    success = content_version_manager.update_content(
-        item_id=item_id,
-        content=content,
-        author=author,
-        note=note,
-        auto_backflow=auto_backflow
-    )
-    
-    if not success:
-        raise HTTPException(status_code=404, detail="内容不存在")
-    
-    item = content_version_manager.get_item(item_id)
-    return {
-        "success": True,
-        "item": item,
-        "message": "内容已更新，新版本已创建并回流知识库"
-    }
-
-
-@router.post("/content/{item_id}/revert")
-async def revert_content(item_id: str, body: Dict[str, Any]):
-    """回滚到指定版本"""
-    version_id = body.get("version")
-    if not version_id:
-        raise HTTPException(status_code=400, detail="请指定版本号")
-    
-    success = content_version_manager.revert_to_version(item_id, version_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="内容或版本不存在")
-    
-    return {"success": True, "message": f"已回滚到版本 {version_id}"}
-
-
-@router.delete("/content/{item_id}")
-async def delete_content(item_id: str):
-    """删除内容项"""
-    success = content_version_manager.delete_item(item_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="内容不存在")
-    
-    return {"success": True, "message": "内容已删除"}
 
 
 @router.post("/multimodal/analyze")
