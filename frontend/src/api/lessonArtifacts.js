@@ -38,7 +38,9 @@ export async function generateLessonPlan(ctx) {
     topic: ctx.topic,
     duration: ctx.duration,
     requirements: ctx.requirements,
-    reference_files: ctx.referenceIds
+    reference_files: ctx.referenceIds,
+    // 给了课程 id，后端会把成品落为该课教案的 v1 —— 之后的"按指令修改"才有基线
+    lesson_id: ctx.lessonId || undefined
   }), '教案生成失败')
 
   if (!created.lesson_plan) throw new Error(created.message || '教案内容为空，请重试')
@@ -60,6 +62,82 @@ export async function generateLessonPlan(ctx) {
     compliance: created.compliance || null,
     summary: 'Word 教案已导出'
   }
+}
+
+// ---- 版本与迭代修改 --------------------------------------------------------
+
+/**
+ * 教案每一版的 docx 都是同一个文件名（按课题命名），所以改完重新导出会覆盖旧文件，
+ * 下载链接保持不变、内容跟着更新 —— 不会出现"列表里是 v3、下载下来是 v1 的内容"。
+ */
+async function exportRevised(lessonPlan, topic, extra) {
+  const exported = await readJson(await post('/lesson-plan/export', {
+    lesson_plan: lessonPlan,
+    export_format: 'docx',
+    topic
+  }), '教案导出失败')
+
+  if (!exported.download_url) throw new Error(exported.message || '教案导出未返回下载地址')
+  return {
+    downloadUrl: exported.download_url,
+    fileName: exported.filename || '',
+    ...extra
+  }
+}
+
+/** 按教师的一句话指令修改教案（结果记为新版本，旧版本仍可回退） */
+export async function reviseLessonPlan({ lessonId, instruction, ctx }) {
+  const data = await readJson(await post('/lesson-plan/revise', {
+    lesson_id: lessonId,
+    instruction,
+    level: ctx.level,
+    subject: ctx.subject,
+    grade: ctx.grade,
+    duration: ctx.duration
+  }), '教案修改失败')
+
+  if (!data.lesson_plan) throw new Error(data.message || '修改结果为空，已保留原版本')
+
+  return exportRevised(data.lesson_plan, ctx.topic, {
+    version: data.version || null,
+    changeLog: Array.isArray(data.change_log) ? data.change_log : [],
+    compliance: data.compliance || null,
+    message: data.message || ''
+  })
+}
+
+export async function listVersions(lessonId, kind) {
+  const q = `?lesson_id=${encodeURIComponent(lessonId)}&kind=${encodeURIComponent(kind)}`
+  const data = await readJson(
+    await trackedFetch(`${BASE()}/artifacts/versions${q}`),
+    '版本历史读取失败'
+  )
+  return {
+    current: Number(data.current || 0),
+    versions: Array.isArray(data.versions) ? data.versions : []
+  }
+}
+
+/** 回退到某一版。回退本身也是一个新版本，所以历史不会被截断。 */
+export async function revertVersion({ lessonId, kind, version, ctx }) {
+  const data = await readJson(await post('/artifacts/revert', {
+    lesson_id: lessonId, kind, version
+  }), '回退失败')
+
+  // 回退只回元信息，正文要再取一次才能重新导出 docx
+  const got = await readJson(
+    await trackedFetch(
+      `${BASE()}/artifacts/content?lesson_id=${encodeURIComponent(lessonId)}`
+      + `&kind=${encodeURIComponent(kind)}&version=${Number(version)}`
+    ),
+    '读取回退后的内容失败'
+  )
+  if (!got.content) throw new Error('回退后的内容为空')
+
+  return exportRevised(got.content, ctx.topic, {
+    version: data.version || null,
+    message: data.message || ''
+  })
 }
 
 // ---- PPT ------------------------------------------------------------------
@@ -183,6 +261,7 @@ export function contextPayload(store) {
     ? `${store.keyPoints.trim()}\n内容难度：${store.difficultyLabel}`
     : store.topic
   return {
+    lessonId: store.taskId || '',
     topic: store.topic.trim(),
     subject: store.subject,
     grade: store.grade,
