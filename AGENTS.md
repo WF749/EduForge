@@ -54,10 +54,11 @@ PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_tasks.py
 PYTHONPATH=backend uv run --project backend python scripts/smoke_llm_service.py         # 14 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_artifact_versions.py   # 53 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_plan_revise.py  # 37 项
+PYTHONPATH=backend uv run --project backend python scripts/smoke_api_contract.py        #  8 项
 node scripts/smoke_chat_action.mjs                                                      # 25 项
 ```
 
-**当前基线：345 项全绿（70 + 77 + 29 + 40 + 14 + 53 + 37 + 25）。跑出红色必须修到绿，或明确说明为什么基线要变。**
+**当前基线：353 项全绿（70 + 77 + 29 + 40 + 14 + 53 + 37 + 8 + 25）。跑出红色必须修到绿，或明确说明为什么基线要变。**
 
 改动前端后额外确认：`git status` 里**不应出现** `frontend/dist/`（它不在版本控制内）。
 
@@ -79,6 +80,10 @@ node scripts/smoke_chat_action.mjs                                              
   "模型漏模块要用原文补回""改坏了能回退"这三条 —— 都是**界面显示成功、内容其实没了**的事故。
 - 动了对话动作路由（`frontend/src/utils/chatAction.js`）→ 必跑 `node scripts/smoke_chat_action.mjs`；
   它钉死的是"修改指令不能被判成重新生成"——判错会**静默覆盖**教师改了几轮的内容。
+- 动了任何一处前端调接口的路径（`frontend/src/api/*.js`、`trackedFetch(`${BASE()}/...`)`、
+  axios 实例的相对路径）→ 必跑 `smoke_api_contract.py`；它把前端写的路径逐个拿到后端路由表里查，
+  钉死的是"路径写错 → POST 打到 SPA 兜底返回 405 → 前端 catch 住只说一句服务没响应"
+  这种**两边各自都对、合起来静默失效**的事故（`/chat/dialogue` 就是这么坏掉的）。
 - 动了 LLM 服务的调用/兜底逻辑 → 必跑 `smoke_llm_service.py`；它钉死的是
   "模型失败后绝不静默切演示模板"以及"降级提示必须先于模板内容"，
   这类问题**不报错、不进日志**，只能靠测试发现。
