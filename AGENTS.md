@@ -28,7 +28,7 @@ Vue3 + FastAPI 单体，后端托管前端构建产物，教案/PPT/动画/游�
 8. **不要为了"顺手"引入新依赖**。先查 `pyproject.toml` / `frontend/package.json`，
    能复用现有能力就复用；确需新增，在 PR/提交信息里说明理由。
 9. **不要擅自 `git commit` 或 `git push`**。改动留在工作区，由用户自己验证后再决定提交；
-   只有用户明确说"提交""推送"时才执行。**提交前先跑通下面的 320 项验证。**
+   只有用户明确说"提交""推送"时才执行。**提交前先跑通下面的 345 项验证。**
 
 ## 目录地图（按需读，不要全读）
 
@@ -54,9 +54,10 @@ PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_tasks.py
 PYTHONPATH=backend uv run --project backend python scripts/smoke_llm_service.py         # 14 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_artifact_versions.py   # 53 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_plan_revise.py  # 37 项
+node scripts/smoke_chat_action.mjs                                                      # 25 项
 ```
 
-**当前基线：320 项全绿（70 + 77 + 29 + 40 + 14 + 53 + 37）。跑出红色必须修到绿，或明确说明为什么基线要变。**
+**当前基线：345 项全绿（70 + 77 + 29 + 40 + 14 + 53 + 37 + 25）。跑出红色必须修到绿，或明确说明为什么基线要变。**
 
 改动前端后额外确认：`git status` 里**不应出现** `frontend/dist/`（它不在版本控制内）。
 
@@ -76,6 +77,8 @@ PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_plan_rev
 - 动了教案迭代修改（`backend/app/api/lesson_plan.py` 的 `revise`）→ 必跑
   `smoke_lesson_plan_revise.py`；它钉死的是"模型没给完整教案时绝不覆盖"
   "模型漏模块要用原文补回""改坏了能回退"这三条 —— 都是**界面显示成功、内容其实没了**的事故。
+- 动了对话动作路由（`frontend/src/utils/chatAction.js`）→ 必跑 `node scripts/smoke_chat_action.mjs`；
+  它钉死的是"修改指令不能被判成重新生成"——判错会**静默覆盖**教师改了几轮的内容。
 - 动了 LLM 服务的调用/兜底逻辑 → 必跑 `smoke_llm_service.py`；它钉死的是
   "模型失败后绝不静默切演示模板"以及"降级提示必须先于模板内容"，
   这类问题**不报错、不进日志**，只能靠测试发现。
