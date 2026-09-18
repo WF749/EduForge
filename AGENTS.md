@@ -55,11 +55,12 @@ PYTHONPATH=backend uv run --project backend python scripts/smoke_llm_service.py 
 PYTHONPATH=backend uv run --project backend python scripts/smoke_artifact_versions.py   # 53 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_plan_revise.py  # 37 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_api_contract.py        #  8 项
+PYTHONPATH=backend uv run --project backend python scripts/smoke_offline_artifact.py    # 27 项
 node scripts/smoke_chat_action.mjs                                                      # 25 项
 node scripts/smoke_dialogue_fields.mjs                                                  # 25 项
 ```
 
-**当前基线：378 项全绿（70 + 77 + 29 + 40 + 14 + 53 + 37 + 8 + 25 + 25）。跑出红色必须修到绿，或明确说明为什么基线要变。**
+**当前基线：405 项全绿（70 + 77 + 29 + 40 + 14 + 53 + 37 + 8 + 27 + 25 + 25）。跑出红色必须修到绿，或明确说明为什么基线要变。**
 
 改动前端后额外确认：`git status` 里**不应出现** `frontend/dist/`（它不在版本控制内）。
 
@@ -85,6 +86,10 @@ node scripts/smoke_dialogue_fields.mjs                                          
   axios 实例的相对路径）→ 必跑 `smoke_api_contract.py`；它把前端写的路径逐个拿到后端路由表里查，
   钉死的是"路径写错 → POST 打到 SPA 兜底返回 405 → 前端 catch 住只说一句服务没响应"
   这种**两边各自都对、合起来静默失效**的事故（`/chat/dialogue` 就是这么坏掉的）。
+- 动了产物离线检查（`backend/app/services/offline_artifact.py`）→ 必跑
+  `smoke_offline_artifact.py`；它同时钉死**漏报**（CDN 引库写法一个都不能放走，
+  否则拷到没网的教室才发现打不开）和**误报**（注释里的示例链接、data: URI、相对路径
+  一个都不能报 —— 误报一多，这个提示就没人看了）。
 - 动了缺字段的中文映射（`frontend/src/utils/dialogueFields.js`）→ 必跑
   `node scripts/smoke_dialogue_fields.mjs`；它钉死的是"译不出来就原样返回、绝不编造"——
   `missing_fields` 是模型自由生成的，写死对照表必漏，而漏了的表现只是
