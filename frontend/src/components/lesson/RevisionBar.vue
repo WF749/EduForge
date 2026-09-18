@@ -156,7 +156,9 @@ async function revert(version) {
 }
 
 onMounted(load)
-watch(() => store.taskId, load)
+// 也盯产物时间戳：对话里改完一版，store 会更新 at，但 taskId 没变，
+// 只盯 taskId 的话这里会一直显示改之前的历史。
+watch(() => [store.taskId, store.artifacts[props.kind]?.at], load)
 </script>
 
 <style lang="scss" scoped>

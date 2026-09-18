@@ -81,7 +81,8 @@ async function exportRevised(lessonPlan, topic, extra) {
   return {
     downloadUrl: exported.download_url,
     fileName: exported.filename || '',
-    ...extra
+    ...extra,
+    summary: extra?.version?.version ? `第 ${extra.version.version} 版` : ''
   }
 }
 
