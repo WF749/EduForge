@@ -86,6 +86,33 @@ async function exportRevised(lessonPlan, topic, extra) {
   }
 }
 
+/**
+ * 规则闸门之后的**可选**模型深度复查（默认关闭、手动触发、只报告）。
+ *
+ * 与生成接口不同：它不会改写任何内容，只是把"规则查不出来的问题"说给教师听。
+ * 未开启时后端返回 enabled=false + reason，前端如实显示，不要假装审查过。
+ */
+export async function deepReview({ lessonId, kind = 'lesson_plan', ctx }) {
+  const data = await readJson(await post('/teaching-compliance/review', {
+    lesson_id: lessonId || undefined,
+    kind,
+    meta: {
+      level: ctx?.level || '',
+      topic: ctx?.topic || '',
+      duration: ctx?.duration || undefined
+    }
+  }), '深度复查失败')
+
+  const r = data.review || {}
+  return {
+    enabled: r.enabled === true,
+    reason: r.reason || '',
+    summary: r.summary || '',
+    findings: Array.isArray(r.findings) ? r.findings : [],
+    raw: r.raw === true
+  }
+}
+
 /** 按教师的一句话指令修改教案（结果记为新版本，旧版本仍可回退） */
 export async function reviseLessonPlan({ lessonId, instruction, ctx }) {
   const data = await readJson(await post('/lesson-plan/revise', {

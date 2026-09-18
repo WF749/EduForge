@@ -71,7 +71,11 @@ RE_CLIENT = re.compile(
     r"(?:get|post|put|patch|delete)\(\s*['\"\`](/[A-Za-z0-9_\-/]*)['\"\`]"
 )
 
-# 只有当文件确实指向本项目后端时才认第二种写法，避免把第三方地址也当自家接口
+# 第三种写法：api 目录里的裸辅助调用 post('/lesson-plan/xx')。
+# 这些路径最终也是拼在 BASE() 后面，不扫就等于没检查 —— 项目里大部分接口其实都这么写。
+RE_HELPER = re.compile(r"\b(?:post|get|put|patch|del)\(\s*'(/[A-Za-z0-9_\-/]*)'")
+
+# 只有当文件确实指向本项目后端时才认第二、三种写法，避免把第三方地址也当自家接口
 RE_POINTS_BACKEND = re.compile(r"resolveApiBaseURL|BASE\(\)")
 
 SKIP_DIRS = {"node_modules", "dist", "dist_old", ".verify-dist", ".build-new"}
@@ -100,6 +104,10 @@ def scan_frontend() -> dict:
             if RE_POINTS_BACKEND.search(text):
                 for m in RE_CLIENT.finditer(text):
                     paths.append("/api" + m.group(1))
+                # 裸辅助调用只在 api 目录里认（那里 post/get 是拼 BASE() 的封装）
+                if "/api/" in str(p.as_posix()):
+                    for m in RE_HELPER.finditer(text):
+                        paths.append("/api" + m.group(1))
             # 含 ${} 的动态路径拼不出来，跳过而不是猜
             paths = [x for x in paths if "${" not in x]
             if paths:
@@ -138,6 +146,14 @@ def main() -> int:
     # 反向对照：故意编一条不存在的路径，必须被判缺失。
     # 否则扫描器一旦写错（比如正则匹配不到任何东西），这个测试会永远绿着。
     check("契约检查本身有效（假路径须判为缺失）", not path_matches("/api/no-such-endpoint-xyz", table))
+
+    # 反向对照二：扫描器本身不能退化。前端大部分接口走 post('/xxx') 这种辅助函数，
+    # 早期只扫 ${BASE()}/xxx 一种写法时只覆盖到 8 条，漏的比查到的还多。
+    all_found = sorted({q for ps in found.values() for q in ps})
+    check("扫描器没退化（至少 25 条路径）", len(all_found) >= 25, f"实得 {len(all_found)} 条")
+    for must in ("/api/lesson-plan/generate-full", "/api/courseware/game/generate",
+                 "/api/ppt/status/{param}", "/api/teaching-compliance/review"):
+        check(f"扫到了 {must}", must in all_found)
 
     print("\n=== 3. 对话链路专项（出过事的那条）===")
     chat = ROOT / "frontend/src/api/lessonChat.js"

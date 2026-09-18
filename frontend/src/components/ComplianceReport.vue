@@ -42,6 +42,39 @@
         </ol>
       </div>
 
+      <!--
+        可选的模型深度复查：规则查"有没有、合不合规范"，它查"好不好、上不上的下去"。
+        默认关闭且必须手动点——它慢、要花钱、还会抖，不该跟着每次生成自动跑。
+      -->
+      <div class="cr-review">
+        <button
+          type="button"
+          class="cr-review-btn"
+          :disabled="reviewing || !canReview"
+          @click="runReview"
+        >
+          {{ reviewing ? '复查中…' : '深度复查（模型）' }}
+        </button>
+        <span class="cr-review-hint">规则查不到的：课时做不完、目标没人管、学生卡在哪</span>
+
+        <p v-if="reviewError" class="cr-review-off">{{ reviewError }}</p>
+
+        <template v-if="review">
+          <p v-if="!review.enabled" class="cr-review-off">{{ review.reason || '未开启' }}</p>
+          <template v-else>
+            <p v-if="review.summary" class="cr-review-summary">{{ review.summary }}</p>
+            <ul v-if="review.findings.length" class="cr-review-list">
+              <li v-for="(f, i) in review.findings" :key="i" :class="`rv-${f.severity}`">
+                <span v-if="f.dimension" class="rv-dim">{{ f.dimension }}</span>
+                <span class="rv-advice">{{ f.advice || f.quote }}</span>
+                <em v-if="f.advice && f.quote" class="rv-quote">原文：{{ f.quote }}</em>
+              </li>
+            </ul>
+            <p v-else class="cr-review-off">没有查出规则之外的问题。</p>
+          </template>
+        </template>
+      </div>
+
       <div class="cr-foot">离线规则扫描（依据 2022 版课标通行规范），仅供参考，最终以教师判断为准</div>
     </div>
   </div>
@@ -50,13 +83,45 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { ArrowDown } from '@element-plus/icons-vue'
+import { useLessonStore } from '@/store/lesson'
+import { deepReview } from '@/api/lessonArtifacts'
 
 const props = defineProps({
   // 后端 compliance 报告：{enabled, artifact_type, passed, score, issues[], suggestions[]}
   report: { type: Object, default: null },
   // 产物名称，用于无障碍标签与文案
   label: { type: String, default: '本次生成' },
+  // 深度复查要读哪一课的当前版本。留空时退回 store 里的当前课程。
+  lessonId: { type: String, default: '' },
+  kind: { type: String, default: 'lesson_plan' }
 })
+
+const store = useLessonStore()
+const reviewing = ref(false)
+const review = ref(null)
+const reviewError = ref('')
+
+// 没有课程 ID 就读不到版本链里的正文，这时不给按钮，避免点了必然失败
+const canReview = computed(() => Boolean(props.lessonId || store.taskId))
+
+async function runReview() {
+  if (reviewing.value) return
+  reviewing.value = true
+  reviewError.value = ''
+  try {
+    review.value = await deepReview({
+      lessonId: props.lessonId || store.taskId || '',
+      kind: props.kind,
+      ctx: { level: store.level || '', topic: store.topic || '', duration: store.duration }
+    })
+  } catch (e) {
+    // 复查失败绝不能影响已经生成好的内容，只在这里提示一句
+    reviewError.value = e?.message || '复查失败'
+    review.value = null
+  } finally {
+    reviewing.value = false
+  }
+}
 
 // 严重程度排序：必须先改的排最前
 const SEV_ORDER = { error: 0, warn: 1, info: 2 }
@@ -296,6 +361,71 @@ function toggle() {
   font-size: 11px;
   color: rgba(255, 255, 255, 0.35);
   line-height: 1.6;
+}
+
+.cr-review {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.12);
+
+  .cr-review-btn {
+    padding: 4px 12px;
+    font-size: 12px;
+    font-family: inherit;
+    color: rgba(0, 200, 255, 0.9);
+    background: rgba(0, 200, 255, 0.08);
+    border: 1px solid rgba(0, 200, 255, 0.32);
+    border-radius: 999px;
+    cursor: pointer;
+
+    &:hover:not(:disabled) { background: rgba(0, 200, 255, 0.18); }
+    &:disabled { opacity: 0.45; cursor: not-allowed; }
+  }
+
+  .cr-review-hint {
+    margin-left: 8px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.35);
+  }
+
+  .cr-review-off {
+    margin: 8px 0 0;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.45);
+  }
+
+  .cr-review-summary {
+    margin: 8px 0 0;
+    font-size: 12px;
+    line-height: 1.7;
+    color: rgba(255, 255, 255, 0.82);
+  }
+
+  .cr-review-list {
+    margin: 8px 0 0;
+    padding-left: 18px;
+    font-size: 12px;
+    line-height: 1.75;
+
+    .rv-dim {
+      margin-right: 6px;
+      padding: 1px 6px;
+      font-size: 11px;
+      color: rgba(0, 200, 255, 0.85);
+      background: rgba(0, 200, 255, 0.1);
+      border-radius: 4px;
+    }
+
+    .rv-quote {
+      display: block;
+      font-style: normal;
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.38);
+    }
+
+    .rv-high .rv-advice { color: #ff9b9b; }
+    .rv-medium .rv-advice { color: #ffd479; }
+  }
 }
 
 // 窄屏：分数与计数容易挤在一行，收起次要信息

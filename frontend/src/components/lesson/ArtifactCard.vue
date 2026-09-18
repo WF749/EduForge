@@ -35,6 +35,8 @@
         v-if="artifact.compliance"
         :report="artifact.compliance"
         :label="meta.name"
+        :lesson-id="store.taskId || ''"
+        :kind="typeId"
       />
 
       <!-- 离线可用性：现在不说，等拷到教室电脑才发现打不开就晚了 -->
@@ -96,7 +98,7 @@ import { ElMessage } from 'element-plus'
 import { Download, View, RefreshRight, EditPen } from '@element-plus/icons-vue'
 import { trackedFetch } from '@/api/dataFlow'
 import ComplianceReport from '@/components/ComplianceReport.vue'
-import { ARTIFACTS } from '@/store/lesson'
+import { ARTIFACTS, useLessonStore } from '@/store/lesson'
 
 const props = defineProps({
   typeId: { type: String, required: true },
@@ -106,6 +108,7 @@ const props = defineProps({
 const emit = defineEmits(['generate'])
 
 const router = useRouter()
+const store = useLessonStore()
 const previewing = ref(false)
 
 const meta = computed(
