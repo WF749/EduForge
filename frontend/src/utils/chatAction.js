@@ -41,7 +41,12 @@ const MODIFY = [
 // 明显是提问而非指令
 const QUESTION = /(什么|如何|怎么|为什么|是不是|能不能|可以吗|有哪些)[^。！!?？]*[?？]?$/
 
-function detectKind(text) {
+/**
+ * 从一句话里认出说的是哪种成品。
+ * 对外导出是为了让对话回退路径能复用同一套词表 ——
+ * 后端说"你要的资源类型是 PPT"时，判成品的标准得和这里一致，不能另写一份。
+ */
+export function detectKind(text) {
   const lower = String(text || '').toLowerCase()
   let hit = null
   let pos = Infinity
