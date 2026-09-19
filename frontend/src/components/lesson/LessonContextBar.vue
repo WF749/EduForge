@@ -1,10 +1,16 @@
 <template>
   <div class="ctx-bar">
-    <div class="ctx-row ctx-row-main">
+    <!--
+      紧凑行常驻：课程切换 + 主题 + 一眼能看完的摘要。
+      为什么把详细信息收起来：工作台上"对话"才是主舞台，课程信息填一次就不动了，
+      让它长期占着一百多像素的竖向空间，就是把对话往下挤。
+      默认展开条件放在"主题还没填"上 —— 那种时候教师必须看到这些输入框；
+      一旦填好，它就该让位。
+    -->
+    <div class="ctx-compact">
       <el-select
         v-model="switchTo"
         class="ctx-switch"
-        size="large"
         filterable
         placeholder="最近课程"
         @change="onSwitch"
@@ -23,75 +29,87 @@
       <el-input
         v-model="store.topic"
         class="ctx-topic"
-        size="large"
         placeholder="这节课的教学主题，例如：一次函数的图像与性质"
         :prefix-icon="EditPen"
       />
 
-      <el-select v-model="store.subject" size="large" filterable allow-create class="ctx-field">
-        <el-option v-for="s in SUBJECTS" :key="s" :label="s" :value="s" />
-      </el-select>
+      <span class="ctx-summary">
+        {{ store.subject }} · {{ store.grade }} · {{ store.duration }} 分钟 · {{ store.difficultyLabel }}
+        <b v-if="store.referenceFiles.length">· 参考资料 {{ store.referenceFiles.length }} 份</b>
+      </span>
 
-      <el-select v-model="store.grade" size="large" class="ctx-field">
-        <el-option v-for="g in GRADES" :key="g" :label="g" :value="g" />
-      </el-select>
+      <el-button text size="small" class="ctx-toggle" @click="expanded = !expanded">
+        {{ expanded ? '收起' : '更多设置' }}
+        <el-icon class="ctx-toggle-icon"><component :is="expanded ? ArrowUp : ArrowDown" /></el-icon>
+      </el-button>
+    </div>
 
-      <div class="ctx-duration">
-        <span class="ctx-label">课时</span>
-        <el-input-number v-model="store.duration" :min="15" :max="180" :step="5" size="large" controls-position="right" />
-        <span class="ctx-unit">分钟</span>
+    <div v-if="expanded" class="ctx-more">
+      <div class="ctx-row ctx-row-main">
+        <el-select v-model="store.subject" filterable allow-create class="ctx-field">
+          <el-option v-for="s in SUBJECTS" :key="s" :label="s" :value="s" />
+        </el-select>
+
+        <el-select v-model="store.grade" class="ctx-field">
+          <el-option v-for="g in GRADES" :key="g" :label="g" :value="g" />
+        </el-select>
+
+        <div class="ctx-duration">
+          <span class="ctx-label">课时</span>
+          <el-input-number v-model="store.duration" :min="15" :max="180" :step="5" controls-position="right" />
+          <span class="ctx-unit">分钟</span>
+        </div>
+
+        <el-select v-model="store.difficulty" class="ctx-diff">
+          <el-option v-for="d in DIFFICULTIES" :key="d.value" :label="d.label" :value="d.value" />
+        </el-select>
+
+        <el-button :icon="RefreshLeft" @click="confirmReset">换一节课</el-button>
+        <el-button
+          v-if="store.taskId"
+          :icon="FolderChecked"
+          title="归档后从最近课程列表移除，产物链接仍可下载"
+          @click="confirmArchive"
+        >归档本课</el-button>
       </div>
 
-      <el-select v-model="store.difficulty" size="large" class="ctx-diff">
-        <el-option v-for="d in DIFFICULTIES" :key="d.value" :label="d.label" :value="d.value" />
-      </el-select>
+      <div class="ctx-row ctx-row-sub">
+        <el-input
+          v-model="store.keyPoints"
+          type="textarea"
+          :rows="1"
+          autosize
+          placeholder="补充要求 / 教学要点（可空）。会随这节课一起传给教案、PPT、动画、游戏四类生成"
+        />
 
-      <el-button size="large" :icon="RefreshLeft" @click="confirmReset">换一节课</el-button>
-      <el-button
-        v-if="store.taskId"
-        size="large"
-        :icon="FolderChecked"
-        title="归档后从最近课程列表移除，产物链接仍可下载"
-        @click="confirmArchive"
-      >归档本课</el-button>
-    </div>
+        <el-upload
+          class="ctx-upload"
+          :action="uploadAction"
+          :multiple="true"
+          :limit="5"
+          :show-file-list="false"
+          accept=".pdf,.doc,.docx,.pptx,.txt"
+          :on-success="onUploaded"
+          :on-error="onUploadError"
+        >
+          <el-button :icon="UploadFilled">参考资料</el-button>
+        </el-upload>
+      </div>
 
-    <div class="ctx-row ctx-row-sub">
-      <el-input
-        v-model="store.keyPoints"
-        type="textarea"
-        :rows="1"
-        autosize
-        placeholder="补充要求 / 教学要点（可空）。会随这节课一起传给教案、PPT、动画、游戏四类生成"
-      />
-
-      <el-upload
-        class="ctx-upload"
-        :action="uploadAction"
-        :multiple="true"
-        :limit="5"
-        :show-file-list="false"
-        accept=".pdf,.doc,.docx,.pptx,.txt"
-        :on-success="onUploaded"
-        :on-error="onUploadError"
-      >
-        <el-button size="default" :icon="UploadFilled">参考资料</el-button>
-      </el-upload>
-    </div>
-
-    <div v-if="store.referenceFiles.length" class="ctx-refs">
-      <el-tag
-        v-for="f in store.referenceFiles"
-        :key="f.file_id"
-        closable
-        size="small"
-        type="info"
-        @close="store.removeReference(f.file_id)"
-      >
-        <el-icon><Document /></el-icon>
-        {{ f.name }}
-      </el-tag>
-      <span class="ctx-refs-hint">已选 {{ store.referenceFiles.length }} 份，生成时会被读取正文</span>
+      <div v-if="store.referenceFiles.length" class="ctx-refs">
+        <el-tag
+          v-for="f in store.referenceFiles"
+          :key="f.file_id"
+          closable
+          size="small"
+          type="info"
+          @close="store.removeReference(f.file_id)"
+        >
+          <el-icon><Document /></el-icon>
+          {{ f.name }}
+        </el-tag>
+        <span class="ctx-refs-hint">已选 {{ store.referenceFiles.length }} 份，生成时会被读取正文</span>
+      </div>
     </div>
   </div>
 </template>
@@ -99,11 +117,16 @@
 <script setup>
 import { computed, ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { EditPen, RefreshLeft, UploadFilled, Document, FolderChecked } from '@element-plus/icons-vue'
+import {
+  EditPen, RefreshLeft, UploadFilled, Document, FolderChecked, ArrowUp, ArrowDown
+} from '@element-plus/icons-vue'
 import { useLessonStore, SUBJECTS, GRADES, DIFFICULTIES } from '@/store/lesson'
 import { resolveApiBaseURL } from '@/api/baseUrl'
 
 const store = useLessonStore()
+// 主题还没填 → 展开（教师必须看到输入框）；填好了 → 收起，把竖向空间让给对话。
+// store 在创建时就 hydrate 了，所以这里读到的已经是本地存档的真实状态。
+const expanded = ref(!store.ready)
 const uploadAction = computed(() => `${resolveApiBaseURL()}/upload/file`)
 
 function onUploaded(response) {
@@ -167,13 +190,45 @@ async function confirmReset() {
 
 <style lang="scss" scoped>
 .ctx-bar {
+  flex: none;
   background: rgba(10, 14, 39, 0.82);
   border: 1px solid rgba(0, 200, 255, 0.18);
-  border-radius: 16px;
-  padding: 16px 18px;
+  border-radius: 14px;
+  padding: 10px 14px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.ctx-compact {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+
+  .ctx-switch { width: 150px; flex: none; }
+  .ctx-topic { flex: 1 1 260px; min-width: 180px; }
+
+  .ctx-summary {
+    flex: none;
+    font-size: 12.5px;
+    color: rgba(255, 255, 255, 0.45);
+    white-space: nowrap;
+
+    b { color: rgba(0, 200, 255, 0.8); font-weight: 500; }
+  }
+
+  .ctx-toggle { flex: none; }
+
+  .ctx-toggle-icon { margin-left: 3px; }
+}
+
+.ctx-more {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
 }
 
 .ctx-row {
@@ -184,10 +239,8 @@ async function confirmReset() {
 }
 
 .ctx-row-main {
-  .ctx-topic { flex: 1 1 320px; min-width: 240px; }
   .ctx-field { width: 130px; }
   .ctx-diff { width: 130px; }
-  .ctx-switch { width: 150px; }
 }
 
 .sw-meta {
@@ -201,6 +254,8 @@ async function confirmReset() {
   display: flex;
   align-items: center;
   gap: 6px;
+
+  :deep(.el-input-number) { width: 120px; }
 
   .ctx-label, .ctx-unit {
     font-size: 13px;
@@ -229,9 +284,19 @@ async function confirmReset() {
   }
 }
 
+@media (max-width: 1080px) {
+  .ctx-compact {
+    flex-wrap: wrap;
+    .ctx-summary { display: none; }
+  }
+}
+
 @media (max-width: 720px) {
+  .ctx-compact {
+    .ctx-switch, .ctx-topic { flex: 1 1 100%; width: 100%; }
+  }
   .ctx-row-main {
-    .ctx-topic, .ctx-field, .ctx-diff { flex: 1 1 100%; width: 100%; }
+    .ctx-field, .ctx-diff { flex: 1 1 100%; width: 100%; }
   }
 }
 </style>

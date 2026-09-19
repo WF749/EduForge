@@ -57,3 +57,73 @@ export async function resetDialogue(conversationId) {
   }
   return true
 }
+
+/**
+ * 教学工作台问答（流式）。
+ *
+ * 与 `postDialogue` 的分工是这个模块存在的全部理由：
+ *   - `postDialogue`（/chat/analyze）是**状态机** —— 判"这句话要生成什么、还缺哪些信息"；
+ *   - 本函数（/lesson-chat/ask）是**真的回答问题** —— 教师问「什么是三角函数」要拿到解释。
+ * 工作台以前只有前者，于是提问被当成"需求没说全"，一路反问到
+ * 「你直接说要生成什么」。两条路都要有，不能拿一条去顶另一条。
+ *
+ * 流式而不是等整段返回：教师盯着对话框，首字延迟就是"卡不卡"的体感。
+ */
+export async function askLessonStream({
+  conversationId,
+  message,
+  history = [],
+  lesson = {},
+  useKnowledge = true,
+  signal,
+  onDelta
+}) {
+  const res = await trackedFetch(`${BASE()}/lesson-chat/ask`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    signal,
+    body: JSON.stringify({
+      conversation_id: conversationId,
+      message,
+      history,
+      lesson,
+      use_knowledge: useKnowledge
+    })
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data?.detail || data?.message || `HTTP ${res.status}`)
+  }
+  if (!res.body) throw new Error('当前浏览器不支持流式响应')
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buf = ''
+  let text = ''
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buf += decoder.decode(value, { stream: true })
+      // SSE 以空行分隔事件；最后一段可能不完整，留在 buf 里等下一块
+      const events = buf.split('\n\n')
+      buf = events.pop() || ''
+      for (const evt of events) {
+        if (!evt.startsWith('data: ')) continue
+        try {
+          const d = JSON.parse(evt.slice(6))
+          if (d.content) {
+            text += d.content
+            if (onDelta) onDelta(text)
+          }
+        } catch {
+          // 单条事件解析失败不该中断整段回答：丢掉这一块，后面的照常收
+        }
+      }
+    }
+  } finally {
+    // 主动中断（教师又发了下一句）也要释放连接，否则后端会继续跑到结束
+    reader.cancel().catch(() => {})
+  }
+  return text
+}
