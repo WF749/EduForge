@@ -12,14 +12,15 @@
     <el-tag type="info" size="large" effect="plain">导出 Word（.docx）</el-tag>
     <span class="lp-tip">学段：{{ store.level }} · 学科：{{ store.subject }} · 年级：{{ store.grade }} · 课时：{{ store.duration }} 分钟</span>
 
-    <RevisionBar kind="lesson_plan" @revised="handleRevised" />
+    <!-- 改内容走左边对话；这里只保留"看历史 / 回退" -->
+    <VersionHistory kind="lesson_plan" @revised="handleRevised" />
   </PanelShell>
 </template>
 
 <script setup>
 import { ElMessage } from 'element-plus'
 import PanelShell from '../PanelShell.vue'
-import RevisionBar from '../RevisionBar.vue'
+import VersionHistory from '../VersionHistory.vue'
 import { useLessonStore } from '@/store/lesson'
 import { useArtifactRunner } from '@/composables/useArtifactRunner'
 import { generateLessonPlan, contextPayload, assertContext } from '@/api/lessonArtifacts'
@@ -41,7 +42,7 @@ async function handleGenerate() {
   if (ok) ElMessage.success('教案生成完成')
 }
 
-/** 迭代条改完/回退后：产物还是同一份 docx（文件名按课题，会被覆盖），只需刷新指针与合规结论 */
+/** 回退版本后：产物还是同一份 docx（文件名按课题，会被覆盖），只需刷新指针与合规结论 */
 function handleRevised(out) {
   const prev = store.artifacts.lesson_plan
   store.setArtifact('lesson_plan', {

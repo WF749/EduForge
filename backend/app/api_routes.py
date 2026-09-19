@@ -19,7 +19,7 @@ from .core.logging_setup import get_logger
 from .core.providers import get_provider, resolve_base_url
 from .document_extract import extract_text, resolve_uploaded_references
 from .services.dialogue_manager import dialogue_manager
-from .services.lesson_tutor import build_lesson_system_prompt
+from .services.lesson_tutor import build_lesson_context, build_lesson_system_prompt
 from .services.multimodal_analyzer import multimodal_analyzer, ModalityType
 from .pathutil import resolve_under_roots
 from .paths import (
@@ -441,6 +441,27 @@ async def lesson_chat_ask(body: Dict[str, Any]):
     # 在生成时由各生成接口读取，问答里再读一遍会出现两套入口。
     payload.pop("attachment_ids", None)
     return StreamingResponse(_sse_stream(payload), media_type="text/plain; charset=utf-8")
+
+
+@router.post("/lesson-chat/context")
+async def lesson_chat_context(body: Dict[str, Any]):
+    """把「智能体眼里的这节课」原样交回界面展示。
+
+    为什么要专门开个接口：教师有权知道系统记住了什么、每轮到底给模型发了什么。
+    关键在于这段文本必须**就是真正发出去的那一份** —— 由服务端组装
+    （`lesson_tutor`），而不是前端照着样式自己拼一份用于展示。
+    拼一份的话迟早与真实内容走偏，那就成了更糟的"看起来透明"。
+
+    纯字符串组装：不调模型、不联网、不读用户数据。
+    """
+    lesson = body.get("lesson")
+    return {
+        "success": True,
+        "context": build_lesson_context(lesson),
+        "system": build_lesson_system_prompt(lesson),
+        # 如实报出实际带上几轮历史（上限在 llm_client.HISTORY_TURNS）
+        "history_turns": llm_client.HISTORY_TURNS,
+    }
 
 
 @router.post("/chat/stream")

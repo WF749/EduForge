@@ -6,6 +6,13 @@
         <span class="lc-sub">能生成四类成品，也能直接问知识点、问教法</span>
       </div>
       <div class="lc-head-tools">
+        <!--
+          上下文透明：教师有权知道"它记住了什么、每轮到底把什么发给了模型"。
+          放一个按钮而不是写一段说明 —— 说明会过时，原文不会。
+        -->
+        <el-button text size="small" :icon="View" @click="ctxOpen = true">
+          智能体知道的事
+        </el-button>
         <label class="lc-kb" :title="useKnowledge ? '回答时会先查你的知识库' : '只用模型自身知识回答'">
           <el-switch v-model="useKnowledge" size="small" />
           <span>知识库</span>
@@ -13,6 +20,12 @@
         <el-button text size="small" @click="clear">清空</el-button>
       </div>
     </header>
+
+    <LessonContextDrawer
+      v-model="ctxOpen"
+      :message-count="memoryCount"
+      :lesson="lessonPayload()"
+    />
 
     <div ref="scroller" class="lc-log">
       <div v-if="!messages.length" class="lc-empty">
@@ -175,7 +188,7 @@
  */
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Microphone } from '@element-plus/icons-vue'
+import { Microphone, View } from '@element-plus/icons-vue'
 import { Files, Document, VideoCamera, TrophyBase } from '@element-plus/icons-vue'
 import { useLessonStore, SUBJECTS, GRADES } from '@/store/lesson'
 import { detectKind, looksLikeQuestion, routeUserMessage } from '@/utils/chatAction'
@@ -183,6 +196,7 @@ import { applyInferred, inferLessonFields } from '@/utils/lessonIntent'
 import { fieldLabels } from '@/utils/dialogueFields'
 import { formatMessage } from '@/utils/markdown'
 import { useSpeech } from '@/composables/useSpeech'
+import LessonContextDrawer from './LessonContextDrawer.vue'
 import { askLessonStream, postDialogue, resetDialogue } from '@/api/lessonChat'
 import { listVersions } from '@/api/lessonArtifacts'
 
@@ -200,11 +214,14 @@ const messages = ref([])
 const draft = ref('')
 const thinking = ref(false)        // 正在等模型（含流式输出中）
 const useKnowledge = ref(true)
+const ctxOpen = ref(false)
 const scroller = ref(null)
 const currentVersion = ref(0)
 let answerController = null
 
 const conversationId = computed(() => `lesson-${store.taskId || 'local'}`)
+/** 抽屉里"记忆"那一节要说实话：只有带正文的消息才算一轮 */
+const memoryCount = computed(() => messages.value.filter((m) => !m.card && m.text).length)
 const reviseSupported = computed(() => props.reviseKinds.includes(props.activeKind))
 
 const {

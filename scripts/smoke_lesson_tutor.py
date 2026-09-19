@@ -105,6 +105,33 @@ check("主题没有多出一行", len([l for l in dirty.splitlines() if "浮力"
 check("补充要求里的换行被压平", "第一行 第二行" in dirty)
 check("超长字段被截断", len(build_lesson_context({"topic": "x" * 500})) < 400)
 
+print("\n=== 7. 上下文展示接口必须和真正发出去的是同一份 ===")
+# 「智能体知道的事」抽屉靠这个接口取原文。它要是自己拼一份用于展示，
+# 迟早与真实 prompt 走偏 —— 那就成了更糟的"看起来透明"。
+import asyncio  # noqa: E402
+
+from app.api_routes import lesson_chat_context  # noqa: E402
+from app import llm_client  # noqa: E402
+
+_LESSON = {"topic": "浮力", "subject": "物理", "grade": "八年级", "duration": 45,
+           "difficulty": "medium", "keyPoints": "重点讲阿基米德原理",
+           "artifacts": {"lesson_plan": "done", "ppt": "idle"}}
+_out = asyncio.run(lesson_chat_context({"lesson": _LESSON}))
+check("接口可用", _out.get("success") is True)
+check("context 与组装函数逐字一致", _out["context"] == build_lesson_context(_LESSON))
+check("system 与组装函数逐字一致", _out["system"] == build_lesson_system_prompt(_LESSON))
+check("system 里带上了这节课", "浮力" in _out["system"])
+check("如实报出历史上限", _out["history_turns"] == llm_client.HISTORY_TURNS,
+      f"实得 {_out.get('history_turns')}")
+check("上限是个正数（否则界面会说'带上 0 轮'）", llm_client.HISTORY_TURNS > 0)
+check("不传 lesson 也不炸", asyncio.run(lesson_chat_context({})).get("success") is True)
+check("lesson 传 None 也不炸", asyncio.run(lesson_chat_context({"lesson": None})).get("success") is True)
+# 静态：这个接口绝不能变成一次模型调用（它会在每次打开抽屉时被触发）
+_route_src = Path(ROOT / "backend" / "app" / "api_routes.py").read_text(encoding="utf-8")
+_ctx_route = _route_src.split('@router.post("/lesson-chat/context")')[1].split("@router.")[0]
+check("展示接口不调模型", "stream_chat_completion" not in _ctx_route and "llm_service" not in _ctx_route)
+check("展示接口不读用户上传正文", "resolve_uploaded_references" not in _ctx_route)
+
 print(f"\n通过 {len(PASS)} 项，失败 {len(FAIL)} 项")
 if FAIL:
     print("失败项：" + "、".join(FAIL))
