@@ -25,15 +25,15 @@ logs/
 *.log
 
 # 运行时数据
-# 注意：RAG 向量索引实际目录是 rag_index/（非 chromadb/），里面含用户上传文档的原文切片，绝不能提交
-backend/data/rag_index/
-backend/data/chromadb/
-backend/data/knowledge_base_store.json
-backend/data/machine_marker.txt
-backend/data/encryption_key.hex
+# ⚠️ 这里改成"整个 backend/data 一律不入库"，而不是逐条点名。
+# 原先是逐条排除（rag_index / runtime_config / chat_history …），
+# 结果漏掉了 artifact_versions/ —— 那里面是**成品正文**
+# （backend/data/artifact_versions/<课程id>/lesson_plan/v1.json 就是整份教案），
+# 一次次白名单式的补漏必然继续漏，所以换成否定式白名单。
+# backend/data 下没有任何文件需要入库（已核对 git ls-files 为空）。
+backend/data/*
+!backend/data/.gitkeep
 backend/models_cache/
-backend/uploads/*
-!backend/uploads/.gitkeep
 # 生成的输出（含用户上传课件/生成内容）
 backend/generated_animations/
 backend/generated_courseware/
@@ -43,9 +43,12 @@ generated_animations/
 generated_courseware/
 generated_games/
 generated_lesson_plans/
-uploads/
+# 上传目录：用 `目录/*` 而不是 `目录/`。
+# 排除整个目录时 git **不会**再往下看，目录内的否定规则永远救不回来
+# （原先 `!backend/uploads/.gitkeep` 就因此形同虚设）。
+uploads/*
+backend/uploads/*
 !uploads/.gitkeep
-backend/uploads/
 !backend/uploads/.gitkeep
 
 # 构建产物
@@ -66,14 +69,8 @@ frontend/vite.config.js.timestamp-*
 !.env.example
 
 # 运行时保存的 LLM 密钥与对话（设置页 / 聊天，勿提交）
-# 注意：.bak 同样含加密后的密钥列，必须一并排除
-backend/data/runtime_config.json
-backend/data/runtime_config.json.bak
-backend/data/*.bak
-backend/data/chat_history.json
-backend/data/uploaded_files.json
-backend/data/lesson_tasks.json
-backend/data/history/
+# 已由上面的 `backend/data/*` 统一覆盖，此处保留说明以免后人再逐条加白名单：
+# .bak 同样含加密后的密钥列；chat_history / uploaded_files / lesson_tasks 含用户输入。
 
 # SQLite LLM 配置（可能含加密后的密钥列）
 **/llm_config.db
