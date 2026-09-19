@@ -19,6 +19,7 @@ from .core.logging_setup import get_logger
 from .core.providers import get_provider, resolve_base_url
 from .document_extract import extract_text, resolve_uploaded_references
 from .services.dialogue_manager import dialogue_manager
+from .services.lesson_tutor import build_lesson_system_prompt
 from .services.multimodal_analyzer import multimodal_analyzer, ModalityType
 from .pathutil import resolve_under_roots
 from .paths import (
@@ -400,6 +401,46 @@ async def reset_dialogue(body: Dict[str, Any]):
     if conversation_id:
         dialogue_manager.reset_context(conversation_id)
     return {"success": True}
+
+
+@router.post("/lesson-chat/ask")
+async def lesson_chat_ask(body: Dict[str, Any]):
+    """工作台对话：带课程语境的教学问答（流式）。
+
+    与 `/chat/analyze` 的分工是这次改造的核心，两者**都要留着**：
+      - `/chat/analyze` 是**状态机**——判"这句话要生成什么、还缺哪些信息"，负责澄清与确认；
+      - 本接口是**真的回答问题**——教师问「什么是三角函数」要拿到解释，
+        而不是被反问「请问您想了解什么主题的知识」。
+    "想做什么"和"想问什么"本来就是两类话，用一套逻辑处理必然有一边变形：
+    之前只留了状态机，于是所有提问都被当成"需求没说全"。
+
+    红线 7：走 `llm_client`，出校插桩（`_guard`）就在里面，不直连任何 provider。
+    """
+    message = (body.get("message") or "").strip()
+    if not message:
+        return JSONResponse(
+            {"success": False, "message": "消息不能为空"}, status_code=400
+        )
+
+    knowledge = ""
+    if body.get("use_knowledge", True):
+        try:
+            hits = knowledge_store.query_kb(message, top_k=_configured_int("topK", 5, 1, 20))
+            knowledge = "\n\n".join(
+                str(h.get("content") or "").strip() for h in hits if h.get("content")
+            )
+        except Exception as e:  # noqa: BLE001
+            # 检索失败不该让问答整个不可用 —— 知识库只是加分项。
+            # 但必须留痕：一直失败会静默退化成"通用闲聊"，而界面上看不出来。
+            log.warning("lesson-chat 知识库检索失败：%s", e)
+
+    payload = dict(body)
+    payload["message"] = message
+    payload["system"] = build_lesson_system_prompt(body.get("lesson"), knowledge)
+    # 不带 attachments 走资料链路：工作台的参考资料是随"这节课"走的，
+    # 在生成时由各生成接口读取，问答里再读一遍会出现两套入口。
+    payload.pop("attachment_ids", None)
+    return StreamingResponse(_sse_stream(payload), media_type="text/plain; charset=utf-8")
 
 
 @router.post("/chat/stream")
