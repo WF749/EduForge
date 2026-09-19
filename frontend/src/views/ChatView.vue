@@ -511,10 +511,9 @@ import { useAppStore } from '@/store/app'
 import { resolveApiBaseURL } from '@/api/baseUrl'
 import { trackedFetch } from '@/api/dataFlow'
 import { ElMessage } from 'element-plus'
-import { marked } from 'marked'
-// 按需注册语言，避免把 highlight.js 全部 190+ 语言打进包（原 ChatView 产物 1MB）
-import hljs from '@/utils/highlight'
-import { renderMathInText } from '@/utils/mathRender'
+// 渲染管线（Markdown + 公式 + 代码块复制）已抽到 utils/markdown.js，
+// 工作台对话共用同一份实现，不在两个组件里各写一份。
+import { formatMessage } from '@/utils/markdown'
 import { useSpeech } from '@/composables/useSpeech'
 import 'katex/dist/katex.min.css'
 import {
@@ -525,17 +524,6 @@ import {
 } from '@element-plus/icons-vue'
 
 defineOptions({ name: 'ChatView' })
-
-// 配置 marked
-marked.setOptions({
-  highlight: (code, lang) => {
-    if (lang && hljs.getLanguage(lang)) {
-      try { return hljs.highlight(code, { language: lang }).value } catch {}
-    }
-    return hljs.highlightAuto(code).value
-  },
-  breaks: true, gfm: true
-})
 
 const router = useRouter()
 const store = useAppStore()
@@ -673,47 +661,6 @@ function scrollBottom() {
 function formatTime(ts) {
   if (!ts) return ''
   return new Date(ts).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-}
-
-function formatMessage(text) {
-  if (!text) return ''
-  // 分离深度思考和最终回答
-  let hasThinking = false, thinkingPart = '', answerPart = text
-  if (text.includes('## 思考过程') && text.includes('## 最终回答')) {
-    hasThinking = true
-    const parts = text.split('## 最终回答')
-    thinkingPart = marked.parse(renderMathInText(parts[0].replace('## 思考过程', '').trim()))
-    answerPart = parts[1] ? marked.parse(renderMathInText(parts[1].trim())) : ''
-  } else {
-    answerPart = marked.parse(renderMathInText(text))
-  }
-  // 代码块加复制按钮
-  answerPart = answerPart.replace(/<pre><code class="([^"]*)">/g,
-    '<pre class="code-block"><button class="copy-btn" onclick="window._copyCode(this)">复制</button><code class="$1">')
-  answerPart = answerPart.replace(/<pre><code>/g,
-    '<pre class="code-block"><button class="copy-btn" onclick="window._copyCode(this)">复制</button><code>')
-  if (hasThinking) {
-    thinkingPart = thinkingPart.replace(/<pre><code/g,
-      '<pre class="code-block"><button class="copy-btn" onclick="window._copyCode(this)">复制</button><code')
-    return `<div class="think-container">
-      <div class="think-section" onclick="this.classList.toggle('collapsed')">
-        <div class="think-hdr"><span>🧠 深度思考过程</span><span class="think-toggle">▼</span></div>
-        <div class="think-body">${thinkingPart}</div>
-      </div>
-      <div class="answer-section">${answerPart}</div>
-    </div>`
-  }
-  return answerPart
-}
-
-window._copyCode = function(btn) {
-  const code = btn.nextElementSibling
-  if (code && code.tagName === 'CODE') {
-    navigator.clipboard.writeText(code.textContent).then(() => {
-      btn.textContent = '已复制!'
-      setTimeout(() => { btn.textContent = '复制' }, 2000)
-    })
-  }
 }
 
 // ====== 聊天核心 ======
