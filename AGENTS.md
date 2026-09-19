@@ -28,7 +28,7 @@ Vue3 + FastAPI 单体，后端托管前端构建产物，教案/PPT/动画/游�
 8. **不要为了"顺手"引入新依赖**。先查 `pyproject.toml` / `frontend/package.json`，
    能复用现有能力就复用；确需新增，在 PR/提交信息里说明理由。
 9. **不要擅自 `git commit` 或 `git push`**。改动留在工作区，由用户自己验证后再决定提交；
-   只有用户明确说"提交""推送"时才执行。**提交前先跑通下面的 540 项验证。**
+   只有用户明确说"提交""推送"时才执行。**提交前先跑通下面的 622 项验证。**
 
 ## 目录地图（按需读，不要全读）
 
@@ -58,13 +58,15 @@ PYTHONPATH=backend uv run --project backend python scripts/smoke_api_contract.py
 PYTHONPATH=backend uv run --project backend python scripts/smoke_offline_artifact.py    # 27 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_teaching_review.py     # 27 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_tutor.py        # 39 项
+PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_docx.py         # 35 项
 node scripts/smoke_chat_action.mjs                                                      # 45 项
 node scripts/smoke_dialogue_fields.mjs                                                  # 25 项
+node scripts/smoke_lesson_intent.mjs                                                    # 47 项
 node scripts/smoke_speech.mjs                                                           # 21 项
 node scripts/smoke_markdown_code.mjs                                                    # 23 项
 ```
 
-**当前基线：540 项全绿（70 + 77 + 29 + 40 + 14 + 53 + 37 + 13 + 27 + 27 + 39 + 45 + 25 + 21 + 23）。跑出红色必须修到绿，或明确说明为什么基线要变。**
+**当前基线：622 项全绿（70 + 77 + 29 + 40 + 14 + 53 + 37 + 13 + 27 + 27 + 39 + 35 + 45 + 25 + 47 + 21 + 23）。跑出红色必须修到绿，或明确说明为什么基线要变。**
 
 改动前端后额外确认：`git status` 里**不应出现** `frontend/dist/`（它不在版本控制内）。
 
@@ -127,6 +129,20 @@ node scripts/smoke_markdown_code.mjs                                            
 - 动了工作台布局（`frontend/src/views/WorkbenchView.vue` / `LessonContextBar.vue`）→
   没有自动化测试，**必须实机看**：对话是主舞台（占满剩余宽度）、成品是可收起的辅列、
   一屏之内能看到输入框。旧版把对话夹在 200px 侧栏和成品区之间，还留了一大片空白。
+- 动了"从一句话里读课程信息"（`frontend/src/utils/lessonIntent.js`）→ 必跑
+  `node scripts/smoke_lesson_intent.mjs`。它钉死的是**新手能不能开口就用**：
+  教师说「生成一份浮力教案」，系统要是回「请先在顶部填好教学主题」，
+  他就是被要求把刚说过的话再说一遍 —— 这是劝退的头号原因。
+  两个方向都要钉：该读出来的必须读出来（主题/学科/年级/课时），
+  读不出来的**必须返回空**（宁可问一句，也不能编一个主题，那会生成一整份无关教案）。
+  别名表（初一→七年级、道法→道德与法治）与"宁窄勿宽"的取舍都在这条测试里。
+- 动了教案导出（`llm_lesson_plan_all_stages.py` 的 `_export_to_docx`）→ 必跑
+  `smoke_lesson_docx.py`。排版的问题**在界面上看不出来**，教师下载打印才发现，
+  而且坏得都很安静：python-docx 默认是 **Letter 不是 A4**；
+  渲染里到处 `str(v)`，模型把一条目标写成 `{"具体目标": …}` 就会把
+  **Python 的 repr 印进 Word**（线上真的产出过 `{'具体目标': "能准确说出…`）；
+  `- ` 伪列表在 Word 里只是破折号，多行缩进靠空格硬凑。
+  测试拿这三种**真实出现过的坏输入**去建文档，再反过来查产物里没有这些痕迹。
 
 ## 不确定的时候
 
