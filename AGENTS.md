@@ -28,7 +28,7 @@ Vue3 + FastAPI 单体，后端托管前端构建产物，教案/PPT/动画/游�
 8. **不要为了"顺手"引入新依赖**。先查 `pyproject.toml` / `frontend/package.json`，
    能复用现有能力就复用；确需新增，在 PR/提交信息里说明理由。
 9. **不要擅自 `git commit` 或 `git push`**。改动留在工作区，由用户自己验证后再决定提交；
-   只有用户明确说"提交""推送"时才执行。**提交前先跑通下面的 345 项验证。**
+   只有用户明确说"提交""推送"时才执行。**提交前先跑通下面的 540 项验证。**
 
 ## 目录地图（按需读，不要全读）
 
@@ -57,12 +57,14 @@ PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_plan_rev
 PYTHONPATH=backend uv run --project backend python scripts/smoke_api_contract.py        # 13 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_offline_artifact.py    # 27 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_teaching_review.py     # 27 项
-node scripts/smoke_chat_action.mjs                                                      # 25 项
+PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_tutor.py        # 39 项
+node scripts/smoke_chat_action.mjs                                                      # 45 项
 node scripts/smoke_dialogue_fields.mjs                                                  # 25 项
 node scripts/smoke_speech.mjs                                                           # 21 项
+node scripts/smoke_markdown_code.mjs                                                    # 23 项
 ```
 
-**当前基线：458 项全绿（70 + 77 + 29 + 40 + 14 + 53 + 37 + 13 + 27 + 27 + 25 + 25 + 21）。跑出红色必须修到绿，或明确说明为什么基线要变。**
+**当前基线：540 项全绿（70 + 77 + 29 + 40 + 14 + 53 + 37 + 13 + 27 + 27 + 39 + 45 + 25 + 21 + 23）。跑出红色必须修到绿，或明确说明为什么基线要变。**
 
 改动前端后额外确认：`git status` 里**不应出现** `frontend/dist/`（它不在版本控制内）。
 
@@ -106,6 +108,25 @@ node scripts/smoke_speech.mjs                                                   
 - 动了 LLM 服务的调用/兜底逻辑 → 必跑 `smoke_llm_service.py`；它钉死的是
   "模型失败后绝不静默切演示模板"以及"降级提示必须先于模板内容"，
   这类问题**不报错、不进日志**，只能靠测试发现。
+- 动了工作台对话的分流（`frontend/src/utils/chatAction.js` 的 `looksLikeQuestion`）
+  → 必跑 `node scripts/smoke_chat_action.mjs`。它钉死的是**「提问」和「要东西」走不同后端接口**：
+  提问走问答（真的给答案），含糊诉求走状态机（澄清/确认）。历史上两类话共用一条路，
+  于是所有提问都被当成"需求没说全"，教师问「什么是三角函数」拿回来的是
+  「请问您想了解什么主题的知识」，再问一句就只剩「你直接说要生成什么」。
+  词表宁窄勿宽：漏判只是多一次澄清往返，误判会把一句修改指令送进问答、绕掉真正的动作
+  （"换成煮饺子的例子"里的"例子"就曾是这样一个误判源）。
+- 动了教学工作台的问答语境（`backend/app/services/lesson_tutor.py`）→ 必跑
+  `smoke_lesson_tutor.py`。它钉死的是几条**模型不会自己遵守**的行为准则：
+  直接回答而不是反问、不谎称"已经生成好了"、贴住学段学科、缺信息时最多问一个。
+  少写一条，界面上就会多一类"看着像坏了"的回答，而且不报错。
+- 动了消息渲染管线（`frontend/src/utils/markdown.js` / `markdownCode.js`）→ 必跑
+  `node scripts/smoke_markdown_code.mjs`。代码高亮**已经静默失效过一次**：
+  marked 从 v5 起移除了 `highlight` 配置项，`setOptions({ highlight })` 变成被忽略的字段，
+  界面上不快了但控制台不报错、构建正常、`utils/highlight.js` 里注册的 12 种语言全白注册。
+  该脚本的第 5 组用例专门盯着"高亮到底有没有真的接进 marked"。
+- 动了工作台布局（`frontend/src/views/WorkbenchView.vue` / `LessonContextBar.vue`）→
+  没有自动化测试，**必须实机看**：对话是主舞台（占满剩余宽度）、成品是可收起的辅列、
+  一屏之内能看到输入框。旧版把对话夹在 200px 侧栏和成品区之间，还留了一大片空白。
 
 ## 不确定的时候
 
