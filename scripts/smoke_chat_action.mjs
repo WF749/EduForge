@@ -9,7 +9,7 @@
  *
  * 运行：node scripts/smoke_chat_action.mjs
  */
-import { routeUserMessage } from '../frontend/src/utils/chatAction.js'
+import { looksLikeQuestion, routeUserMessage } from '../frontend/src/utils/chatAction.js'
 
 let pass = 0
 let fail = 0
@@ -86,6 +86,35 @@ check('消息没提类型时用当前类型', route('改成生活例子', has).k
 check('"太阳" 不会被当成"太难"',
   route('太阳', has).action === 'chat', route('太阳', has).reason)
 check('大小写不敏感识别 PPT', route('来一份 ppt', none).kind === 'ppt')
+
+console.log('\n== 8. 提问检测（决定走"问答"还是走"澄清"）==')
+// 这一条判错的表现是：教师提问，系统反问"请问你想了解什么主题的知识"，
+// 再问一句就只剩"你直接说要生成什么"——正是被吐槽的那个毛病
+check('什么是三角函数 → 提问', looksLikeQuestion('什么是三角函数'))
+check('浮力是什么 → 提问', looksLikeQuestion('浮力是什么'))
+check('解释一下动能定理 → 提问', looksLikeQuestion('解释一下动能定理'))
+check('学生总把 k 和 b 搞混，怎么讲 → 提问', looksLikeQuestion('学生总把 k 和 b 搞混，怎么讲'))
+check('这两个概念有什么区别 → 提问', looksLikeQuestion('这两个概念有什么区别'))
+check('电磁感应有什么易错点 → 提问', looksLikeQuestion('电磁感应有什么易错点'))
+check('怎么教一次函数比较好 → 提问', looksLikeQuestion('怎么教一次函数比较好'))
+check('给我讲讲这个原理 → 提问', looksLikeQuestion('给我讲讲这个原理'))
+check('帮我想想这节课的导入 → 提问', looksLikeQuestion('帮我想想这节课的导入'))
+check('能不能举一个生活中的例子 → 提问', looksLikeQuestion('能不能举一个生活中的例子'))
+check('带问号的短问句也算', looksLikeQuestion('这样对吗？'))
+
+check('生成指令不算提问', !looksLikeQuestion('生成一份浮力教案'))
+check('修改指令不算提问', !looksLikeQuestion('导入环节太抽象，换成煮饺子的例子'))
+check('含糊诉求不算提问（该走澄清）', !looksLikeQuestion('帮我搞个能讲浮力的东西'))
+check('空串不算提问', !looksLikeQuestion(''))
+check('null 不算提问', !looksLikeQuestion(null))
+// 反向对照：提问与"要东西"都能被同一套规则分开，规则本身没退化成恒真/恒假
+check('规则没退化成恒真',
+  looksLikeQuestion('什么是三角函数') && !looksLikeQuestion('生成一份浮力教案'))
+
+// 提问必须落在 chat 动作上 —— 若它被判成 generate/revise，问答那条路根本不会被走到
+check('提问不会被误判成 generate', route('什么是三角函数', has).action === 'chat')
+check('提问不会被误判成 revise', route('学生总把 k 和 b 搞混，怎么讲', has).action === 'chat')
+check('提问的 reason 标明是提问', route('什么是三角函数', has).reason === '像是在提问')
 
 console.log('\n' + '='.repeat(64))
 console.log(`通过 ${pass} 项，失败 ${fail} 项`)
