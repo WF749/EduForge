@@ -155,7 +155,12 @@ async function ensureTask() {
 
 async function handleGenerate(kind) {
   if (!store.ready) {
-    ElMessage.warning('请先填好教学主题、学科与年级')
+    // 这条提示要能教会新手怎么做，而不是只宣布一个失败。
+    // 最省事的路径是"直接在对话里说一句"，所以把它写在最前面。
+    ElMessage.warning({
+      message: '在左边对话里说「生成一份××教案」就行，主题我会自己读出来；也可以在顶部直接填主题。',
+      duration: 5000
+    })
     return
   }
   const runner = runners[kind]
@@ -180,7 +185,7 @@ async function handleRevise({ kind, instruction }) {
   const runner = runners[kind]
   if (!runner || runner.running.value) return
   if (!store.ready) {
-    ElMessage.warning('请先填好学科与年级')
+    ElMessage.warning('教案修改要先有一份教案。在左边对话里说「生成一份××教案」即可。')
     return
   }
   if (!(await ensureTask())) {
