@@ -29,8 +29,24 @@ def _history_from_payload(body: Dict[str, Any]) -> List[Dict[str, Any]]:
     return messages
 
 
+def _system_prefix(body: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """可选的 system 消息。
+
+    单独抽出来是为了让文字链路和多模态链路取到**同一份** system ——
+    只在其中一条上支持，将来带图提问时会静默丢掉语境（这类"少了一段"
+    的 bug 不报错、不入日志，只能靠不重复写两份来避免）。
+    """
+    system = (body.get("system") or "").strip()
+    return [{"role": "system", "content": system}] if system else []
+
+
 def _messages_from_payload(body: Dict[str, Any]) -> List[Dict[str, Any]]:
-    messages = _history_from_payload(body)
+    messages: List[Dict[str, Any]] = []
+    # 可选 system：工作台对话要带上"这节课的语境 + 智能体身份"。
+    # 语境是长期背景，不能拼进用户消息（模型会以为教师刚说了那一长串）。
+    # 不传 system 的既有调用方行为完全不变。
+    messages.extend(_system_prefix(body))
+    messages.extend(_history_from_payload(body))
     msg = (body.get("message") or "").strip()
     messages.append({"role": "user", "content": msg})
     return messages
@@ -114,7 +130,7 @@ def _messages_multimodal(body: Dict[str, Any]) -> List[Dict[str, Any]]:
         {"type": "image_url", "image_url": {"url": img_url}},
         {"type": "text", "text": user_text},
     ]
-    return [*_history_from_payload(body), {"role": "user", "content": content}]
+    return [*_system_prefix(body), *_history_from_payload(body), {"role": "user", "content": content}]
 
 
 async def stream_chat_completion(body: Dict[str, Any]) -> AsyncIterator[str]:
