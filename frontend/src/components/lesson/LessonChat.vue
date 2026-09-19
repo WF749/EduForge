@@ -177,8 +177,9 @@ import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Microphone } from '@element-plus/icons-vue'
 import { Files, Document, VideoCamera, TrophyBase } from '@element-plus/icons-vue'
-import { useLessonStore } from '@/store/lesson'
+import { useLessonStore, SUBJECTS, GRADES } from '@/store/lesson'
 import { detectKind, looksLikeQuestion, routeUserMessage } from '@/utils/chatAction'
+import { applyInferred, inferLessonFields } from '@/utils/lessonIntent'
 import { fieldLabels } from '@/utils/dialogueFields'
 import { formatMessage } from '@/utils/markdown'
 import { useSpeech } from '@/composables/useSpeech'
@@ -221,6 +222,12 @@ const quickActions = [
   { label: '生成 PPT', action: 'generate', kind: 'ppt' },
   { label: '生成动画', action: 'generate', kind: 'animation' },
   { label: '生成游戏', action: 'generate', kind: 'game' }
+]
+
+/** 还没读到主题时给的例句：点了就真的能开工（主题在句子里，能被读出来） */
+const ASK_TOPIC_EXAMPLES = [
+  '生成一份浮力教案',
+  '生成一份《细胞的结构》教案'
 ]
 
 function nameOf(kind) { return KIND_NAME[kind] || '成品' }
@@ -467,7 +474,25 @@ function kindFromResult(r) {
   return null
 }
 
-function startGenerate(kind, lead) {
+function startGenerate(kind, lead, sourceText = '') {
+  // 先把他这句话里的"这节课是什么"读出来 —— 新手最常见的说法是
+  // 「生成一份浮力教案」一口气说完，此时主题、学科、年级都在句子里，
+  // 再去要求他"先填好教学主题"就是让他把说过的话再说一遍。
+  const inferred = sourceText
+    ? inferLessonFields(sourceText, { subjects: SUBJECTS, grades: GRADES })
+    : null
+  const changes = inferred ? applyInferred(store, inferred) : []
+  if (changes.length) push('agent', `（已记下：${changes.join(' · ')}）`)
+
+  if (!String(store.topic || '').trim()) {
+    // 读不出来就问一句人话，并且给出**可以直接点的完整例句** ——
+    // 空手给一句"请填主题"对新手等于没说
+    push('agent', '这节课讲什么？在句子里带上主题就行，我会自己读出来。', {
+      chips: ASK_TOPIC_EXAMPLES
+    })
+    return
+  }
+
   if (kind !== props.activeKind) emit('switch-kind', kind)
   push('agent', lead)
   pushCard(kind)
@@ -475,10 +500,6 @@ function startGenerate(kind, lead) {
 }
 
 function requestGenerate(kind) {
-  if (!store.ready) {
-    ElMessage.warning('请先在顶部填好教学主题、学科与年级')
-    return
-  }
   startGenerate(kind, `好的，开始生成${nameOf(kind)}。`)
 }
 
@@ -487,7 +508,7 @@ function dispatch(text, route) {
   const kindName = nameOf(route.kind)
 
   if (route.action === 'generate') {
-    startGenerate(route.kind, `好的，开始生成${kindName}。右侧会显示进度，完成后可以直接打开。`)
+    startGenerate(route.kind, `好的，开始生成${kindName}。右侧会显示进度，完成后可以直接打开。`, text)
     return
   }
 
