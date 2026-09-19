@@ -18,11 +18,144 @@ except Exception:  # pragma: no cover - RAG 可选
 
 class LessonPlanGenerator:
     """全学段教案生成器"""
-    
+
+    # ---- 排版尺度：集中一处，避免同一份文档里 11pt / 12pt 混着用 ----
+    # 中文文档的常规层级：标题三号(16) / 小标题四号(14) / 正文小四(12) / 表格五号(10.5)
+    _SZ_H1 = 22      # 文档主标题（课题）
+    _SZ_H2 = 16      # 章节标题（一、二、三）
+    _SZ_H3 = 14      # 小节标题
+    _SZ_BODY = 12    # 正文
+    _SZ_TABLE = 10.5  # 表格内文字
+
     def __init__(self):
         """初始化教案生成器"""
         self.prompts = LessonPlanPrompts()
         self.university_config = UniversityMajorConfig()
+
+    # ------------------------------------------------------------------
+    # 内容形状 → 可读文本
+    # ------------------------------------------------------------------
+    # 为什么单独做这一层：模型返回的字段形状不固定，而渲染代码里到处是 str(v)。
+    # `str({'具体目标': '能说出…'})` 会把 Python 的 repr 原样写进 Word —— 线上
+    # 真的出现过：教学目标表格的单元格里躺着 `{'具体目标': "能准确说出…`。
+    # 一个 dict 该怎么读，必须由渲染层决定，不能拿语言内部的 repr 当文档内容。
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _plain_scalar(value) -> str:
+        """标量 → 文本。空值给空串，布尔给人话，整数不做 float 化。"""
+        if value is None:
+            return ""
+        if isinstance(value, bool):
+            return "是" if value else "否"
+        if isinstance(value, float) and value.is_integer():
+            return str(int(value))
+        if isinstance(value, (int, float, str)):
+            return str(value).strip()
+        return ""
+
+    # 「- xxx」「1. xxx」「• xxx」这类行首标记，判断字面量前要先剥掉
+    _LIST_MARKER = re.compile(r"^\s*(?:[-*•◦▪]|\d+[.、])\s*")
+
+    @classmethod
+    def _heal_literals(cls, value, depth: int = 0):
+        """把"长得像 Python 字面量"的字符串还原成结构。
+
+        为什么需要：模型有时把一条作业写成**字符串**
+        `"{'题目': '…', '评分标准': '…'}"` —— 提示词里给的是 Python 风格示例，
+        它就把 repr 照抄了。这串东西一路传到渲染层，`str()` 之后原样印进 Word，
+        用户看到的是「1. {'题目': '体积为200 cm³…'}」（线上真的这样产出过）。
+
+        判定得了就还原，判定不了**原样保留** —— 渲染层不负责猜内容，
+        但"这串文本是不是一个结构"是能判定的。绝不为了好看丢掉内容。
+        """
+        if depth > 6:
+            return value
+        if isinstance(value, dict):
+            return {k: cls._heal_literals(v, depth + 1) for k, v in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [cls._heal_literals(v, depth + 1) for v in value]
+        if not isinstance(value, str):
+            return value
+
+        body = cls._LIST_MARKER.sub("", value).strip()
+        if len(body) < 4 or len(body) > 20000:
+            return value
+        if not ((body.startswith("{") and body.endswith("}"))
+                or (body.startswith("[") and body.endswith("]"))):
+            return value
+        try:
+            import ast
+            parsed = ast.literal_eval(body)
+        except (ValueError, SyntaxError, MemoryError, RecursionError):
+            return value
+        if isinstance(parsed, (dict, list)):
+            return cls._heal_literals(parsed, depth + 1)
+        return value
+
+    @classmethod
+    def _flatten(cls, value, level: int = 0):
+        """任意形状 → [(层级, 文本)]。
+
+        dict → 「键：值」，值还是复合结构就下沉一层；
+        list → 逐项摊平（**不**输出方括号与引号）；
+        标量 → 原样。
+        """
+        rows = []
+        if isinstance(value, dict):
+            for key, sub in value.items():
+                name = cls._plain_scalar(key) or str(key).strip()
+                if isinstance(sub, (dict, list, tuple)):
+                    kids = cls._flatten(sub, level + 1)
+                    if len(kids) == 1 and kids[0][0] == level + 1:
+                        rows.append((level, f"{name}：{kids[0][1]}"))
+                    elif kids:
+                        rows.append((level, f"{name}："))
+                        rows.extend(kids)
+                    else:
+                        rows.append((level, name))
+                else:
+                    text = cls._plain_scalar(sub)
+                    rows.append((level, f"{name}：{text}" if text else name))
+        elif isinstance(value, (list, tuple)):
+            for sub in value:
+                rows.extend(cls._flatten(sub, level))
+        else:
+            text = cls._plain_scalar(value)
+            if text:
+                rows.append((level, text))
+        return rows
+
+    @classmethod
+    def _plain_block(cls, value, max_rows: int = 60) -> str:
+        """摊成多行文本（写进表格单元格）。
+
+        层级用缩进 + 项目符号表达 —— **不用** `- ` 这种伪列表：
+        那在 Word 里就是个普通破折号，既没有悬挂缩进也不会随样式变，
+        多行缩进只能靠空格硬凑（原实现里真的出现过 "-    单位：…"）。
+        """
+        rows = cls._flatten(value)[:max_rows]
+        if not rows:
+            return ""
+        lines = []
+        for lv, text in rows:
+            lines.append(text if lv == 0 else f"{'    ' * (lv - 1)}• {text}")
+        return "\n".join(lines)
+
+    @classmethod
+    def _numbered_block(cls, value, max_rows: int = 60) -> str:
+        """像 _plain_block，但顶层条目带序号（教学目标这类"几条"的内容）"""
+        rows = cls._flatten(value)[:max_rows]
+        if not rows:
+            return ""
+        lines, n = [], 0
+        for lv, text in rows:
+            if lv == 0:
+                n += 1
+                lines.append(f"{n}. {text}")
+            else:
+                lines.append(f"{'    ' * (lv - 1)}• {text}")
+        return "\n".join(lines)
     
     def analyze_requirements(self, level: str, subject: str, grade: str, topic: str, 
                            duration: int, requirements: str = "") -> Dict[str, Any]:
@@ -259,8 +392,13 @@ class LessonPlanGenerator:
         
         doc = Document()
         
-        # ========== 设置页面边距 ==========
+        # ========== 纸张与边距（A4，中文公文规范）==========
+        # python-docx 的默认模板是 **Letter（21.6×27.9cm）**，不是 A4。
+        # 不显式设置的话，教案在打印机上会按 Letter 排版：右边距对不上、
+        # 最后一列被裁掉。中文教案一律 A4（21×29.7cm）。
         for section in doc.sections:
+            section.page_width = Cm(21)
+            section.page_height = Cm(29.7)
             section.top_margin = Cm(2.5)
             section.bottom_margin = Cm(2.5)
             section.left_margin = Cm(3)
@@ -270,11 +408,13 @@ class LessonPlanGenerator:
         style = doc.styles['Normal']
         font = style.font
         font.name = 'Times New Roman'
-        font.size = Pt(12)
+        font.size = Pt(self._SZ_BODY)
         style.element.rPr.rFonts.set(qn('w:eastAsia'), '宋体')
         style.paragraph_format.line_spacing = 1.5
         
         # ========== 提取基本信息 ==========
+        # 先自愈：模型偶尔把结构写成字符串（repr），不还原就会原样印进文档
+        lesson_plan = self._heal_literals(lesson_plan)
         basic_info = lesson_plan.get("教案基本信息", {})
         # 优先使用传入的topic参数，确保文件名与用户输入一致
         if not topic:
@@ -285,7 +425,7 @@ class LessonPlanGenerator:
         title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
         title_run = title_para.add_run(f"{topic}")
         title_run.bold = True
-        title_run.font.size = Pt(22)
+        title_run.font.size = Pt(self._SZ_H1)
         title_run.font.color.rgb = RGBColor(0x1A, 0x5C, 0xA8)
         self._set_cn_font(title_run, '黑体')
         
@@ -293,7 +433,7 @@ class LessonPlanGenerator:
         subtitle_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
         subtitle_run = subtitle_para.add_run("教 案")
         subtitle_run.bold = True
-        subtitle_run.font.size = Pt(18)
+        subtitle_run.font.size = Pt(self._SZ_H2)
         subtitle_run.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
         self._set_cn_font(subtitle_run, '黑体')
         
@@ -328,7 +468,10 @@ class LessonPlanGenerator:
                             break
                 if val:
                     break
-            info_rows.append((label, str(val) if val else "________"))
+            # str(val) 在这里是错的：模型有时把"教材版本"给成 {"版本":…,"章节":…}，
+            # str() 会把 repr 印进表格（这一处和教学目标那处是同一个病）
+            text = val if isinstance(val, str) else self._plain_block(val)
+            info_rows.append((label, text.strip() if text and text.strip() else "________"))
         
         cols = 4
         table = doc.add_table(rows=0, cols=cols)
@@ -341,6 +484,7 @@ class LessonPlanGenerator:
             if i + 1 < len(info_rows):
                 self._set_cell(row.cells[2], info_rows[i+1][0], bold=True, bg_color="E8EEF7")
                 self._set_cell(row.cells[3], info_rows[i+1][1])
+        self._fix_layout(table)
         
         # ========== 教学目标 ==========
         # 说明：这里**不再硬编码"三维目标"**。
@@ -363,8 +507,13 @@ class LessonPlanGenerator:
         for idx, (cat_name, cat_items) in enumerate(goal_categories):
             row = goal_table.rows[idx + 1]
             self._set_cell(row.cells[0], cat_name, bold=True, bg_color="E8EEF7", width=Cm(3.5))
-            content_text = "\n".join([f"{i+1}. {item}" for i, item in enumerate(cat_items)]) if cat_items else "（请根据实际情况补充）"
+            # 逐条编号：cat_items 已是纯文本（_group_goals 里展平过），这里只负责排版
+            content_text = "\n".join(
+                f"{i}. {item}" for i, item in enumerate(cat_items, 1)
+            ) if cat_items else "（请根据实际情况补充）"
             self._set_cell(row.cells[1], content_text)
+        self._repeat_header(goal_table.rows[0])
+        self._fix_layout(goal_table)
         
         # ========== 教学重难点（表格）==========
         focus = lesson_plan.get("教学重难点", {})
@@ -372,27 +521,26 @@ class LessonPlanGenerator:
         
         focus_data = {"教学重点": "", "教学难点": "", "突破策略": ""}
         if isinstance(focus, dict):
+            # 统一走 _plain_block：list 逐条一行、dict 变「键：值」，
+            # 不再出现 "- xxx" 伪列表与 str(list) 的字面量
             for fkey in ["教学重点", "重点"]:
                 if fkey in focus:
-                    val = focus[fkey]
-                    focus_data["教学重点"] = "\n".join([f"- {v}" for v in val]) if isinstance(val, list) else str(val)
+                    focus_data["教学重点"] = self._plain_block(focus[fkey])
                     break
             for fkey in ["教学难点", "难点"]:
                 if fkey in focus:
-                    val = focus[fkey]
-                    focus_data["教学难点"] = "\n".join([f"- {v}" for v in val]) if isinstance(val, list) else str(val)
+                    focus_data["教学难点"] = self._plain_block(focus[fkey])
                     break
             for fkey in ["突破策略", "重难点突破", "突破方法", "解决策略"]:
                 if fkey in focus:
-                    val = focus[fkey]
-                    focus_data["突破策略"] = "\n".join([f"- {v}" for v in val]) if isinstance(val, list) else str(val)
+                    focus_data["突破策略"] = self._plain_block(focus[fkey])
                     break
             # 收集未匹配的内容
             known_focus = {"教学重点", "重点", "教学难点", "难点", "突破策略", "重难点突破", "突破方法", "解决策略"}
             for k, v in focus.items():
-                if k not in known_focus:
-                    if not focus_data["突破策略"]:
-                        focus_data["突破策略"] = f"{k}：{v}" if not isinstance(v, list) else f"{k}：\n" + "\n".join([f"- {item}" for item in v])
+                if k not in known_focus and not focus_data["突破策略"]:
+                    inner = self._plain_block(v)
+                    focus_data["突破策略"] = f"{k}：\n{inner}" if inner else str(k)
         elif isinstance(focus, str):
             focus_data["教学重点"] = focus
         
@@ -402,6 +550,7 @@ class LessonPlanGenerator:
         for idx, (fk, fv) in enumerate(focus_data.items()):
             self._set_cell(focus_table.rows[idx].cells[0], fk, bold=True, bg_color="E8EEF7", width=Cm(3.5))
             self._set_cell(focus_table.rows[idx].cells[1], fv if fv else "（请根据实际情况补充）")
+        self._fix_layout(focus_table)
         
         # ========== 教学准备（表格）==========
         preparation = lesson_plan.get("教学准备", {})
@@ -414,35 +563,30 @@ class LessonPlanGenerator:
             media_keys = ["教学媒体", "多媒体", "课件", "教学工具", "媒体"]
             for tk in teacher_keys:
                 if tk in preparation:
-                    val = preparation[tk]
-                    prep_data["教师准备"] = "\n".join([f"- {v}" for v in val]) if isinstance(val, list) else str(val)
+                    prep_data["教师准备"] = self._plain_block(preparation[tk])
                     break
             for sk in student_keys:
                 if sk in preparation:
-                    val = preparation[sk]
-                    prep_data["学生准备"] = "\n".join([f"- {v}" for v in val]) if isinstance(val, list) else str(val)
+                    prep_data["学生准备"] = self._plain_block(preparation[sk])
                     break
             for mk in media_keys:
                 if mk in preparation:
-                    val = preparation[mk]
-                    prep_data["教学媒体"] = "\n".join([f"- {v}" for v in val]) if isinstance(val, list) else str(val)
+                    prep_data["教学媒体"] = self._plain_block(preparation[mk])
                     break
             # 未匹配的内容归入教师准备
             matched_prep = set(teacher_keys + student_keys + media_keys)
             extra_items = []
             for k, v in preparation.items():
                 if k not in matched_prep:
-                    if isinstance(v, list):
-                        extra_items.append(f"{k}：" + "、".join([str(item) for item in v]))
-                    else:
-                        extra_items.append(f"{k}：{v}")
+                    inner = self._plain_block(v)
+                    extra_items.append(f"{k}：{inner}" if inner else str(k))
             if extra_items:
-                if prep_data["教师准备"]:
-                    prep_data["教师准备"] += "\n" + "\n".join(extra_items)
-                else:
-                    prep_data["教师准备"] = "\n".join(extra_items)
+                merged = "\n".join(extra_items)
+                prep_data["教师准备"] = (
+                    f"{prep_data['教师准备']}\n{merged}" if prep_data["教师准备"] else merged
+                )
         elif isinstance(preparation, list):
-            prep_data["教师准备"] = "\n".join([f"- {item}" for item in preparation])
+            prep_data["教师准备"] = self._plain_block(preparation)
         elif isinstance(preparation, str):
             prep_data["教师准备"] = preparation
         
@@ -452,6 +596,7 @@ class LessonPlanGenerator:
         for idx, (pk, pv) in enumerate(prep_data.items()):
             self._set_cell(prep_table.rows[idx].cells[0], pk, bold=True, bg_color="E8EEF7", width=Cm(3.5))
             self._set_cell(prep_table.rows[idx].cells[1], pv if pv else "（请根据实际情况补充）")
+        self._fix_layout(prep_table)
         
         # ========== 教学过程设计（统一大表格）==========
         process = lesson_plan.get("教学过程设计", [])
@@ -493,21 +638,25 @@ class LessonPlanGenerator:
                                        "教师活动", "学生活动", "设计意图", "教学内容", "对应PPT页码"}
                     for sk, sv in step.items():
                         if sk not in known_step_keys and sv:
-                            teacher_act = f"{teacher_act}\n{sk}：{sv}" if teacher_act else f"{sk}：{sv}"
+                            extra = self._plain_block(sv)
+                            if extra:
+                                teacher_act = f"{teacher_act}\n{sk}：{extra}" if teacher_act else f"{sk}：{extra}"
                     
-                    self._set_cell(row.cells[0], str(step_name), bold=True)
-                    self._set_cell(row.cells[1], str(step_time) if step_time else "")
-                    self._set_cell(row.cells[2], str(teacher_act) if teacher_act else "")
-                    self._set_cell(row.cells[3], str(student_act) if student_act else "")
-                    self._set_cell(row.cells[4], str(design_intent) if design_intent else "")
+                    self._set_cell(row.cells[0], step_name, bold=True)
+                    self._set_cell(row.cells[1], step_time if step_time else "")
+                    self._set_cell(row.cells[2], teacher_act if teacher_act else "")
+                    self._set_cell(row.cells[3], student_act if student_act else "")
+                    self._set_cell(row.cells[4], design_intent if design_intent else "")
                 else:
-                    self._set_cell(row.cells[0], str(step))
+                    self._set_cell(row.cells[0], step)
+            self._repeat_header(process_table.rows[0])
+            self._fix_layout(process_table)
         elif isinstance(process, dict):
             self._add_dict_or_list_content(doc, process)
         else:
             p = doc.add_paragraph()
             run = p.add_run("（请根据实际情况设计教学过程）")
-            run.font.size = Pt(12)
+            run.font.size = Pt(self._SZ_BODY)
             self._set_cn_font(run, '宋体')
         
         # ========== 板书设计/课件框架 ==========
@@ -566,8 +715,8 @@ class LessonPlanGenerator:
         
         return file_path
     
-    @staticmethod
-    def _group_goals(goals):
+    @classmethod
+    def _group_goals(cls, goals):
         """把「教学目标」整理成 [(维度, [目标...]), ...]，**不预设维度名称**。
 
         为什么不做成固定三维：2022 年版义务教育课程方案与课程标准已把课程目标
@@ -586,12 +735,14 @@ class LessonPlanGenerator:
         grouped: "OrderedDict[str, list]" = OrderedDict()
 
         def _add(dim, value):
-            dim = str(dim or "教学目标").strip() or "教学目标"
+            dim = cls._plain_scalar(dim) or "教学目标"
             bucket = grouped.setdefault(dim, [])
-            if isinstance(value, (list, tuple)):
-                bucket.extend(str(v) for v in value if str(v).strip())
-            elif value is not None and str(value).strip():
-                bucket.append(str(value))
+            # 走 _flatten 而不是 str()：模型有时把一条目标写成
+            # {"具体目标": "能说出…"}，str() 会把 repr 直接送进 Word
+            # （历史事故：目标表格里出现 `{'具体目标': "能准确说出…`）
+            for _lv, text in cls._flatten(value):
+                if text.strip():
+                    bucket.append(text.strip())
 
         if isinstance(goals, dict):
             for dim, value in goals.items():
@@ -624,15 +775,63 @@ class LessonPlanGenerator:
         p = doc.add_paragraph()
         p.paragraph_format.space_before = Pt(16)
         p.paragraph_format.space_after = Pt(8)
-        run = p.add_run(text)
+        p.paragraph_format.keep_with_next = True  # 标题不与正文分离到两页
+        run = p.add_run(str(text))
         run.bold = True
-        run.font.size = Pt(15)
+        run.font.size = Pt(self._SZ_H2)
         run.font.color.rgb = RGBColor(0x1A, 0x5C, 0xA8)
         self._set_cn_font(run, '黑体')
-    
+
+    def _add_sub_heading(self, doc, text: str):
+        """小节标题（板书要点、课后作业这类）"""
+        from docx.shared import Pt, RGBColor
+
+        p = doc.add_paragraph()
+        p.paragraph_format.space_before = Pt(10)
+        p.paragraph_format.space_after = Pt(4)
+        p.paragraph_format.keep_with_next = True
+        run = p.add_run(str(text))
+        run.bold = True
+        run.font.size = Pt(self._SZ_H3)
+        run.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
+        self._set_cn_font(run, '黑体')
+
+    def _add_bullet(self, doc, text: str, level: int = 0):
+        """真正的项目符号段落：悬挂缩进让换行对齐，而不是靠空格硬凑。
+
+        原实现写 `p.add_run(f"- {item}")`，多行内容只能靠空格模拟层级
+        （文档里真的出现过 "-    单位：…"）。这里用「符号 + 悬挂缩进」，
+        换行会自动与首行文字对齐，层级用缩进表达。
+        """
+        from docx.shared import Pt, Cm
+
+        marker = ("•", "◦", "▪")[min(level, 2)]
+        p = doc.add_paragraph()
+        pf = p.paragraph_format
+        pf.left_indent = Cm(0.74 + 0.6 * level)
+        pf.first_line_indent = Cm(-0.4)   # 负首行 = 悬挂，换行后与文字左对齐
+        pf.space_after = Pt(2)
+        pf.line_spacing = 1.4
+        run = p.add_run(f"{marker} {text}")
+        run.font.size = Pt(self._SZ_BODY)
+        self._set_cn_font(run, '宋体')
+
+    def _add_numbered_item(self, doc, num: int, text: str):
+        """添加编号项"""
+        from docx.shared import Pt, Cm
+
+        p = doc.add_paragraph()
+        p.paragraph_format.left_indent = Cm(0.74)
+        p.paragraph_format.first_line_indent = Cm(-0.55)
+        p.paragraph_format.space_after = Pt(2)
+        p.paragraph_format.line_spacing = 1.4
+        run = p.add_run(f"{num}. {text}")
+        run.font.size = Pt(self._SZ_BODY)
+        self._set_cn_font(run, '宋体')
+
     def _set_header_cell(self, cell, text: str, width=None):
         """设置表头单元格（深蓝底白色粗体）"""
-        from docx.shared import Pt, RGBColor, Cm
+        from docx.shared import Pt, RGBColor
         from docx.oxml.ns import nsdecls
         from docx.oxml import parse_xml
         from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -640,36 +839,66 @@ class LessonPlanGenerator:
         cell.text = ""
         p = cell.paragraphs[0]
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = p.add_run(text)
+        p.paragraph_format.line_spacing = 1.15
+        run = p.add_run(str(text))
         run.bold = True
-        run.font.size = Pt(11)
+        run.font.size = Pt(self._SZ_TABLE)
         run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
         self._set_cn_font(run, '黑体')
         shading = parse_xml(f'<w:shd {nsdecls("w")} w:fill="1A5CA8"/>')
         cell._tc.get_or_add_tcPr().append(shading)
         if width:
             cell.width = width
-    
-    def _add_numbered_item(self, doc, num: int, text: str):
-        """添加编号项"""
+
+    @staticmethod
+    def _repeat_header(row):
+        """让表头在跨页时重复。
+
+        长表格（教学过程最常跨页）翻到第二页就只剩正文，读者得回头找列标题。
+        这是 `<w:tblHeader/>` 一句话的事，但不做的话没人会报错。
+        """
+        from docx.oxml.ns import qn
+        from docx.oxml import OxmlElement
+        tr_pr = row._tr.get_or_add_trPr()
+        if tr_pr.find(qn('w:tblHeader')) is None:
+            el = OxmlElement('w:tblHeader')
+            el.set(qn('w:val'), 'true')
+            tr_pr.append(el)
+
+    @staticmethod
+    def _fix_layout(table):
+        """关掉自动伸缩：开启时 Word 会按内容重排列宽，5 列的表格会被挤成一团。"""
+        from docx.oxml.ns import qn
+        from docx.oxml import OxmlElement
+        tbl_pr = table._tbl.tblPr
+        for tag in ('w:tblLayout',):
+            existing = tbl_pr.find(qn(tag))
+            if existing is not None:
+                tbl_pr.remove(existing)
+        layout = OxmlElement('w:tblLayout')
+        layout.set(qn('w:type'), 'fixed')
+        tbl_pr.append(layout)
+
+    def _set_cell(self, cell, content, bold: bool = False, bg_color: str = None, width=None,
+                  size=None, first_line_indent=None):
+        """设置表格单元格。
+
+        `content` 可以是任意形状（str / list / dict）—— 一律先过 `_plain_block`
+        摊成可读文本。**绝不**直接 str() 一个复合结构：那会把 Python 的 repr
+        写进文档（历史事故：教学目标格里出现 `{'具体目标': …`）。
+        """
         from docx.shared import Pt
-        
-        p = doc.add_paragraph()
-        p.paragraph_format.left_indent = Pt(20)
-        run = p.add_run(f"{num}. {text}")
-        run.font.size = Pt(12)
-        self._set_cn_font(run, '宋体')
-    
-    def _set_cell(self, cell, text: str, bold: bool = False, bg_color: str = None, width=None):
-        """设置表格单元格"""
-        from docx.shared import Pt, Cm
         from docx.oxml.ns import nsdecls
         from docx.oxml import parse_xml
-        
+
+        text = content if isinstance(content, str) else self._plain_block(content)
         cell.text = ""
         p = cell.paragraphs[0]
+        # 表格里按 1.15 倍行距：1.5 在窄列里会被拆得七零八落
+        p.paragraph_format.line_spacing = 1.15
+        p.paragraph_format.space_after = Pt(2)
         run = p.add_run(text)
-        run.font.size = Pt(11)
+        run.font.size = Pt(size or self._SZ_TABLE)
         self._set_cn_font(run, '宋体')
         if bold:
             run.bold = True
@@ -680,52 +909,50 @@ class LessonPlanGenerator:
             cell.width = width
     
     def _add_dict_or_list_content(self, doc, content):
-        """将字典或列表内容添加到文档"""
+        """把「板书设计 / 作业布置 / 教学反思」这类模块渲染进正文。
+
+        统一走 `_flatten` 得到 (层级, 文本)，再用 `_add_bullet` 排版：
+          - 键用小节标题（黑体四号），值按其形状铺成条目；
+          - 条目用真项目符号 + 悬挂缩进，**不用** `- ` 加空格硬凑缩进
+            （原实现里出现过 "-    单位：…"，换行后完全对不起）。
+        """
         from docx.shared import Pt
-        
-        if isinstance(content, dict):
-            for k, v in content.items():
-                p = doc.add_paragraph()
-                p.paragraph_format.left_indent = Pt(10)
-                run_label = p.add_run(f"{k}：")
-                run_label.bold = True
-                run_label.font.size = Pt(12)
-                self._set_cn_font(run_label, '黑体')
-                
-                if isinstance(v, list):
-                    for item in v:
-                        sub_p = doc.add_paragraph()
-                        sub_p.paragraph_format.left_indent = Pt(30)
-                        sub_run = sub_p.add_run(f"- {item}")
-                        sub_run.font.size = Pt(11)
-                        self._set_cn_font(sub_run, '宋体')
-                elif isinstance(v, dict):
-                    for sub_k, sub_v in v.items():
-                        sub_p = doc.add_paragraph()
-                        sub_p.paragraph_format.left_indent = Pt(30)
-                        sub_run = sub_p.add_run(f"{sub_k}：{sub_v}")
-                        sub_run.font.size = Pt(11)
-                        self._set_cn_font(sub_run, '宋体')
-                else:
-                    run_val = p.add_run(str(v))
-                    run_val.font.size = Pt(12)
-                    self._set_cn_font(run_val, '宋体')
-        elif isinstance(content, list):
-            for i, item in enumerate(content, 1):
-                if isinstance(item, dict):
-                    for k, v in item.items():
-                        p = doc.add_paragraph()
-                        p.paragraph_format.left_indent = Pt(10)
-                        run = p.add_run(f"{k}：{v}")
-                        run.font.size = Pt(11)
-                        self._set_cn_font(run, '宋体')
-                else:
-                    self._add_numbered_item(doc, i, str(item))
-        elif isinstance(content, str):
+
+        rows = self._flatten(content)
+        if not rows:
+            return
+
+        # 顶层且只有一条 → 当小节标题；否则铺完整个模块
+        if len(rows) == 1 and rows[0][0] == 0:
+            body = rows[0][1]
+            # "结构化板书要点：" 这类以冒号收尾的当作标题，正文另起
+            if body.endswith(("：", ":")):
+                self._add_sub_heading(doc, body.rstrip("：:"))
+                return
             p = doc.add_paragraph()
-            run = p.add_run(content)
-            run.font.size = Pt(12)
+            run = p.add_run(body)
+            run.font.size = Pt(self._SZ_BODY)
             self._set_cn_font(run, '宋体')
+            return
+
+        for level, text in rows:
+            if level == 0 and text.endswith(("：", ":")):
+                self._add_sub_heading(doc, text.rstrip("：:"))
+                continue
+            if level == 0 and self._looks_like_key(text):
+                # 顶层「键：值」—— 键交给小节标题，值单独一条
+                key, _, value = text.partition("：")
+                self._add_sub_heading(doc, key)
+                if value.strip():
+                    self._add_bullet(doc, value.strip())
+                continue
+            self._add_bullet(doc, text, level)
+
+    @staticmethod
+    def _looks_like_key(text: str) -> bool:
+        """顶层「XX：……」，且键足够短 —— 短到像字段名而不是一整句正文"""
+        key, sep, value = text.partition("：")
+        return bool(sep) and 0 < len(key) <= 12 and bool(value.strip())
     
     @staticmethod
     def _set_cn_font(run, east_asian='宋体', western='Times New Roman'):
