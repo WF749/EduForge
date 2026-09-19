@@ -15,12 +15,18 @@ load_dotenv(_PROJECT / ".env")
 _HTTP_TIMEOUT = httpx.Timeout(180.0, connect=30.0)
 
 
+# 对话历史的轮数上限。
+# 抽成常量是为了让"界面能如实说出带上几轮" —— 写死在切片里的话，
+# 展示文案与实际行为迟早对不上，而这种不一致教师是发现不了的。
+HISTORY_TURNS = 20
+
+
 def _history_from_payload(body: Dict[str, Any]) -> List[Dict[str, Any]]:
     history = body.get("history")
     if not isinstance(history, list):
         return []
     messages: List[Dict[str, Any]] = []
-    for item in history[-20:]:
+    for item in history[-HISTORY_TURNS:]:
         if not isinstance(item, dict) or item.get("role") not in ("user", "assistant"):
             continue
         content = item.get("content")

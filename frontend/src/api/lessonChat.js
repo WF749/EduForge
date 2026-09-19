@@ -59,6 +59,28 @@ export async function resetDialogue(conversationId) {
 }
 
 /**
+ * 取回「智能体眼里的这节课」—— 界面用它如实展示系统记住了什么、每轮发给模型什么。
+ *
+ * 刻意由服务端返回原文，而不是前端按同样的格式自己拼一份：
+ * 拼一份的话迟早与真正发出去的那份走偏，那就成了更糟的"看起来透明"。
+ * 不调模型、不联网。
+ */
+export async function fetchLessonContext(lesson) {
+  const res = await trackedFetch(`${BASE()}/lesson-chat/context`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ lesson })
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data?.detail || data?.message || '读取上下文失败')
+  return {
+    context: data.context || '',
+    system: data.system || '',
+    historyTurns: Number(data.history_turns) || 0
+  }
+}
+
+/**
  * 教学工作台问答（流式）。
  *
  * 与 `postDialogue` 的分工是这个模块存在的全部理由：
