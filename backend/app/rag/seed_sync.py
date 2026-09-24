@@ -28,9 +28,13 @@ import hashlib
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from .frontmatter import split_frontmatter
 from .retriever import ORIGIN_SEED, is_seed_metadata
 
-__all__ = ["content_hash", "seed_metadata", "seed_files", "sync_seed_index"]
+__all__ = [
+    "content_hash", "seed_metadata", "seed_body", "seed_files",
+    "rebuild_seed_index", "sync_seed_index", "maybe_upload_metadata",
+]
 
 
 def content_hash(text: str) -> str:
@@ -43,15 +47,31 @@ def seed_metadata(filename: str, content: str, **extra: Any) -> Dict[str, Any]:
 
     字段含义见 retriever 里 origin 的说明：origin 管"能删什么"，
     source 与 filename 管展示与溯源，content_hash 管增量同步。
+
+    `content` 传**原始全文**（含 frontmatter）：
+      * hash 用全文 —— 改了元数据也算变，索引会重建；
+      * 文档头部的 frontmatter 会被解析成 stage / subject / grades 等字段，
+        供 `/api/rag/search` 的 filters 使用（例如只看初中物理）。
     """
+    front, _body = split_frontmatter(content)
     meta: Dict[str, Any] = {
         "origin": ORIGIN_SEED,
         "source": ORIGIN_SEED,
         "filename": filename,
         "content_hash": content_hash(content),
     }
+    meta.update(front)
     meta.update(extra)
     return meta
+
+
+def seed_body(content: str) -> str:
+    """去掉 frontmatter 后的正文 —— 索引只吃正文。
+
+    不剥掉的话，`stage: 初中` 这类行会被切进 chunk：既污染检索，
+    溯源时也会显示成一段莫名其妙的正文。
+    """
+    return split_frontmatter(content)[1]
 
 
 def seed_files(kb_dir) -> List[Path]:
@@ -60,6 +80,33 @@ def seed_files(kb_dir) -> List[Path]:
     if not kb.exists():
         return []
     return sorted(list(kb.glob("*.md")) + list(kb.glob("*.txt")))
+
+
+def rebuild_seed_index(retriever, kb_dir) -> Dict[str, Any]:
+    """全量重建种子索引（先清种子，再逐篇加入）。
+
+    这是**唯一**的重建入口：`POST /api/rag/reindex` 与 `scripts/rag_eval.py`
+    都用它。此前评测脚本自己写了一份，用的是 `clear()`（会把用户上传一起删掉）
+    和旧的 metadata 写法 —— 于是"评测跑过的索引"和"线上实际用的索引"是两套，
+    改了一处另一处不动，评测结果也就说明不了线上行为。
+    """
+    removed = retriever.clear_seed()
+    added: List[str] = []
+    errors: List[Dict[str, str]] = []
+    for path in seed_files(kb_dir):
+        try:
+            raw = path.read_text(encoding="utf-8")
+            retriever.add_document(path.stem, seed_body(raw), seed_metadata(path.name, raw))
+            added.append(path.stem)
+        except Exception as e:  # noqa: BLE001
+            errors.append({"document_id": path.stem, "error": str(e)})
+    return {
+        "added": added,
+        "removed": removed,
+        "errors": errors,
+        "documents": len(retriever.documents),
+        "chunks": len(retriever.chunks),
+    }
 
 
 def sync_seed_index(retriever, kb_dir, *, verbose: bool = False) -> Dict[str, Any]:
@@ -107,7 +154,9 @@ def sync_seed_index(retriever, kb_dir, *, verbose: bool = False) -> Dict[str, An
             continue  # 内容没变，不重算向量（省时间也省额度）
 
         try:
-            retriever.add_document(stem, content, seed_metadata(path.name, content))
+            retriever.add_document(
+                stem, seed_body(content), seed_metadata(path.name, content)
+            )
             (updated if existing else added).append(stem)
         except Exception as e:  # noqa: BLE001
             errors.append({"document_id": stem, "error": str(e)})

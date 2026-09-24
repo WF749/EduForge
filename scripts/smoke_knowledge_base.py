@@ -132,6 +132,51 @@ check("没有 TODO / 待补充 / 占位 字样", not placeholder, f"{placeholder
 check("没有可疑的内部路径或地址",
       not re.search(r"[A-Za-z]:\\\\[Uu]sers|192\.168\.|127\.0\.0\.1", all_text))
 
+print("\n=== 8. 结构化元数据（frontmatter）===")
+# 没有 pyyaml（红线 8：能复用就不加依赖），所以自己解析。
+# 这里的重点不是"解析得多全"，而是**不能因为一个冒号就把整篇文档丢掉** ——
+# 那会让教师改了半天发现查不到，而日志里只有一行 YAML 报错。
+sys.path.insert(0, str(ROOT / "backend"))
+from app.rag.frontmatter import (  # noqa: E402
+    parse_frontmatter, split_frontmatter,
+)
+
+fm, body = split_frontmatter(
+    "---\nstage: 初中\nsubject: 物理\ngrades: [八年级, 九年级]\n---\n\n# 标题\n正文\n"
+)
+check("解析出 stage", fm.get("stage") == "初中", str(fm.get("stage")))
+check("解析出 subject", fm.get("subject") == "物理")
+check("解析出数组 grades", fm.get("grades") == ["八年级", "九年级"], str(fm.get("grades")))
+check("正文不含 frontmatter", "stage" not in body and body.startswith("# 标题"))
+
+fm2, body2 = split_frontmatter("---\nstage: 初中\ngrades:\n  - 八年级\n  - 九年级\n---\n正文")
+check("块数组也能解析", fm2.get("grades") == ["八年级", "九年级"], str(fm2.get("grades")))
+
+check("没有 frontmatter 时整篇是正文", split_frontmatter("# 标题\n正文")[1].startswith("# 标题"))
+check("正文中间的 --- 分隔线不被当 frontmatter",
+      parse_frontmatter("# 标题\n\n第一段\n\n---\n\n第二段") == {})
+check("开了头没闭合 → 按整篇正文处理（不半截解析）",
+      split_frontmatter("---\nstage: 初中\n\n# 标题\n正文")[1].startswith("---"))
+check("坏写法不抛异常（冒号缺失等）",
+      isinstance(split_frontmatter("---\n这不是键值对啊\n---\n正文"), tuple))
+check("空输入不炸", split_frontmatter("") == ({}, ""))
+check("带引号的值会被去掉引号",
+      parse_frontmatter('---\nsubject: "物理"\n---\nx').get("subject") == "物理")
+check("行尾注释会被去掉",
+      parse_frontmatter("---\nstage: 初中  # 学段\n---\nx").get("stage") == "初中")
+
+print("\n=== 9. 每篇语料都要带可过滤的元数据 ===")
+for stem, text in docs.items():
+    meta = parse_frontmatter(text)
+    missing = [k for k in ("stage", "subject", "type") if not meta.get(k)]
+    if missing:
+        check(f"{stem} 元数据齐全", False, f"缺 {missing}")
+check("全部语料都带 stage / subject / type", True, "（逐篇检查见上）")
+stages = {parse_frontmatter(t).get("stage") for t in docs.values()}
+check("学段覆盖小学与初中", {"小学", "初中"} <= stages, str(sorted(stages)))
+types = {parse_frontmatter(t).get("type") for t in docs.values()}
+check("类型覆盖教学法与学科知识点", {"教学法", "学科知识点"} <= types, str(sorted(types)))
+
 print(f"\n通过 {len(PASS)} 项，失败 {len(FAIL)} 项")
 if FAIL:
     print("失败项：" + "、".join(FAIL))
