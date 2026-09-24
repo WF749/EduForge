@@ -28,7 +28,7 @@ Vue3 + FastAPI 单体，后端托管前端构建产物，教案/PPT/动画/游�
 8. **不要为了"顺手"引入新依赖**。先查 `pyproject.toml` / `frontend/package.json`，
    能复用现有能力就复用；确需新增，在 PR/提交信息里说明理由。
 9. **不要擅自 `git commit` 或 `git push`**。改动留在工作区，由用户自己验证后再决定提交；
-   只有用户明确说"提交""推送"时才执行。**提交前先跑通下面的 622 项验证。**
+   只有用户明确说"提交""推送"时才执行。**提交前先跑通下面的 667 项验证。**
 
 ## 目录地图（按需读，不要全读）
 
@@ -57,8 +57,9 @@ PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_plan_rev
 PYTHONPATH=backend uv run --project backend python scripts/smoke_api_contract.py        # 13 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_offline_artifact.py    # 27 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_teaching_review.py     # 27 项
-PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_tutor.py        # 39 项
+PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_tutor.py        # 49 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_docx.py         # 35 项
+PYTHONPATH=backend uv run --project backend python scripts/smoke_knowledge_base.py      # 35 项
 node scripts/smoke_chat_action.mjs                                                      # 45 项
 node scripts/smoke_dialogue_fields.mjs                                                  # 25 项
 node scripts/smoke_lesson_intent.mjs                                                    # 47 项
@@ -66,7 +67,7 @@ node scripts/smoke_speech.mjs                                                   
 node scripts/smoke_markdown_code.mjs                                                    # 23 项
 ```
 
-**当前基线：622 项全绿（70 + 77 + 29 + 40 + 14 + 53 + 37 + 13 + 27 + 27 + 39 + 35 + 45 + 25 + 47 + 21 + 23）。跑出红色必须修到绿，或明确说明为什么基线要变。**
+**当前基线：667 项全绿（70 + 77 + 29 + 40 + 14 + 53 + 37 + 13 + 27 + 27 + 49 + 35 + 35 + 45 + 25 + 47 + 21 + 23）。跑出红色必须修到绿，或明确说明为什么基线要变。**
 
 改动前端后额外确认：`git status` 里**不应出现** `frontend/dist/`（它不在版本控制内）。
 
@@ -143,6 +144,13 @@ node scripts/smoke_markdown_code.mjs                                            
   **Python 的 repr 印进 Word**（线上真的产出过 `{'具体目标': "能准确说出…`）；
   `- ` 伪列表在 Word 里只是破折号，多行缩进靠空格硬凑。
   测试拿这三种**真实出现过的坏输入**去建文档，再反过来查产物里没有这些痕迹。
+- 动了预置知识库（`knowledge_base/`）或检索评测集（`evals/rag_eval_set.jsonl`）→
+  必跑 `smoke_knowledge_base.py`，并跑一次 `make eval`。
+  **预置知识库是交付内容**：教师的第一次备课不该以"先上传资料"为前提。
+  这类内容资产最容易被悄悄掏空（删几篇、改成占位、扩了内容却忘了更新评测集），
+  没有测试的话都不会报错，只表现为"问什么都说不知道"。
+  该测试钉的是资产本身：规模与分节密度、每篇自成体系、
+  以及评测集与语料严格对齐（expect_terms 真在文档里、拒答题真在库外）。
 
 ## 不确定的时候
 
