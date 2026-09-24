@@ -119,31 +119,20 @@ def reindex():
     from ..core.config import KNOWLEDGE_BASE_DIR
     from pathlib import Path
     from ..rag.retriever import ORIGIN_SEED
-    from ..rag.seed_sync import seed_metadata
+    from ..rag.seed_sync import rebuild_seed_index
 
     kb = Path(KNOWLEDGE_BASE_DIR)
     if not kb.exists():
         return JSONResponse(status_code=404, content={
             "success": False, "code": "E4004", "message": f"知识库目录不存在: {kb}"})
 
-    r = get_retriever()
-    removed = r.clear_seed()
-    indexed: List[Dict[str, Any]] = []
-    errors: List[Dict[str, Any]] = []
-    for f in sorted(list(kb.glob("*.md")) + list(kb.glob("*.txt"))):
-        try:
-            st = r.add_document(f.stem, f.read_text(encoding="utf-8"),
-                                seed_metadata(f.name, f.read_text(encoding="utf-8")))
-            indexed.append({"document_id": f.stem, **st})
-        except Exception as e:  # noqa: BLE001
-            errors.append({"file": f.name, "error": str(e)})
-
+    # 与 `scripts/rag_eval.py --reindex` 共用同一份实现，避免两套索引逻辑漂移
+    out = rebuild_seed_index(get_retriever(), kb)
     return {
-        "success": not errors,
+        "success": not out["errors"],
         "origin": ORIGIN_SEED,
-        "removed": removed,
-        "documents": len(indexed),
-        "chunks": sum(i.get("chunks", 0) for i in indexed),
-        "errors": errors,
-        "items": indexed,
+        "removed": out["removed"],
+        "documents": len(out["added"]),
+        "chunks": out["chunks"],
+        "errors": out["errors"],
     }

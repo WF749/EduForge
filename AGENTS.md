@@ -28,7 +28,7 @@ Vue3 + FastAPI 单体，后端托管前端构建产物，教案/PPT/动画/游�
 8. **不要为了"顺手"引入新依赖**。先查 `pyproject.toml` / `frontend/package.json`，
    能复用现有能力就复用；确需新增，在 PR/提交信息里说明理由。
 9. **不要擅自 `git commit` 或 `git push`**。改动留在工作区，由用户自己验证后再决定提交；
-   只有用户明确说"提交""推送"时才执行。**提交前先跑通下面的 698 项验证。**
+   只有用户明确说"提交""推送"时才执行。**提交前先跑通下面的 713 项验证。**
 
 ## 目录地图（按需读，不要全读）
 
@@ -59,7 +59,7 @@ PYTHONPATH=backend uv run --project backend python scripts/smoke_offline_artifac
 PYTHONPATH=backend uv run --project backend python scripts/smoke_teaching_review.py     # 27 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_tutor.py        # 49 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_docx.py         # 35 项
-PYTHONPATH=backend uv run --project backend python scripts/smoke_knowledge_base.py      # 35 项
+PYTHONPATH=backend uv run --project backend python scripts/smoke_knowledge_base.py      # 50 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_rag_seed_sync.py    # 31 项
 node scripts/smoke_chat_action.mjs                                                      # 45 项
 node scripts/smoke_dialogue_fields.mjs                                                  # 25 项
@@ -68,7 +68,7 @@ node scripts/smoke_speech.mjs                                                   
 node scripts/smoke_markdown_code.mjs                                                    # 23 项
 ```
 
-**当前基线：698 项全绿（70 + 77 + 29 + 40 + 14 + 53 + 37 + 13 + 27 + 27 + 49 + 35 + 35 + 31 + 45 + 25 + 47 + 21 + 23）。跑出红色必须修到绿，或明确说明为什么基线要变。**
+**当前基线：713 项全绿（70 + 77 + 29 + 40 + 14 + 53 + 37 + 13 + 27 + 27 + 49 + 35 + 50 + 31 + 45 + 25 + 47 + 21 + 23）。跑出红色必须修到绿，或明确说明为什么基线要变。**
 
 改动前端后额外确认：`git status` 里**不应出现** `frontend/dist/`（它不在版本控制内）。
 
@@ -161,6 +161,10 @@ node scripts/smoke_markdown_code.mjs                                            
      origin=upload 两个字段表达同一件事，种子靠"恰好没写 origin"侥幸存活）；
   ③ 文件改了要重建、文件删了要移除（曾只看 id 在不在，改了查不到新的、
      删了还在检索旧的，两头都静默）。
+- 新增/改动知识文档的重建逻辑 → **必须走 `seed_sync.rebuild_seed_index`**。
+  曾出现两套实现（API 一套、`scripts/rag_eval.py` 一套），评测脚本那份还在用
+  `clear()` 与旧 metadata —— 于是"评测跑过的索引"和"线上用的索引"不是同一套，
+  改了一处另一处不动，评测结果说明不了线上行为。
 
 ## 不确定的时候
 

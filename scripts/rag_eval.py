@@ -22,20 +22,23 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 
 
 def reindex(kb_dir: Path) -> int:
-    """用 knowledge_base/ 下的 md/txt 重建索引。"""
+    """用 knowledge_base/ 下的 md/txt 重建**种子**索引。
+
+    走 `app.rag.seed_sync.rebuild_seed_index` —— 与线上
+    `POST /api/rag/reindex` 是同一个实现。此前这里自己写了一份，
+    用的是 `clear()`（会把用户上传的资料一起删掉）和旧 metadata 写法，
+    于是"评测跑过的索引"和"线上用的索引"是两套，改了一处另一处不动。
+    """
     from app.rag.retriever import get_retriever
+    from app.rag.seed_sync import rebuild_seed_index
 
     r = get_retriever()
-    r.clear()
-    n = 0
-    for f in sorted(list(kb_dir.glob("*.md")) + list(kb_dir.glob("*.txt"))):
-        st = r.add_document(
-            f.stem, f.read_text(encoding="utf-8"),
-            {"filename": f.name, "source": "seed"},
-        )
-        print(f"  索引 {f.name}: {st['chunks']} chunks, 向量={st['vector_indexed']}")
-        n += st["chunks"]
-    return n
+    out = rebuild_seed_index(r, kb_dir)
+    for e in out["errors"]:
+        print(f"  索引失败 {e['document_id']}: {e['error']}")
+    print(f"  重建种子索引：新增 {len(out['added'])} 篇 / 清掉旧的 {out['removed']} 篇"
+          f" / 共 {out['chunks']} 片段")
+    return out["chunks"]
 
 
 def main() -> int:
