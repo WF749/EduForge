@@ -28,7 +28,7 @@ Vue3 + FastAPI 单体，后端托管前端构建产物，教案/PPT/动画/游�
 8. **不要为了"顺手"引入新依赖**。先查 `pyproject.toml` / `frontend/package.json`，
    能复用现有能力就复用；确需新增，在 PR/提交信息里说明理由。
 9. **不要擅自 `git commit` 或 `git push`**。改动留在工作区，由用户自己验证后再决定提交；
-   只有用户明确说"提交""推送"时才执行。**提交前先跑通下面的 667 项验证。**
+   只有用户明确说"提交""推送"时才执行。**提交前先跑通下面的 698 项验证。**
 
 ## 目录地图（按需读，不要全读）
 
@@ -60,6 +60,7 @@ PYTHONPATH=backend uv run --project backend python scripts/smoke_teaching_review
 PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_tutor.py        # 49 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_docx.py         # 35 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_knowledge_base.py      # 35 项
+PYTHONPATH=backend uv run --project backend python scripts/smoke_rag_seed_sync.py    # 31 项
 node scripts/smoke_chat_action.mjs                                                      # 45 项
 node scripts/smoke_dialogue_fields.mjs                                                  # 25 项
 node scripts/smoke_lesson_intent.mjs                                                    # 47 项
@@ -67,7 +68,7 @@ node scripts/smoke_speech.mjs                                                   
 node scripts/smoke_markdown_code.mjs                                                    # 23 项
 ```
 
-**当前基线：667 项全绿（70 + 77 + 29 + 40 + 14 + 53 + 37 + 13 + 27 + 27 + 49 + 35 + 35 + 45 + 25 + 47 + 21 + 23）。跑出红色必须修到绿，或明确说明为什么基线要变。**
+**当前基线：698 项全绿（70 + 77 + 29 + 40 + 14 + 53 + 37 + 13 + 27 + 27 + 49 + 35 + 35 + 31 + 45 + 25 + 47 + 21 + 23）。跑出红色必须修到绿，或明确说明为什么基线要变。**
 
 改动前端后额外确认：`git status` 里**不应出现** `frontend/dist/`（它不在版本控制内）。
 
@@ -151,6 +152,15 @@ node scripts/smoke_markdown_code.mjs                                            
   没有测试的话都不会报错，只表现为"问什么都说不知道"。
   该测试钉的是资产本身：规模与分节密度、每篇自成体系、
   以及评测集与语料严格对齐（expect_terms 真在文档里、拒答题真在库外）。
+- 动了种子索引的同步与来源标记（`app/rag/seed_sync.py`、retriever 的
+  `clear_seed`/`ORIGIN_*`）→ 必跑 `smoke_rag_seed_sync.py`。
+  它钉的三件事都属于"操作成功、数据没了"：
+  ① `POST /api/rag/reindex` **只重建种子、不碰用户上传**（曾调用 `clear()`
+     连 chroma collection 一起删，教师重启一次服务资料全没，接口却报成功）；
+  ② origin 只有 seed/upload 两种且全项目同一口径（曾出现 source=seed 与
+     origin=upload 两个字段表达同一件事，种子靠"恰好没写 origin"侥幸存活）；
+  ③ 文件改了要重建、文件删了要移除（曾只看 id 在不在，改了查不到新的、
+     删了还在检索旧的，两头都静默）。
 
 ## 不确定的时候
 

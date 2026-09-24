@@ -109,9 +109,17 @@ def delete_document(document_id: str):
 
 @router.post("/reindex")
 def reindex():
-    """用仓库根 knowledge_base/ 下的 md/txt 全量重建索引。"""
+    """用仓库根 knowledge_base/ 下的 md/txt 重建**种子索引**。
+
+    只重建 origin=seed 的部分，**用户上传的资料不受影响**。
+    此前这里调用的是 `clear()` —— 那会连 chroma collection 一起删掉，
+    教师上传的课件与资料在一次"重建内置知识库"里被全部抹掉，
+    而接口返回 success。现在语义写死在 `clear_seed()` 里。
+    """
     from ..core.config import KNOWLEDGE_BASE_DIR
     from pathlib import Path
+    from ..rag.retriever import ORIGIN_SEED
+    from ..rag.seed_sync import seed_metadata
 
     kb = Path(KNOWLEDGE_BASE_DIR)
     if not kb.exists():
@@ -119,19 +127,21 @@ def reindex():
             "success": False, "code": "E4004", "message": f"知识库目录不存在: {kb}"})
 
     r = get_retriever()
-    r.clear()
+    removed = r.clear_seed()
     indexed: List[Dict[str, Any]] = []
     errors: List[Dict[str, Any]] = []
     for f in sorted(list(kb.glob("*.md")) + list(kb.glob("*.txt"))):
         try:
             st = r.add_document(f.stem, f.read_text(encoding="utf-8"),
-                                {"filename": f.name, "source": "seed"})
+                                seed_metadata(f.name, f.read_text(encoding="utf-8")))
             indexed.append({"document_id": f.stem, **st})
         except Exception as e:  # noqa: BLE001
             errors.append({"file": f.name, "error": str(e)})
 
     return {
         "success": not errors,
+        "origin": ORIGIN_SEED,
+        "removed": removed,
         "documents": len(indexed),
         "chunks": sum(i.get("chunks", 0) for i in indexed),
         "errors": errors,

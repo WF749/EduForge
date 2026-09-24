@@ -78,6 +78,33 @@ DEFAULT_CANDIDATES = 20
 
 
 # ---------------------------------------------------------------------------
+# 来源标记（origin）
+# ---------------------------------------------------------------------------
+# 只此一处定义，全项目共用。此前**同一个意思用了两个字段**：
+# 种子文档写 `source="seed"`，上传文档写 `origin="upload"`；
+# 而 `knowledge_store.clear_all()` 是按 `origin` 过滤的，
+# 于是种子文档靠"恰好没有 origin"侥幸存活 —— 任何一处改字段名就会误删或漏删。
+#
+# 约定：
+#   * `origin` = 来源分类，只有 seed / upload 两种，用于"能删什么、不能删什么"；
+#   * `source` = 展示用的来源名（种子是 "seed"，上传是文件名）；
+#   * `filename` = 原始文件名（种子为 md 文件名，上传为用户上传名）。
+ORIGIN_SEED = "seed"
+ORIGIN_UPLOAD = "upload"
+
+
+def is_seed_metadata(metadata: Optional[Dict[str, Any]]) -> bool:
+    """判定一篇文档是不是种子语料。
+
+    历史遗留：早期只写 `source="seed"` 不写 `origin`。两种都认，
+    这样老索引在下次 reindex / 启动同步时会被识别并补上 `origin`，
+    不会变成"谁都删不掉也认不出"的孤儿文档。
+    """
+    meta = metadata or {}
+    return meta.get("origin") == ORIGIN_SEED or meta.get("source") == ORIGIN_SEED
+
+
+# ---------------------------------------------------------------------------
 # 数据结构
 # ---------------------------------------------------------------------------
 
@@ -384,6 +411,24 @@ class HybridRetriever:
             if save and to_del:
                 self._save()
             return len(to_del)
+
+    def clear_seed(self) -> int:
+        """只清种子语料，**不动用户上传的内容**。
+
+        为什么单独开一个方法：`POST /api/rag/reindex` 的语义是"重建内置知识库"，
+        而它此前调用的是 `clear()` —— 后者会把 chroma collection 整块删掉，
+        用户上传的资料随之全部消失，而接口返回的是"重建成功"。
+        这类"操作成功但数据没了"的事故，只能靠把语义写进方法名来防。
+        """
+        with self._lock:
+            ids = [d for d, doc in self.documents.items()
+                   if is_seed_metadata(doc.get("metadata"))]
+            for d in ids:
+                self.delete_document(d, save=False)
+            if ids:
+                self._rebuild_bm25()
+                self._save()
+            return len(ids)
 
     def clear(self) -> None:
         with self._lock:
