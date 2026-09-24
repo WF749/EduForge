@@ -89,30 +89,19 @@ app.include_router(api_routes.router)
 
 
 def _rag_seed_background():
-    """启动时把 knowledge_base/ 下的种子文档补进统一检索索引。
+    """启动时把 knowledge_base/ 同步进统一检索索引。
 
-    只补**尚未索引**的文档，已存在则跳过——否则每次启动都重算一遍向量，
-    既慢又白白消耗额度。完整重建请用 `POST /api/rag/reindex`。
+    按文件内容 hash 增量同步（新增 / 变更 / 删除），只动种子文档，
+    用户上传的资料不受影响。完整重建用 `POST /api/rag/reindex`。
+
+    放在后台线程：首次索引要算向量，不该拖慢服务启动。
     """
     try:
         from .core.config import KNOWLEDGE_BASE_DIR
         from .rag.retriever import get_retriever
+        from .rag.seed_sync import sync_seed_index
 
-        r = get_retriever()
-        known = set(r.documents.keys())
-        added = 0
-        for f in sorted(list(Path(KNOWLEDGE_BASE_DIR).glob("*.md"))
-                        + list(Path(KNOWLEDGE_BASE_DIR).glob("*.txt"))):
-            if f.stem in known:
-                continue
-            try:
-                r.add_document(f.stem, f.read_text(encoding="utf-8"),
-                               {"filename": f.name, "source": "seed"})
-                added += 1
-            except Exception as e:  # noqa: BLE001
-                print(f"  索引 {f.name} 失败: {e}")
-        print(f"知识库种子索引: 新增 {added} 篇，索引内共 {len(r.documents)} 篇"
-              f" / {len(r.chunks)} 片段")
+        sync_seed_index(get_retriever(), KNOWLEDGE_BASE_DIR, verbose=True)
     except Exception as e:  # noqa: BLE001
         print(f"知识库后台索引: {e}")
 

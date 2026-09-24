@@ -154,10 +154,14 @@ def add_chunks(
         try:
             r = _rag()
             if r is not None:
+                # origin 用常量而不是字面量：这个字段决定"能不能被清空"，
+                # 拼错一个字母就会让用户的资料永远删不掉（或永远被误删）。
+                from .rag.retriever import ORIGIN_UPLOAD
                 r.add_document(
                     doc_id,
                     "\n".join(chunks),
-                    metadata={"filename": filename, **(meta or {}), "origin": "upload"},
+                    metadata={"filename": filename, "source": filename,
+                              **(meta or {}), "origin": ORIGIN_UPLOAD},
                     chunk_size=chunk_size or 320,
                 )
         except Exception as e:  # noqa: BLE001
@@ -214,12 +218,18 @@ def clear_all() -> None:
     # 注意：不清空统一检索器中的**种子知识库**。
     # clear_all 的语义是"清空用户上传的知识"，而种子文档由 /api/rag/reindex 管理，
     # 一并清掉会让用户莫名其妙失去内置资料。
+    #
+    # 判定用"不是种子"而不是"origin == upload"：早期版本的上传文档可能没写
+    # origin，按 upload 精确匹配会漏掉它们，于是用户点了清空却还查得到 ——
+    # 这种"点了没反应"正是最伤信任的一类。
     if _rag_enabled():
         try:
             r = _rag()
             if r is not None:
+                from .rag.retriever import is_seed_metadata
                 for d in list(r.documents.keys()):
-                    if (r.documents[d].get("metadata") or {}).get("origin") == "upload":
+                    meta = (r.documents[d] or {}).get("metadata") or {}
+                    if not is_seed_metadata(meta):
                         r.delete_document(d)
         except Exception as e:  # noqa: BLE001
             log.warning("清空统一检索索引中的上传文档失败: %s", e)
