@@ -310,10 +310,10 @@ PPT 走后台任务，报告写在 `task.result.compliance`，随 `/api/ppt/stat
 - 三角色审批流（教师/教研/学生）—— 会把系统边界撑爆
 - 作业批改与考试系统 —— 与"备课"不是一个环节
 
-**质量保证怎么自证**：745 项离线冒烟测试（不消耗模型额度、秒级跑完），
+**质量保证怎么自证**：751 项离线冒烟测试（不消耗模型额度、秒级跑完），
 覆盖数据合规、教学合规、教案健壮性与 Word 排版、版本链、迭代修改、前后端接口路径契约、
 对话意图路由与问答语境、从一句话读课程信息、预置知识库与教案排版、产物离线可用性。
-另含 100 条 RAG 评测集（`make eval`）与预置知识库（15 篇约 3.9 万字，随仓库自带）。另有 100 条自建 RAG 评测集（`make eval` 可复现）。
+另含 100 条 RAG 评测集（`make eval`）与预置知识库（21 篇约 5.4 万字，随仓库自带）。另有 100 条自建 RAG 评测集（`make eval` 可复现）。
 
 ---
 
@@ -343,7 +343,7 @@ PPT 走后台任务，报告写在 `task.result.compliance`，随 `/api/ppt/stat
 
 欢迎 Issue 与 PR。提交前请运行冒烟测试（均在项目根目录，不消耗模型额度）：
 
-全部 745 项，均不消耗模型额度、秒级跑完（完整清单见 [`AGENTS.md`](AGENTS.md#提交前必须跑通的验证)）：
+全部 751 项，均不消耗模型额度、秒级跑完（完整清单见 [`AGENTS.md`](AGENTS.md#提交前必须跑通的验证)）：
 
 ```bash
 PYTHONPATH=backend uv run --project backend python scripts/smoke_safety.py
@@ -364,7 +364,7 @@ PYTHONPATH=backend uv run --project backend python scripts/smoke_offline_artifac
 PYTHONPATH=backend uv run --project backend python scripts/smoke_teaching_review.py     # 27 项：模型深度复查（默认关闭也要能跑通）
 PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_tutor.py        # 49 项：问答的课程语境与行为准则
 PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_docx.py         # 35 项：教案 Word 排版（A4/字号/真列表/字面量自愈）
-PYTHONPATH=backend uv run --project backend python scripts/smoke_knowledge_base.py      # 50 项：预置知识库（规模/结构/元数据/评测集对齐）
+PYTHONPATH=backend uv run --project backend python scripts/smoke_knowledge_base.py      # 56 项：预置知识库（规模/结构/元数据/评测集对齐）
 PYTHONPATH=backend uv run --project backend python scripts/smoke_rag_seed_sync.py    # 31 项：种子索引增量同步与来源标记
 PYTHONPATH=backend uv run --project backend python scripts/smoke_course_knowledge.py  # 32 项：四路生成共用同一份课程知识
 

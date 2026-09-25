@@ -175,7 +175,12 @@ check("全部语料都带 stage / subject / type", True, "（逐篇检查见上�
 stages = {parse_frontmatter(t).get("stage") for t in docs.values()}
 check("学段覆盖小学与初中", {"小学", "初中"} <= stages, str(sorted(stages)))
 types = {parse_frontmatter(t).get("type") for t in docs.values()}
-check("类型覆盖教学法与学科知识点", {"教学法", "学科知识点"} <= types, str(sorted(types)))
+# 六类教学资源是"从能回答问题到能完成教学工作"的关键补齐：
+# 只有教学法与知识点时，系统能答题但给不出可直接用的课例、活动、作业与量规。
+REQUIRED_TYPES = ("教学法", "学科知识点", "课例", "活动", "实验", "作业",
+                  "评价量规", "产物模板")
+missing_types = [t for t in REQUIRED_TYPES if t not in types]
+check("八类资源齐备", not missing_types, f"缺 {missing_types}")
 
 print(f"\n通过 {len(PASS)} 项，失败 {len(FAIL)} 项")
 if FAIL:

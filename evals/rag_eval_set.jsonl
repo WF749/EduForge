@@ -3,91 +3,91 @@
 {"id": "A003", "query": "数学核心素养的三会指什么", "answerable": true, "expect_source": "10_课程标准与政策要点", "expect_terms": ["数学的眼光", "数学的思维", "数学的语言"]}
 {"id": "A004", "query": "学业质量标准是依据什么来刻画学生表现的", "answerable": true, "expect_source": "10_课程标准与政策要点", "expect_terms": ["核心素养发展水平", "学业质量标准"]}
 {"id": "A005", "query": "小学一二年级能不能布置书面家庭作业", "answerable": true, "expect_source": "10_课程标准与政策要点", "expect_terms": ["二年级不布置书面家庭作业"]}
-{"id": "A006", "query": "初中每天书面作业完成时间平均不超过多久", "answerable": true, "expect_source": "10_课程标准与政策要点", "expect_terms": ["90 分钟"]}
+{"id": "A006", "query": "跨学科主题学习的目的是什么", "answerable": true, "expect_source": "10_课程标准与政策要点", "expect_terms": ["跨学科主题学习", "真实问题"]}
 {"id": "A007", "query": "什么是逆向设计", "answerable": true, "expect_source": "11_教学设计方法", "expect_terms": ["预期结果", "评估证据"]}
 {"id": "A008", "query": "5E 教学法包括哪五个环节", "answerable": true, "expect_source": "11_教学设计方法", "expect_terms": ["引入", "探究", "解释", "迁移", "评价"]}
-{"id": "A009", "query": "BOPPPS 六个模块分别是什么", "answerable": true, "expect_source": "11_教学设计方法", "expect_terms": ["导言", "目标", "前测", "参与式学习", "后测", "总结"]}
-{"id": "A010", "query": "为什么要先定评估证据再设计教学活动", "answerable": true, "expect_source": "11_教学设计方法", "expect_terms": ["不能为证据服务的环节就删掉"]}
-{"id": "A011", "query": "教学设计里的大概念指什么", "answerable": true, "expect_source": "11_教学设计方法", "expect_terms": ["可迁移的概括性认识"]}
-{"id": "A012", "query": "探究型新授课适合用哪种教学模式", "answerable": true, "expect_source": "11_教学设计方法", "expect_terms": ["5E"]}
-{"id": "A013", "query": "ABCD 法里的四个要素是什么", "answerable": true, "expect_source": "12_教学目标撰写", "expect_terms": ["行为主体", "行为动词", "行为条件", "表现程度"]}
-{"id": "A014", "query": "为什么不能写理解和掌握这样的目标", "answerable": true, "expect_source": "12_教学目标撰写", "expect_terms": ["不可观测"]}
-{"id": "A015", "query": "布鲁姆认知层次由低到高有哪些", "answerable": true, "expect_source": "12_教学目标撰写", "expect_terms": ["记忆", "理解", "应用", "分析", "评价", "创造"]}
-{"id": "A016", "query": "分析层次可以用哪些行为动词", "answerable": true, "expect_source": "12_教学目标撰写", "expect_terms": ["区分", "辨析", "推断"]}
-{"id": "A017", "query": "教学重点和教学难点有什么区别", "answerable": true, "expect_source": "12_教学目标撰写", "expect_terms": ["教学重点", "教学难点"]}
-{"id": "A018", "query": "教学难点应该从哪里找", "answerable": true, "expect_source": "12_教学目标撰写", "expect_terms": ["常见迷思概念"]}
-{"id": "A019", "query": "45 分钟新授课怎么分配时间", "answerable": true, "expect_source": "13_课堂环节设计", "expect_terms": ["导入", "新授", "巩固", "小结"]}
-{"id": "A020", "query": "导入环节的作用是什么", "answerable": true, "expect_source": "13_课堂环节设计", "expect_terms": ["制造认知需求"]}
-{"id": "A021", "query": "导入有哪些常见做法", "answerable": true, "expect_source": "13_课堂环节设计", "expect_terms": ["情境导入", "问题导入", "复习导入", "实验导入"]}
-{"id": "A022", "query": "新授环节可以分哪三步", "answerable": true, "expect_source": "13_课堂环节设计", "expect_terms": ["暴露学生的想法", "提供证据", "抽象出概念"]}
-{"id": "A023", "query": "课堂小结应该怎么做", "answerable": true, "expect_source": "13_课堂环节设计", "expect_terms": ["自己梳理"]}
-{"id": "A024", "query": "练习课的结构是怎样的", "answerable": true, "expect_source": "13_课堂环节设计", "expect_terms": ["讲评共性问题"]}
-{"id": "A025", "query": "提问之后应该等待多久", "answerable": true, "expect_source": "14_课堂提问与互动", "expect_terms": ["3 秒"]}
-{"id": "A026", "query": "课堂追问可以分成哪几类", "answerable": true, "expect_source": "14_课堂提问与互动", "expect_terms": ["要证据", "要解释", "换角度", "反例检验"]}
-{"id": "A027", "query": "小组讨论要有效需要哪些条件", "answerable": true, "expect_source": "14_课堂提问与互动", "expect_terms": ["任务明确", "时间明确", "角色分工", "汇报"]}
-{"id": "A028", "query": "学生回答错了应该怎么对待", "answerable": true, "expect_source": "14_课堂提问与互动", "expect_terms": ["教学资源"]}
-{"id": "A029", "query": "什么样的问题不适合拿来讨论", "answerable": true, "expect_source": "14_课堂提问与互动", "expect_terms": ["唯一标准答案"]}
-{"id": "A030", "query": "怎样用提问做形成性评价", "answerable": true, "expect_source": "14_课堂提问与互动", "expect_terms": ["一分钟纸笔", "出门票"]}
-{"id": "A031", "query": "板书有哪几种常见结构", "answerable": true, "expect_source": "15_板书与多媒体教具", "expect_terms": ["提纲式", "结构图式", "表格式", "推导式"]}
-{"id": "A032", "query": "多媒体课件应该用在什么地方", "answerable": true, "expect_source": "15_板书与多媒体教具", "expect_terms": ["无法用语言或板书表达"]}
-{"id": "A033", "query": "教学动画适合呈现什么内容", "answerable": true, "expect_source": "15_板书与多媒体教具", "expect_terms": ["不可见或过快过慢"]}
-{"id": "A034", "query": "判断一项技术值不值得进课堂要看什么", "answerable": true, "expect_source": "15_板书与多媒体教具", "expect_terms": ["无法呈现"]}
-{"id": "A035", "query": "实验的功能是什么", "answerable": true, "expect_source": "15_板书与多媒体教具", "expect_terms": ["提供证据"]}
-{"id": "A036", "query": "课堂游戏适合用在哪个环节", "answerable": true, "expect_source": "15_板书与多媒体教具", "expect_terms": ["巩固与检测"]}
-{"id": "A037", "query": "学生为什么觉得除以分数会越除越小", "answerable": true, "expect_source": "20_小学数学_核心概念与常见误区", "expect_terms": ["6 ÷ 1/2"]}
-{"id": "A038", "query": "学生为什么认为分子大分数就大", "answerable": true, "expect_source": "20_小学数学_核心概念与常见误区", "expect_terms": ["3/8", "2/5"]}
-{"id": "A039", "query": "小数末尾添零会不会改变大小", "answerable": true, "expect_source": "20_小学数学_核心概念与常见误区", "expect_terms": ["0.5", "0.50"]}
-{"id": "A040", "query": "怎么帮学生区分周长和面积", "answerable": true, "expect_source": "20_小学数学_核心概念与常见误区", "expect_terms": ["绳子围边界", "铺方格"]}
-{"id": "A041", "query": "为什么量出内角和接近180度还不算证明", "answerable": true, "expect_source": "20_小学数学_核心概念与常见误区", "expect_terms": ["剪拼"]}
-{"id": "A042", "query": "应用题看到多就加对吗", "answerable": true, "expect_source": "20_小学数学_核心概念与常见误区", "expect_terms": ["比谁多", "标准量"]}
-{"id": "A043", "query": "负 a 一定是负数吗", "answerable": true, "expect_source": "21_初中数学_核心概念与常见误区", "expect_terms": ["相反数"]}
-{"id": "A044", "query": "不等式什么时候要改变不等号方向", "answerable": true, "expect_source": "21_初中数学_核心概念与常见误区", "expect_terms": ["同乘或同除以负数"]}
-{"id": "A045", "query": "反比例函数的增减性该怎么表述", "answerable": true, "expect_source": "21_初中数学_核心概念与常见误区", "expect_terms": ["在每个象限内"]}
-{"id": "A046", "query": "二次函数 a 越大开口就越大吗", "answerable": true, "expect_source": "21_初中数学_核心概念与常见误区", "expect_terms": ["|a| 越大"]}
-{"id": "A047", "query": "两边和其中一边的对角能判定全等吗", "answerable": true, "expect_source": "21_初中数学_核心概念与常见误区", "expect_terms": ["SSA 不能保证唯一"]}
-{"id": "A048", "query": "相似三角形的面积比与相似比是什么关系", "answerable": true, "expect_source": "21_初中数学_核心概念与常见误区", "expect_terms": ["面积比等于相似比的平方"]}
-{"id": "A049", "query": "浮力大小与物体重力有关吗", "answerable": true, "expect_source": "22_初中物理_核心概念与常见误区", "expect_terms": ["液体密度", "排开液体的体积"]}
-{"id": "A050", "query": "排开液体的体积一定等于物体体积吗", "answerable": true, "expect_source": "22_初中物理_核心概念与常见误区", "expect_terms": ["浸没时 V排 = V物"]}
-{"id": "A051", "query": "下沉的物体还受浮力吗", "answerable": true, "expect_source": "22_初中物理_核心概念与常见误区", "expect_terms": ["沉入水中的物体仍受浮力"]}
-{"id": "A052", "query": "物体浸没越深浮力越大吗", "answerable": true, "expect_source": "22_初中物理_核心概念与常见误区", "expect_terms": ["完全浸没后 V排 不再变化"]}
-{"id": "A053", "query": "漂浮和悬浮有什么区别", "answerable": true, "expect_source": "22_初中物理_核心概念与常见误区", "expect_terms": ["漂浮是部分浸入", "悬浮是全部浸入"]}
-{"id": "A054", "query": "液体压强与容器形状有关吗", "answerable": true, "expect_source": "22_初中物理_核心概念与常见误区", "expect_terms": ["液体密度和深度"]}
-{"id": "A055", "query": "有气体生成的反应为什么看起来不遵守质量守恒", "answerable": true, "expect_source": "23_初中化学_核心概念与常见误区", "expect_terms": ["密闭容器"]}
-{"id": "A056", "query": "催化剂到底参不参加反应", "answerable": true, "expect_source": "23_初中化学_核心概念与常见误区", "expect_terms": ["催化剂", "中间过程"]}
-{"id": "A057", "query": "是二氧化碳使石蕊变红吗", "answerable": true, "expect_source": "23_初中化学_核心概念与常见误区", "expect_terms": ["碳酸使石蕊变红"]}
-{"id": "A058", "query": "一氧化碳使人中毒的原因是什么", "answerable": true, "expect_source": "23_初中化学_核心概念与常见误区", "expect_terms": ["一氧化碳", "血红蛋白"]}
-{"id": "A059", "query": "铁与稀盐酸反应后溶液是什么颜色", "answerable": true, "expect_source": "23_初中化学_核心概念与常见误区", "expect_terms": ["亚铁", "浅绿色"]}
-{"id": "A060", "query": "复分解反应发生需要什么条件", "answerable": true, "expect_source": "23_初中化学_核心概念与常见误区", "expect_terms": ["沉淀", "气体或水"]}
-{"id": "A061", "query": "植物白天只进行光合作用吗", "answerable": true, "expect_source": "24_初中生物_核心概念与常见误区", "expect_terms": ["时刻都在进行"]}
-{"id": "A062", "query": "所有植物细胞都有叶绿体吗", "answerable": true, "expect_source": "24_初中生物_核心概念与常见误区", "expect_terms": ["绿色部分", "叶绿体"]}
-{"id": "A063", "query": "动脉里流动的一定是动脉血吗", "answerable": true, "expect_source": "24_初中生物_核心概念与常见误区", "expect_terms": ["肺动脉", "静脉血"]}
-{"id": "A064", "query": "病毒能独立生活吗", "answerable": true, "expect_source": "24_初中生物_核心概念与常见误区", "expect_terms": ["寄生在活细胞"]}
-{"id": "A065", "query": "食物链可以从动物开始写吗", "answerable": true, "expect_source": "24_初中生物_核心概念与常见误区", "expect_terms": ["起点必须是", "生产者"]}
-{"id": "A066", "query": "生态系统里的能量可以循环利用吗", "answerable": true, "expect_source": "24_初中生物_核心概念与常见误区", "expect_terms": ["单向流动", "逐级递减"]}
-{"id": "A067", "query": "古诗教学一般按什么顺序展开", "answerable": true, "expect_source": "25_小学语文_阅读习作与常见误区", "expect_terms": ["解诗题", "明诗意", "想画面", "悟诗情"]}
-{"id": "A068", "query": "概括主要内容等于复述课文吗", "answerable": true, "expect_source": "25_小学语文_阅读习作与常见误区", "expect_terms": ["舍去细节"]}
-{"id": "A069", "query": "理解词语有哪些常用方法", "answerable": true, "expect_source": "25_小学语文_阅读习作与常见误区", "expect_terms": ["联系上下文", "拆词法"]}
-{"id": "A070", "query": "怎样把作文内容写具体", "answerable": true, "expect_source": "25_小学语文_阅读习作与常见误区", "expect_terms": ["慢镜头"]}
-{"id": "A071", "query": "习作讲评一次应该抓几个点", "answerable": true, "expect_source": "25_小学语文_阅读习作与常见误区", "expect_terms": ["一个训练点"]}
-{"id": "A072", "query": "有感情朗读要怎么指导", "answerable": true, "expect_source": "25_小学语文_阅读习作与常见误区", "expect_terms": ["理解内容与情感"]}
-{"id": "A073", "query": "赏析句子只答修辞手法够不够", "answerable": true, "expect_source": "26_初中语文_阅读写作与常见误区", "expect_terms": ["手法", "内容", "效果"]}
-{"id": "A074", "query": "所有结尾都答升华主题对吗", "answerable": true, "expect_source": "26_初中语文_阅读写作与常见误区", "expect_terms": ["照应开头"]}
-{"id": "A075", "query": "说明文里的打比方和比喻怎么区分", "answerable": true, "expect_source": "26_初中语文_阅读写作与常见误区", "expect_terms": ["打比方"]}
-{"id": "A076", "query": "论点和论题怎么区分", "answerable": true, "expect_source": "26_初中语文_阅读写作与常见误区", "expect_terms": ["论点是作者的观点"]}
-{"id": "A077", "query": "文言文翻译要注意什么", "answerable": true, "expect_source": "26_初中语文_阅读写作与常见误区", "expect_terms": ["直译为主", "字字落实"]}
-{"id": "A078", "query": "议论文只举例子够不够", "answerable": true, "expect_source": "26_初中语文_阅读写作与常见误区", "expect_terms": ["分析"]}
-{"id": "A079", "query": "宾语从句应该用什么语序", "answerable": true, "expect_source": "27_中小学英语_常见错误与教学要点", "expect_terms": ["陈述语序"]}
-{"id": "A080", "query": "句子里有 for 或 since 该用什么时态", "answerable": true, "expect_source": "27_中小学英语_常见错误与教学要点", "expect_terms": ["现在完成时"]}
-{"id": "A081", "query": "there be 句型怎么决定单复数", "answerable": true, "expect_source": "27_中小学英语_常见错误与教学要点", "expect_terms": ["就近原则"]}
-{"id": "A082", "query": "哪些动词没有被动语态", "answerable": true, "expect_source": "27_中小学英语_常见错误与教学要点", "expect_terms": ["happen", "take place"]}
-{"id": "A083", "query": "I very like it 该怎么改", "answerable": true, "expect_source": "27_中小学英语_常见错误与教学要点", "expect_terms": ["I like it very much"]}
-{"id": "A084", "query": "口语课只做跟读够不够", "answerable": true, "expect_source": "27_中小学英语_常见错误与教学要点", "expect_terms": ["自己组织语言"]}
-{"id": "A085", "query": "道德与法治课程的核心素养有哪些", "answerable": true, "expect_source": "28_道德与法治历史地理教学要点", "expect_terms": ["政治认同", "道德修养", "法治观念", "健全人格", "责任意识"]}
-{"id": "A086", "query": "历史学科的核心素养包括什么", "answerable": true, "expect_source": "28_道德与法治历史地理教学要点", "expect_terms": ["唯物史观", "时空观念", "史料实证", "历史解释", "家国情怀"]}
-{"id": "A087", "query": "地理学科的核心素养有哪些", "answerable": true, "expect_source": "28_道德与法治历史地理教学要点", "expect_terms": ["人地协调观", "综合思维", "区域认知", "地理实践力"]}
-{"id": "A088", "query": "读地图的正确顺序是什么", "answerable": true, "expect_source": "28_道德与法治历史地理教学要点", "expect_terms": ["读图名与图例"]}
-{"id": "A089", "query": "史料实证的核心要求是什么", "answerable": true, "expect_source": "28_道德与法治历史地理教学要点", "expect_terms": ["论从史出"]}
-{"id": "A090", "query": "能不能用今天的标准评价古人", "answerable": true, "expect_source": "28_道德与法治历史地理教学要点", "expect_terms": ["当时的历史条件"]}
+{"id": "A009", "query": "BOPPPS 六个模块分别是什么", "answerable": true, "expect_source": "11_教学设计方法", "expect_terms": ["导言", "目标", "前测", "参与式学习"]}
+{"id": "A010", "query": "教学设计里的大概念指什么", "answerable": true, "expect_source": "11_教学设计方法", "expect_terms": ["可迁移的概括性认识"]}
+{"id": "A011", "query": "ABCD 法里的四个要素是什么", "answerable": true, "expect_source": "12_教学目标撰写", "expect_terms": ["行为主体", "行为动词", "行为条件", "表现程度"]}
+{"id": "A012", "query": "为什么不能写理解和掌握这样的目标", "answerable": true, "expect_source": "12_教学目标撰写", "expect_terms": ["不可观测"]}
+{"id": "A013", "query": "布鲁姆认知层次由低到高有哪些", "answerable": true, "expect_source": "12_教学目标撰写", "expect_terms": ["记忆", "理解", "应用", "分析", "评价", "创造"]}
+{"id": "A014", "query": "教学重点和教学难点有什么区别", "answerable": true, "expect_source": "12_教学目标撰写", "expect_terms": ["教学重点", "教学难点"]}
+{"id": "A015", "query": "45 分钟新授课怎么分配时间", "answerable": true, "expect_source": "13_课堂环节设计", "expect_terms": ["导入", "新授", "巩固", "小结"]}
+{"id": "A016", "query": "导入环节的作用是什么", "answerable": true, "expect_source": "13_课堂环节设计", "expect_terms": ["制造认知需求"]}
+{"id": "A017", "query": "导入有哪些常见做法", "answerable": true, "expect_source": "13_课堂环节设计", "expect_terms": ["情境导入", "问题导入", "复习导入"]}
+{"id": "A018", "query": "课堂小结应该怎么做", "answerable": true, "expect_source": "13_课堂环节设计", "expect_terms": ["自己梳理"]}
+{"id": "A019", "query": "提问之后应该等待多久", "answerable": true, "expect_source": "14_课堂提问与互动", "expect_terms": ["3 秒"]}
+{"id": "A020", "query": "课堂追问可以分成哪几类", "answerable": true, "expect_source": "14_课堂提问与互动", "expect_terms": ["要证据", "要解释", "换角度"]}
+{"id": "A021", "query": "小组讨论要有效需要哪些条件", "answerable": true, "expect_source": "14_课堂提问与互动", "expect_terms": ["任务明确", "时间明确", "角色分工"]}
+{"id": "A022", "query": "学生回答错了应该怎么对待", "answerable": true, "expect_source": "14_课堂提问与互动", "expect_terms": ["教学资源"]}
+{"id": "A023", "query": "板书有哪几种常见结构", "answerable": true, "expect_source": "15_板书与多媒体教具", "expect_terms": ["提纲式", "结构图式", "表格式"]}
+{"id": "A024", "query": "多媒体课件应该用在什么地方", "answerable": true, "expect_source": "15_板书与多媒体教具", "expect_terms": ["无法用语言或板书表达"]}
+{"id": "A025", "query": "教学动画适合呈现什么内容", "answerable": true, "expect_source": "15_板书与多媒体教具", "expect_terms": ["不可见或过快过慢"]}
+{"id": "A026", "query": "课堂游戏适合用在哪个环节", "answerable": true, "expect_source": "15_板书与多媒体教具", "expect_terms": ["巩固与检测"]}
+{"id": "A027", "query": "学生为什么觉得除以分数会越除越小", "answerable": true, "expect_source": "20_小学数学_核心概念与常见误区", "expect_terms": ["6 ÷ 1/2"]}
+{"id": "A028", "query": "学生为什么认为分子大分数就大", "answerable": true, "expect_source": "20_小学数学_核心概念与常见误区", "expect_terms": ["3/8", "2/5"]}
+{"id": "A029", "query": "怎么帮学生区分周长和面积", "answerable": true, "expect_source": "20_小学数学_核心概念与常见误区", "expect_terms": ["绳子围边界", "铺方格"]}
+{"id": "A030", "query": "应用题看到多就加对吗", "answerable": true, "expect_source": "20_小学数学_核心概念与常见误区", "expect_terms": ["比谁多", "标准量"]}
+{"id": "A031", "query": "负 a 一定是负数吗", "answerable": true, "expect_source": "21_初中数学_核心概念与常见误区", "expect_terms": ["相反数"]}
+{"id": "A032", "query": "不等式什么时候要改变不等号方向", "answerable": true, "expect_source": "21_初中数学_核心概念与常见误区", "expect_terms": ["同乘或同除以负数"]}
+{"id": "A033", "query": "反比例函数的增减性该怎么表述", "answerable": true, "expect_source": "21_初中数学_核心概念与常见误区", "expect_terms": ["在每个象限内"]}
+{"id": "A034", "query": "相似三角形的面积比与相似比是什么关系", "answerable": true, "expect_source": "21_初中数学_核心概念与常见误区", "expect_terms": ["面积比等于相似比的平方"]}
+{"id": "A035", "query": "浮力大小与物体重力有关吗", "answerable": true, "expect_source": "22_初中物理_核心概念与常见误区", "expect_terms": ["液体密度", "排开液体的体积"]}
+{"id": "A036", "query": "排开液体的体积一定等于物体体积吗", "answerable": true, "expect_source": "22_初中物理_核心概念与常见误区", "expect_terms": ["浸没时 V排 = V物"]}
+{"id": "A037", "query": "下沉的物体还受浮力吗", "answerable": true, "expect_source": "22_初中物理_核心概念与常见误区", "expect_terms": ["沉入水中的物体仍受浮力"]}
+{"id": "A038", "query": "漂浮和悬浮有什么区别", "answerable": true, "expect_source": "22_初中物理_核心概念与常见误区", "expect_terms": ["漂浮是部分浸入", "悬浮是全部浸入"]}
+{"id": "A039", "query": "液体压强与容器形状有关吗", "answerable": true, "expect_source": "22_初中物理_核心概念与常见误区", "expect_terms": ["液体密度和深度"]}
+{"id": "A040", "query": "有气体生成的反应为什么看起来不遵守质量守恒", "answerable": true, "expect_source": "23_初中化学_核心概念与常见误区", "expect_terms": ["密闭容器"]}
+{"id": "A041", "query": "催化剂到底参不参加反应", "answerable": true, "expect_source": "23_初中化学_核心概念与常见误区", "expect_terms": ["催化剂", "中间过程"]}
+{"id": "A042", "query": "是二氧化碳使石蕊变红吗", "answerable": true, "expect_source": "23_初中化学_核心概念与常见误区", "expect_terms": ["碳酸使石蕊变红"]}
+{"id": "A043", "query": "铁与稀盐酸反应后溶液是什么颜色", "answerable": true, "expect_source": "23_初中化学_核心概念与常见误区", "expect_terms": ["亚铁", "浅绿色"]}
+{"id": "A044", "query": "复分解反应发生需要什么条件", "answerable": true, "expect_source": "23_初中化学_核心概念与常见误区", "expect_terms": ["沉淀", "气体或水"]}
+{"id": "A045", "query": "植物白天只进行光合作用吗", "answerable": true, "expect_source": "24_初中生物_核心概念与常见误区", "expect_terms": ["时刻都在进行"]}
+{"id": "A046", "query": "所有植物细胞都有叶绿体吗", "answerable": true, "expect_source": "24_初中生物_核心概念与常见误区", "expect_terms": ["绿色部分", "叶绿体"]}
+{"id": "A047", "query": "动脉里流动的一定是动脉血吗", "answerable": true, "expect_source": "24_初中生物_核心概念与常见误区", "expect_terms": ["肺动脉", "静脉血"]}
+{"id": "A048", "query": "生态系统里的能量可以循环利用吗", "answerable": true, "expect_source": "24_初中生物_核心概念与常见误区", "expect_terms": ["单向流动", "逐级递减"]}
+{"id": "A049", "query": "食物链可以从动物开始写吗", "answerable": true, "expect_source": "24_初中生物_核心概念与常见误区", "expect_terms": ["起点必须是", "生产者"]}
+{"id": "A050", "query": "古诗教学一般按什么顺序展开", "answerable": true, "expect_source": "25_小学语文_阅读习作与常见误区", "expect_terms": ["解诗题", "明诗意", "想画面"]}
+{"id": "A051", "query": "概括主要内容等于复述课文吗", "answerable": true, "expect_source": "25_小学语文_阅读习作与常见误区", "expect_terms": ["舍去细节"]}
+{"id": "A052", "query": "怎样把作文内容写具体", "answerable": true, "expect_source": "25_小学语文_阅读习作与常见误区", "expect_terms": ["慢镜头"]}
+{"id": "A053", "query": "有感情朗读要怎么指导", "answerable": true, "expect_source": "25_小学语文_阅读习作与常见误区", "expect_terms": ["理解内容与情感"]}
+{"id": "A054", "query": "赏析句子只答修辞手法够不够", "answerable": true, "expect_source": "26_初中语文_阅读写作与常见误区", "expect_terms": ["手法", "内容", "效果"]}
+{"id": "A055", "query": "说明文里的打比方和比喻怎么区分", "answerable": true, "expect_source": "26_初中语文_阅读写作与常见误区", "expect_terms": ["打比方"]}
+{"id": "A056", "query": "论点和论题怎么区分", "answerable": true, "expect_source": "26_初中语文_阅读写作与常见误区", "expect_terms": ["论点是作者的观点"]}
+{"id": "A057", "query": "文言文翻译要注意什么", "answerable": true, "expect_source": "26_初中语文_阅读写作与常见误区", "expect_terms": ["直译为主", "字字落实"]}
+{"id": "A058", "query": "宾语从句应该用什么语序", "answerable": true, "expect_source": "27_中小学英语_常见错误与教学要点", "expect_terms": ["陈述语序"]}
+{"id": "A059", "query": "句子里有 for 或 since 该用什么时态", "answerable": true, "expect_source": "27_中小学英语_常见错误与教学要点", "expect_terms": ["现在完成时"]}
+{"id": "A060", "query": "there be 句型怎么决定单复数", "answerable": true, "expect_source": "27_中小学英语_常见错误与教学要点", "expect_terms": ["就近原则"]}
+{"id": "A061", "query": "口语课只做跟读够不够", "answerable": true, "expect_source": "27_中小学英语_常见错误与教学要点", "expect_terms": ["自己组织语言"]}
+{"id": "A062", "query": "道德与法治课程的核心素养有哪些", "answerable": true, "expect_source": "28_道德与法治历史地理教学要点", "expect_terms": ["政治认同", "道德修养", "法治观念"]}
+{"id": "A063", "query": "历史学科的核心素养包括什么", "answerable": true, "expect_source": "28_道德与法治历史地理教学要点", "expect_terms": ["唯物史观", "时空观念", "史料实证"]}
+{"id": "A064", "query": "读地图的正确顺序是什么", "answerable": true, "expect_source": "28_道德与法治历史地理教学要点", "expect_terms": ["读图名与图例"]}
+{"id": "A065", "query": "能不能用今天的标准评价古人", "answerable": true, "expect_source": "28_道德与法治历史地理教学要点", "expect_terms": ["当时的历史条件"]}
+{"id": "A066", "query": "有没有浮力这节课的完整课例", "answerable": true, "expect_source": "30_课例_可复用完整课例", "expect_terms": ["弹簧测力计", "V排"]}
+{"id": "A067", "query": "古诗课的时间怎么分配", "answerable": true, "expect_source": "30_课例_可复用完整课例", "expect_terms": ["解诗题", "想画面"]}
+{"id": "A068", "query": "课例和教案有什么区别", "answerable": true, "expect_source": "30_课例_可复用完整课例", "expect_terms": ["实录", "复盘"]}
+{"id": "A069", "query": "课例应该怎么用", "answerable": true, "expect_source": "30_课例_可复用完整课例", "expect_terms": ["看环节用时", "看卡点"]}
+{"id": "A070", "query": "有效课堂活动要满足哪些条件", "answerable": true, "expect_source": "31_课堂活动_活动库", "expect_terms": ["任务明确", "时间明确", "角色分工"]}
+{"id": "A071", "query": "有没有一两分钟就能做的活动", "answerable": true, "expect_source": "31_课堂活动_活动库", "expect_terms": ["一分钟纸笔", "同桌互说"]}
+{"id": "A072", "query": "活动和实验的区别是什么", "answerable": true, "expect_source": "31_课堂活动_活动库", "expect_terms": ["证据", "加工信息"]}
+{"id": "A073", "query": "活动做完了要怎么收口", "answerable": true, "expect_source": "31_课堂活动_活动库", "expect_terms": ["汇报", "回到知识本身"]}
+{"id": "A074", "query": "实验设计要说清哪四件事", "answerable": true, "expect_source": "32_实验探究_实验设计与数据处理", "expect_terms": ["自变量", "无关变量"]}
+{"id": "A075", "query": "实验出现异常数据怎么办", "answerable": true, "expect_source": "32_实验探究_实验设计与数据处理", "expect_terms": ["不能因为不符合预期就删除"]}
+{"id": "A076", "query": "为什么要设对照组", "answerable": true, "expect_source": "32_实验探究_实验设计与数据处理", "expect_terms": ["归因"]}
+{"id": "A077", "query": "分组实验怎么避免只有一个人动手", "answerable": true, "expect_source": "32_实验探究_实验设计与数据处理", "expect_terms": ["角色分工", "轮换"]}
+{"id": "A078", "query": "实验为什么要多次测量取平均", "answerable": true, "expect_source": "32_实验探究_实验设计与数据处理", "expect_terms": ["重复", "异常"]}
+{"id": "A079", "query": "分层作业怎么设计才合理", "answerable": true, "expect_source": "33_作业设计_分层作业与管理", "expect_terms": ["同一目标", "不同难度"]}
+{"id": "A080", "query": "作业有哪三类功能", "answerable": true, "expect_source": "33_作业设计_分层作业与管理", "expect_terms": ["巩固型", "诊断型", "拓展型"]}
+{"id": "A081", "query": "作业讲评应该讲什么", "answerable": true, "expect_source": "33_作业设计_分层作业与管理", "expect_terms": ["共性问题", "典型错因"]}
+{"id": "A082", "query": "初中每天书面作业不超过多少分钟", "answerable": true, "expect_source": "33_作业设计_分层作业与管理", "expect_terms": ["90 分钟"]}
+{"id": "A083", "query": "量规由哪三部分组成", "answerable": true, "expect_source": "34_评价量规_量规设计与评分标准", "expect_terms": ["评价维度", "等级", "等级描述"]}
+{"id": "A084", "query": "等级描述应该怎么写", "answerable": true, "expect_source": "34_评价量规_量规设计与评分标准", "expect_terms": ["可观察的行为"]}
+{"id": "A085", "query": "选择题的干扰项怎么设计", "answerable": true, "expect_source": "34_评价量规_量规设计与评分标准", "expect_terms": ["真实的学生错误"]}
+{"id": "A086", "query": "整体评分和分项评分分别适合什么", "answerable": true, "expect_source": "34_评价量规_量规设计与评分标准", "expect_terms": ["整体评分", "分项评分"]}
+{"id": "A087", "query": "一份完整教案要包含哪些部分", "answerable": true, "expect_source": "35_产物模板_四类产物结构", "expect_terms": ["教案基本信息", "设计意图"]}
+{"id": "A088", "query": "教案最容易被漏掉的是哪部分", "answerable": true, "expect_source": "35_产物模板_四类产物结构", "expect_terms": ["设计意图", "应急预案"]}
+{"id": "A089", "query": "45 分钟的课 PPT 做多少页合适", "answerable": true, "expect_source": "35_产物模板_四类产物结构", "expect_terms": ["12—18 页"]}
+{"id": "A090", "query": "游戏适合用在教学哪个阶段", "answerable": true, "expect_source": "35_产物模板_四类产物结构", "expect_terms": ["巩固与检测"]}
 {"id": "B001", "query": "大学微积分里泰勒公式怎么讲", "answerable": false, "expect_source": "", "expect_terms": [], "expect_absent": ["泰勒", "微积分"]}
 {"id": "B002", "query": "法语虚拟式怎么使用", "answerable": false, "expect_source": "", "expect_terms": [], "expect_absent": ["法语"]}
 {"id": "B003", "query": "幼儿园手工课怎么设计", "answerable": false, "expect_source": "", "expect_terms": [], "expect_absent": ["幼儿园"]}
