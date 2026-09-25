@@ -10,6 +10,9 @@ from ..paths import GENERATED_LP
 from ..services import artifact_versions
 from ..services.llm_lesson_plan_all_stages import LessonPlanGenerator
 from ..services.university_major_config import UniversityMajorConfig
+from ..services.course_knowledge import (
+    append_to_requirements, build_course_context,
+)
 from ..services.teaching_compliance import (
     flatten_to_text,
     pick_assessment_text,
@@ -346,6 +349,16 @@ async def generate_full_lesson_plan(
             effective_requirements = (
                 f"{requirements}\n\n【参考资料摘录】\n{reference_text}"
             ).strip()
+        # 四路生成共用同一份课程知识上下文（见 app/services/course_knowledge.py）。
+        # 不查知识库的话，模型只能凭参数记忆备课，难点与误区全靠猜。
+        # 检索失败不阻断生成 —— 最多是这次没用到知识库。
+        course_knowledge = build_course_context(
+            topic=topic, subject=subject, grade=grade, kind="lesson_plan",
+        )
+        effective_requirements = append_to_requirements(
+            effective_requirements, course_knowledge
+        )
+
         requirements_result = lesson_plan_generator.analyze_requirements(
             level=level,
             subject=subject,
@@ -407,6 +420,8 @@ async def generate_full_lesson_plan(
             },
             "lesson_plan": corrected_lesson_plan,
             "compliance": compliance,
+            # 让教师看到这一版用到了知识库里的哪些依据（可溯源）
+            "course_knowledge": course_knowledge.to_dict(),
             "version": version_info,
             "version_error": version_error,
         }
