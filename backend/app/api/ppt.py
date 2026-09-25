@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from typing import Optional, List, Dict, Tuple
 
 from ..document_extract import resolve_uploaded_references
+from ..services.course_knowledge import build_course_context
 from ..paths import GENERATED_CW, BACKEND_DIR
 from ..services.ppt_content_generator import PPTContentGenerator
 from ..services.teaching_compliance import run_compliance_gate
@@ -244,6 +245,15 @@ async def generate_ppt(
     generation_tasks[task_id] = task
     
     reference_context = resolve_uploaded_references(reference_docs)
+
+    # 四路生成共用同一份课程知识上下文（见 app/services/course_knowledge.py）。
+    # 检索失败不阻断生成 —— 最多是这次没用到知识库。
+    course_knowledge = build_course_context(
+        topic=topic, subject=subject, grade=audience, key_points=key_points,
+        kind="ppt",
+    )
+    if not course_knowledge.empty:
+        reference_context = list(reference_context or []) + [course_knowledge.text]
 
     # 启动后台任务
     background_tasks.add_task(

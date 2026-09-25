@@ -6,6 +6,7 @@ from fastapi import APIRouter, Body, Query, Path, HTTPException
 from fastapi.responses import FileResponse
 from typing import Optional
 from ..paths import GENERATED_ANIM, GENERATED_CW, GENERATED_GAMES, GENERATED_LP
+from ..services.course_knowledge import build_course_context
 from ..services.courseware_generator import CoursewareGenerator
 from ..services.game_generator import GameGenerator
 from ..services.animation_generator import AnimationGenerator
@@ -95,10 +96,18 @@ async def generate_game(
     try:
         generator = GameGenerator(output_dir=GAMES_DIR)
 
+        # 四路生成共用同一份课程知识上下文（见 app/services/course_knowledge.py）
+        course_knowledge = build_course_context(
+            topic=topic, audience=audience, kind="game",
+        )
+        effective_content = teaching_content
+        if not course_knowledge.empty:
+            effective_content = f"{teaching_content}\n\n{course_knowledge.text}".strip()
+
         result = generator.generate(
             topic=topic,
             audience=audience,
-            teaching_content=teaching_content,
+            teaching_content=effective_content,
             game_type=game_type,
             provider=provider
         )
@@ -230,7 +239,13 @@ async def generate_animation(
             "mathematics": "数学", "physics": "物理", "chemistry": "化学",
             "biology": "生物", "geography": "地理", "general": "综合",
         }.get(subject, subject)
+        # 四路生成共用同一份课程知识上下文（见 app/services/course_knowledge.py）
+        course_knowledge = build_course_context(
+            topic=topic, subject=subject, audience=audience, kind="animation",
+        )
         content_with_subject = f"学科：{subject_name}\n{teaching_content}".strip()
+        if not course_knowledge.empty:
+            content_with_subject = f"{content_with_subject}\n\n{course_knowledge.text}"
         result = generator.generate(
             topic=topic,
             audience=audience,
