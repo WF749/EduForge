@@ -60,6 +60,17 @@
           </div>
         </div>
 
+        <!-- 深浅色切换：放在顶栏，全站一致，不用每个页面各找一遍 -->
+        <button
+          class="theme-btn"
+          type="button"
+          :title="theme.isDark ? '切换到浅色' : '切换到深色'"
+          :aria-label="theme.isDark ? '切换到浅色' : '切换到深色'"
+          @click="theme.toggle()"
+        >
+          <el-icon :size="18"><component :is="theme.isDark ? Sunny : Moon" /></el-icon>
+        </button>
+
         <!-- 设置按钮 -->
         <router-link to="/settings" class="settings-btn">
           <el-icon :size="20"><Setting /></el-icon>
@@ -110,8 +121,9 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useAppStore } from '@/store/app'
 import ParticleBackground from '@/components/ParticleBackground.vue'
 import DataFlowBadge from '@/components/DataFlowBadge.vue'
+import { useThemeStore } from '@/store/theme'
 // 图标是全局注册的，这里导入只为导航栏数组使用
-import { HomeFilled, Collection, Setting, Clock } from '@element-plus/icons-vue'
+import { HomeFilled, Collection, Setting, Clock, Sunny, Moon } from '@element-plus/icons-vue'
 
 const store = useAppStore()
 
@@ -120,6 +132,8 @@ const currentTime = ref('')
 
 // 导航只保留"围绕一节课"的入口。旧的功能页（/chat /courseware /animation /game）
 // 路由仍然保留、可直接访问，只是不再占据导航栏——工作台出问题时有退路。
+const theme = useThemeStore()
+
 const navItems = [
   { path: '/', name: '备课工作台', icon: HomeFilled },
   { path: '/knowledge', name: '知识库', icon: Collection },
@@ -384,6 +398,32 @@ onUnmounted(() => {
       .status-label {
         font-weight: 500;
       }
+    }
+  }
+
+  // 主题切换按钮与设置按钮同一套尺寸与反馈，避免出现"看着像能点其实不能点"
+  .theme-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    margin-right: 8px;
+    padding: 0;
+    border: 1px solid var(--wb-border);
+    border-radius: 10px;
+    background: var(--wb-surface-2);
+    color: var(--wb-text-2);
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover {
+      color: var(--primary);
+      border-color: var(--wb-border-strong);
+      transform: translateY(-1px);
+    }
+    &:active {
+      transform: translateY(0);
     }
   }
 

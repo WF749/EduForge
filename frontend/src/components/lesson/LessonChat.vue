@@ -590,8 +590,8 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
   padding: 16px 18px 18px;
   background:
     radial-gradient(120% 90% at 12% 0%, rgba(0, 200, 255, 0.07), transparent 60%),
-    rgba(8, 12, 33, 0.82);
-  border: 1px solid rgba(0, 200, 255, 0.16);
+    var(--wb-surface);
+  border: 1px solid var(--wb-border-strong);
   border-radius: 16px;
 }
 
@@ -601,7 +601,7 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
   justify-content: space-between;
   gap: 12px;
   padding-bottom: 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid var(--wb-border);
 
   .lc-head-main {
     display: flex;
@@ -615,12 +615,12 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
     font-size: 15px;
     font-weight: 600;
     letter-spacing: 0.02em;
-    color: rgba(255, 255, 255, 0.92);
+    color: var(--wb-text);
   }
 
   .lc-sub {
     font-size: 12px;
-    color: rgba(255, 255, 255, 0.38);
+    color: var(--wb-text-3);
   }
 
   .lc-head-tools {
@@ -635,7 +635,7 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
     align-items: center;
     gap: 6px;
     font-size: 12px;
-    color: rgba(255, 255, 255, 0.45);
+    color: var(--wb-text-3);
     cursor: pointer;
     user-select: none;
   }
@@ -652,7 +652,7 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
 
   &::-webkit-scrollbar { width: 6px; }
   &::-webkit-scrollbar-thumb {
-    background: rgba(0, 200, 255, 0.22);
+    background: var(--wb-border-strong);
     border-radius: 3px;
   }
 }
@@ -667,7 +667,7 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
   .lc-empty-lead {
     margin: 0 0 2px;
     font-size: 13px;
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--wb-text-3);
   }
 }
 
@@ -679,9 +679,9 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
   font-family: inherit;
   font-size: 13px;
   text-align: left;
-  color: rgba(255, 255, 255, 0.62);
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  color: var(--wb-text-2);
+  background: var(--wb-surface-2);
+  border: 1px solid var(--wb-border);
   border-radius: 10px;
   cursor: pointer;
   transition: all 0.18s ease;
@@ -697,8 +697,8 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
   span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   &:hover {
-    color: #fff;
-    background: rgba(0, 200, 255, 0.09);
+    color: var(--wb-text);
+    background: var(--wb-hover);
     border-color: rgba(0, 200, 255, 0.3);
     transform: translateX(2px);
   }
@@ -723,16 +723,16 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
   word-break: break-word;
 
   .is-user & {
-    background: linear-gradient(135deg, rgba(0, 200, 255, 0.22), rgba(0, 140, 255, 0.16));
+    background: linear-gradient(135deg, var(--wb-border-strong), rgba(0, 140, 255, 0.16));
     border: 1px solid rgba(0, 200, 255, 0.34);
-    color: #fff;
+    color: var(--wb-text);
     border-bottom-right-radius: 4px;
   }
 
   .is-agent & {
-    background: rgba(255, 255, 255, 0.055);
-    border: 1px solid rgba(255, 255, 255, 0.09);
-    color: rgba(255, 255, 255, 0.86);
+    background: var(--wb-surface-2);
+    border: 1px solid var(--wb-border);
+    color: var(--wb-text);
     border-bottom-left-radius: 4px;
   }
 
@@ -749,7 +749,7 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
     margin: 12px 0 6px;
     font-size: 14px;
     font-weight: 600;
-    color: #fff;
+    color: var(--wb-text);
   }
   :deep(h1:first-child), :deep(h2:first-child), :deep(h3:first-child) { margin-top: 0; }
   :deep(code) {
@@ -764,7 +764,7 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
     padding: 10px 12px;
     overflow-x: auto;
     background: rgba(0, 0, 0, 0.42);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--wb-border);
     border-radius: 8px;
     position: relative;
 
@@ -774,7 +774,7 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
     margin: 8px 0;
     padding: 2px 0 2px 12px;
     border-left: 2px solid rgba(0, 200, 255, 0.4);
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--wb-text-2);
   }
   :deep(table) {
     width: 100%;
@@ -784,21 +784,21 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
   }
   :deep(th), :deep(td) {
     padding: 6px 8px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--wb-border);
     text-align: left;
   }
-  :deep(th) { background: rgba(0, 200, 255, 0.09); color: #fff; font-weight: 600; }
+  :deep(th) { background: rgba(0, 200, 255, 0.09); color: var(--wb-text); font-weight: 600; }
   :deep(a) { color: #4fd1ff; text-decoration: underline; }
-  :deep(hr) { border: none; border-top: 1px solid rgba(255, 255, 255, 0.12); margin: 12px 0; }
+  :deep(hr) { border: none; border-top: 1px solid var(--wb-border); margin: 12px 0; }
   :deep(.copy-btn) {
     position: absolute;
     top: 6px;
     right: 6px;
     padding: 2px 7px;
     font-size: 11px;
-    color: rgba(255, 255, 255, 0.55);
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--wb-text-2);
+    background: var(--wb-border);
+    border: 1px solid var(--wb-border);
     border-radius: 5px;
     cursor: pointer;
   }
@@ -811,7 +811,7 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
   align-items: center;
   gap: 8px;
   font-size: 12.5px;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--wb-text-3);
 }
 
 .lc-dots {
@@ -857,7 +857,7 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
     padding: 0;
     font-family: inherit;
     font-size: 11.5px;
-    color: rgba(255, 255, 255, 0.34);
+    color: var(--wb-text-3);
     background: none;
     border: none;
     cursor: pointer;
@@ -866,15 +866,15 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
     &:hover { color: rgba(0, 200, 255, 0.9); }
   }
 
-  .lc-elapsed { font-size: 11.5px; color: rgba(255, 255, 255, 0.22); }
+  .lc-elapsed { font-size: 11.5px; color: var(--wb-text-3); }
 }
 
 /* 产物卡片 —— 生成进度直接长在对话流里 */
 .lc-card {
   width: 100%;
   padding: 12px 14px;
-  background: rgba(255, 255, 255, 0.045);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--wb-surface-2);
+  border: 1px solid var(--wb-border);
   border-left-width: 3px;
   border-radius: 12px;
   transition: border-color 0.25s ease;
@@ -885,20 +885,20 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
   }
   &.lc-card-done { border-left-color: #00ff88; }
   &.lc-card-failed { border-left-color: #ff6b6b; }
-  &.lc-card-idle { border-left-color: rgba(255, 255, 255, 0.18); }
+  &.lc-card-idle { border-left-color: var(--wb-border-strong); }
 }
 
 .lc-card-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--wb-text);
 
   .lc-card-name { font-size: 13.5px; font-weight: 600; }
   .lc-card-status {
     margin-left: auto;
     font-size: 12px;
-    color: rgba(255, 255, 255, 0.42);
+    color: var(--wb-text-3);
   }
 
   .lc-card-running & .lc-card-status { color: #5fdcff; }
@@ -925,12 +925,12 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
   align-items: center;
   gap: 7px;
   padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  border-top: 1px solid var(--wb-border);
 
   .lc-quick-label {
     font-size: 11.5px;
     letter-spacing: 0.06em;
-    color: rgba(255, 255, 255, 0.3);
+    color: var(--wb-text-3);
   }
 
   .lc-quick-warn {
@@ -944,16 +944,16 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
   padding: 5px 11px;
   font-size: 12px;
   font-family: inherit;
-  color: rgba(255, 255, 255, 0.7);
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--wb-text-2);
+  background: var(--wb-surface-2);
+  border: 1px solid var(--wb-border);
   border-radius: 999px;
   cursor: pointer;
   transition: all 0.18s ease;
 
   &:hover:not(:disabled) {
-    color: #fff;
-    background: rgba(0, 200, 255, 0.14);
+    color: var(--wb-text);
+    background: var(--wb-border-strong);
     border-color: rgba(0, 200, 255, 0.36);
   }
 
