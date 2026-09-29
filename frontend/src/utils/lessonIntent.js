@@ -16,7 +16,9 @@
 /** 一句话里的噪声：动作词、量词、礼貌词、成品类型词 */
 const NOISE = [
   /(?:帮我|请|麻烦|给我|替我|我想|我要|我打算|我需要|需要|能不能|可不可以|可以|能否|直接|重新|先|再)\s*/g,
-  /(?:生成|创建|制作|设计|写|做|搞|出|来一?[份个节堂])/g,
+  // 动作词要全：老版本只有"生成/制作/设计/写/做"，
+  // "来一份""弄一个""准备一节""安排一节""出一份" 全都漏在外面，被当成主题。
+  /(?:生成|创建|制作|设计|编写|准备|安排|弄|搞|写|做|出|来一?[份个节堂])/g,
   /(?:一|两|三|[0-9]+)\s*[份个节堂]/g,
   // "内容是浮力""主题是一次函数" —— 冒号后才是主题，冒号前全是引导语
   /(?:内容是|内容是|内容为|主题是|主题为|课题是|课题为|讲的是|教的是|内容|主题|课题)/g,
@@ -24,12 +26,32 @@ const NOISE = [
   // 学段词：它不是主题（"初中八年级生物《细胞的结构》"里的"初中"）
   /(?:小学|初中|高中|中职|职高|大学)/g,
   /(?:一下|一遍|一趟)/g,
+  // "八年级物理浮力教学课件" —— "教学"是修饰成品的，不是主题的一部分。
+  // 但"教学设计"是**成品类型词**，不能把它的"教学"先吃掉只留"设计"
+  // （那会让"生成一份教学设计"抽出主题"设计"），所以排除后接"设计"的情况。
+  /(?:教学|授课|上课)(?!设计)/g,
   // 语气尾巴：留在主题里会变成"浮力 吗"
   /(?:吧|呢|啊|哦|哈|呀|吗|好吗|行吗|谢谢)\s*$/g,
 ]
 
 /** 成品类型词 —— 它们不是主题的一部分，是"要做什么" */
-const ARTIFACT_WORDS = /(?:教学设计|课时设计|备课|教案|PPT|ppt|Ppt|课件|幻灯片|演示文稿|微课|演示动画|动画|互动小游戏|互动游戏|小游戏|游戏|闯关)/g
+const ARTIFACT_WORDS = /(?:教学设计|课时设计|备课|教案|学案|导学案|说课稿|PPT|ppt|Ppt|课件|幻灯片|演示文稿|微课|演示动画|动画|互动实验|探究实验|实验|互动小游戏|互动游戏|小游戏|游戏|闯关|练习题|习题|试题)/g
+
+/**
+ * 学段别名 → 标准取值。
+ * 取值与后端 `llm_lesson_plan_all_stages.level_rules` 的键名一致，
+ * 这样 stage 可以直接喂给 `analyze_requirements(level=...)`，零转换。
+ *
+ * 为什么学段要独立成字段：「高中语文」认得出学段、认不出具体年级 ——
+ * 只靠年级推，这类输入就整个丢失了。
+ */
+const STAGE_ALIASES = {
+  小学: '小学', 初中: '初中', 高中: '普通高中', 高一: '普通高中',
+  高二: '普通高中', 高三: '普通高中',
+  中职: '职业高中·中等职业学校', 职高: '职业高中·中等职业学校',
+  中专: '职业高中·中等职业学校',
+  大学: '普通高等院校', 高校: '普通高等院校'
+}
 
 /** 学科别名 → 标准名（只放"人会说但词表里没有"的说法） */
 const SUBJECT_ALIASES = {
@@ -57,8 +79,9 @@ function tidy(text) {
     .trimStart()
     // 「做一节课，主题是X」剥完动作与量词后剩下「课，X」—— 这个光杆量词名词要去掉
     .replace(/^(?:课|节|份|个|堂)\s*[，,、；;：:]?\s*/, '')
-    .replace(/^[\s，,。.、；;：:!！?？'"""''（）()《》【】\[\]-]+/, '')
-    .replace(/[\s，,。.、；;：:!！?？'"""''（）()《》【】\[\]-]+$/, '')
+    // 书名号**不在**剥离范围：《故乡》是主题的一部分，不是标点
+    .replace(/^[\s，,。.、；;：:!！?？'"'（）()【】\[\]-]+/, '')
+    .replace(/[\s，,。.、；;：:!！?？'"'（）()【】\[\]-]+$/, '')
     .replace(/^(?:的|地|得)\s*/, '')
     .replace(/\s*(?:的|地|得)$/, '')
     .replace(/\s{2,}/g, ' ')
@@ -76,11 +99,32 @@ export function inferLessonFields(text, vocab = {}) {
   const grades = Array.isArray(vocab.grades) ? vocab.grades : []
 
   const raw = String(text || '').trim()
-  const out = { topic: '', subject: '', grade: '', duration: 0, matched: [] }
+  const out = { topic: '', subject: '', grade: '', stage: '', duration: 0, matched: [] }
   if (!raw) return out
 
-  // ---- 先认学科 / 年级 / 时长：认出来之后要把它们从主题里剔掉 ----
-  let rest = raw
+  // ---- 书名号里的东西先"挖"出来 ----
+  // 《课间操的科学》里的"科学"是篇名的一部分，不是学科。
+  // 不先挖走，学科识别会把它当成学科剔掉，篇名就被拆成"课间操的"。
+  const quoted = []
+  const MARK = '\u0001'   // 不会命中任何噪声规则的占位符
+  let rest = raw.replace(/《[^》]*》/g, (m) => {
+    quoted.push(m)
+    return `${MARK}${quoted.length - 1}${MARK}`
+  })
+  /** 把挖走的书名还原回去（主题定型前调用） */
+  const restore = (s) => s.replace(
+    new RegExp(`${MARK}(\\d+)${MARK}`, 'g'), (_, i) => quoted[Number(i)] || '')
+
+  // 学段单独认一次：**从整句话里认**，因为"高中语文"认得出学段却认不出年级。
+  // 只靠年级反推的话，这类输入整个丢失。
+  const stageWords = Object.keys(STAGE_ALIASES).sort((a, b) => b.length - a.length)
+  for (const word of stageWords) {
+    if (raw.includes(word)) {
+      out.stage = STAGE_ALIASES[word]
+      out.matched.push('stage')
+      break
+    }
+  }
 
   for (const alias of Object.keys(SUBJECT_ALIASES)) {
     if (rest.includes(alias)) {
@@ -127,11 +171,32 @@ export function inferLessonFields(text, vocab = {}) {
   // 句首的"能/能否/可以"要**锚定**着剥：不锚定的话"动能定理"会被吃成"动 定理"。
   rest = rest.replace(/^\s*(?:能不能|可不可以|能否|可以|能)\s*/, ' ')
   for (const re of NOISE) rest = rest.replace(re, ' ')
+  rest = restore(rest)
   rest = rest.replace(ARTIFACT_WORDS, ' ')
-  // 书名号/引号只当分隔符：去掉它们，别让《》留进主题
-  rest = rest.replace(/[《》〈〉【】\[\]""''「」『』（）()]/g, ' ')
+  // 书名号**保留**：《故乡》是篇名，是主题本身。
+  // 旧版把它当分隔符剔掉，"鲁迅《故乡》" 就被拆成 "鲁迅 故乡" —— 篇名没了。
+  // 只有括号类才当分隔符。
+  rest = rest.replace(/[【】\[\]""''（）()]/g, ' ')
+  // "准备一节关于浮力的课" → "浮力的课"：量词剥离后残留的句尾"课"要收掉。
+  // 必须在 tidy **之前**做：tidy 里有"去掉句首光杆量词名词"的规则，
+  // 若先 tidy 再收句尾，第二次 tidy 会把「课间操的科学」的"课"当成量词吃掉。
+  rest = rest.replace(/(?:的)?(?:课|课程)\s*$/, '')
   rest = rest.replace(/\s+/g, ' ')
   let topic = tidy(rest)
+  // 整句就是一个书名时把书名号脱掉（"《浮力》" → "浮力"），
+  // 但"鲁迅《故乡》"这种部分包裹的要原样保留。
+  // 脱完要再收一次句尾的"的"，但不能调 tidy —— 它会把「课间操」的"课"当量词吃掉。
+  topic = topic.replace(/^《(.+)》$/, '$1')
+  topic = topic.replace(/\s+/g, ' ').replace(/\s*(?:的|地|得)$/, '').trim()
+
+  // 学段没明说但年级认出来了 → 由年级派生。
+  // 反过来不成立："高中语文"认得出学段认不出年级，所以两个字段都要留。
+  if (!out.stage && out.grade) {
+    if (/^[一二三四五六]年级$/.test(out.grade)) out.stage = '小学'
+    else if (/^[七八九]年级$/.test(out.grade)) out.stage = '初中'
+    else if (/^高[一二三]$/.test(out.grade)) out.stage = '普通高中'
+    if (out.stage && !out.matched.includes('stage')) out.matched.push('stage')
+  }
 
   // 只剩连接词/量词说明没读到东西，不要把它当成主题
   if (/^(?:的|地|得|一|两|三|[0-9]+)$/.test(topic)) topic = ''
@@ -169,6 +234,11 @@ export function applyInferred(store, inferred) {
   if (inferred.grade && said('grade') && store.grade !== inferred.grade) {
     store.grade = inferred.grade
     changes.push(`年级「${inferred.grade}」`)
+  }
+  // 学段只在"认得出学段、但年级还没定"时补：
+  // 年级一旦确定，学段由它派生即可，不必再存一份（避免两份真值不一致）。
+  if (inferred.stage && said('stage') && !store.grade) {
+    changes.push(`学段「${inferred.stage}」`)
   }
   if (inferred.duration && said('duration') && store.duration !== inferred.duration) {
     store.duration = inferred.duration
