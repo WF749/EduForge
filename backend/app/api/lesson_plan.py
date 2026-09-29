@@ -10,9 +10,7 @@ from ..paths import GENERATED_LP
 from ..services import artifact_versions
 from ..services.llm_lesson_plan_all_stages import LessonPlanGenerator
 from ..services.university_major_config import UniversityMajorConfig
-from ..services.course_knowledge import (
-    append_to_requirements, build_course_context,
-)
+from ..services.course_knowledge import compose_generation_context
 from ..services.teaching_compliance import (
     flatten_to_text,
     pick_assessment_text,
@@ -338,7 +336,14 @@ async def generate_full_lesson_plan(
     duration: int = Body(45, description="授课时长（分钟）"),
     requirements: str = Body("", description="补充需求"),
     reference_files: Optional[List[str]] = Body(None, description="上传参考资料的文件ID"),
-    lesson_id: Optional[str] = Body(None, description="所属课程 id（给了就把成品存为该课教案的 v1）")
+    lesson_id: Optional[str] = Body(None, description="所属课程 id（给了就把成品存为该课教案的 v1）"),
+    # 下面三个是 2026-09-25 新增的**可选**字段：不传就与以前完全一样
+    teaching_intent: Optional[Dict[str, Any]] = Body(
+        None, description="教学意图（可选）"),
+    teaching_blueprint: Optional[Dict[str, Any]] = Body(
+        None, description="教学蓝图（可选；不传表示教师跳过了蓝图）"),
+    knowledge_scope: Optional[str] = Body(
+        "both", description="知识库范围：system/personal/both/none")
 ):
     """完整教案生成流程"""
     try:
@@ -349,14 +354,18 @@ async def generate_full_lesson_plan(
             effective_requirements = (
                 f"{requirements}\n\n【参考资料摘录】\n{reference_text}"
             ).strip()
-        # 四路生成共用同一份课程知识上下文（见 app/services/course_knowledge.py）。
-        # 不查知识库的话，模型只能凭参数记忆备课，难点与误区全靠猜。
-        # 检索失败不阻断生成 —— 最多是这次没用到知识库。
-        course_knowledge = build_course_context(
+        # 四路生成共用同一份课程上下文（见 app/services/course_knowledge.py
+        # 的 compose_generation_context）—— 知识 + 教学意图 + 教学蓝图一次拼好，
+        # 保证四类产物拿到的是**同一段**上下文。
+        # 检索失败、蓝图缺失都不阻断生成 —— 最多是这次没用到它们。
+        course_knowledge, composed_context, ctx_meta = compose_generation_context(
             topic=topic, subject=subject, grade=grade, kind="lesson_plan",
+            scope=knowledge_scope, intent=teaching_intent,
+            blueprint=teaching_blueprint, lesson_id=lesson_id,
         )
-        effective_requirements = append_to_requirements(
-            effective_requirements, course_knowledge
+        effective_requirements = (
+            f"{effective_requirements}\n\n{composed_context}".strip()
+            if composed_context else effective_requirements
         )
 
         requirements_result = lesson_plan_generator.analyze_requirements(
@@ -422,6 +431,16 @@ async def generate_full_lesson_plan(
             "compliance": compliance,
             # 让教师看到这一版用到了知识库里的哪些依据（可溯源）
             "course_knowledge": course_knowledge.to_dict(),
+            "knowledge": course_knowledge.to_dict(),
+            "citations": course_knowledge.citations,
+            # 蓝图摘要只回传状态，不回传正文（正文由蓝图接口单独管理）
+            # 如实说明蓝图到底用上没有。此前只要"有蓝图文本"就报 used=True，
+            # 而草稿/跳过的蓝图根本不会被注入 —— 教师会以为系统照着蓝图生成了。
+            "teaching_blueprint": {
+                **ctx_meta,
+                "status": (teaching_blueprint or {}).get("status", "")
+                if isinstance(teaching_blueprint, dict) else "",
+            },
             "version": version_info,
             "version_error": version_error,
         }

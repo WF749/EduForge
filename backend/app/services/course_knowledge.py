@@ -21,8 +21,10 @@
 from __future__ import annotations
 
 import logging
+import time
+from collections import OrderedDict
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 log = logging.getLogger("course_knowledge")
 
@@ -52,6 +54,28 @@ _KIND_HINT = {
 }
 
 
+# 知识库范围。与 retriever 的 origin 元数据对应（seed = 系统预置 / upload = 用户上传）。
+# 之所以能直接复用 origin：上一轮已把来源标记统一成这一个字段，
+# 所以"只用系统库"就是过滤 origin=seed，不需要新增任何索引结构。
+KNOWLEDGE_SCOPES = ("system", "personal", "both", "none")
+
+_SCOPE_NAMES = {
+    "system": "系统教学知识库",
+    "personal": "我的个人知识库",
+    "both": "系统知识库 + 个人知识库",
+    "none": "不使用知识库",
+}
+
+
+def scope_filters(scope: Optional[str]) -> Optional[Dict[str, Any]]:
+    """知识库范围 → 检索过滤条件。未知值按 both（不过滤）处理，不静默变窄。"""
+    if scope == "system":
+        return {"origin": "seed"}
+    if scope == "personal":
+        return {"origin": "upload"}
+    return None
+
+
 @dataclass
 class CourseKnowledge:
     """一次检索的结果。空结果也返回对象，方便调用方统一处理。"""
@@ -59,6 +83,12 @@ class CourseKnowledge:
     citations: List[Dict[str, str]] = field(default_factory=list)
     queries: List[str] = field(default_factory=list)
     empty: bool = True
+    # 本次检索到底用上没有 —— 没用上必须说清原因，绝不伪造引用
+    scope: str = "both"
+    used: bool = False
+    reason: str = ""
+    # 本学科库内无命中、放宽到全库后才有结果 —— 含金量下降，必须让教师知道
+    relaxed: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -66,6 +96,10 @@ class CourseKnowledge:
             "queries": self.queries,
             "citations": self.citations,
             "chars": len(self.text),
+            "scope": self.scope,
+            "used": self.used,
+            "reason": self.reason,
+            "relaxed": self.relaxed,
         }
 
 
@@ -98,15 +132,47 @@ def build_course_context(
     method_top_k: int = 2,
     max_chars: int = 2400,
     enable_rerank: bool = True,
+    scope: Optional[str] = "both",
     retriever=None,
+    lesson_id: Optional[str] = None,
+    use_snapshot: bool = True,
 ) -> CourseKnowledge:
     """检索这一节课该用的知识，返回可直接拼进 prompt 的文本块。
 
     `retriever` 可注入（测试用）；不传则用全局检索器。
+    `scope` 见 KNOWLEDGE_SCOPES；缺省 both = **现有行为**，老调用方零感知。
+
+    **同一节课共用同一批资料**：给了 `lesson_id`（或主题+学科+年级）且
+    `use_snapshot=True` 时，命中缓存就原样返回上一次的检索结果 ——
+    四路产物才会引用同一批依据，而不是各自检索一遍各引各的。
+    缓存键**不含产物类型**，这正是为了保证四路命中同一份。
+
+    **检索失败绝不阻断生成**：异常与拒答都吞掉，返回空上下文，
+    并把原因写进 `reason` —— 上层必须原样展示给教师，不能伪造引用。
     """
-    result = CourseKnowledge()
+    scope = scope if scope in KNOWLEDGE_SCOPES else "both"
+    result = CourseKnowledge(scope=scope)
     topic = (topic or "").strip()
+
+    snap_key = ""
+    if use_snapshot:
+        snap_key = _snapshot_key(
+            lesson_id=str(lesson_id or ""), topic=topic,
+            subject=subject or "",
+            who=(grade or "").strip() or (audience or "").strip(),
+            scope=scope)
+        cached = get_snapshot(snap_key)
+        if cached is not None:
+            return cached
+        if not topic and not (lesson_id or "").strip():
+            snap_key = ""
+
     if not topic:
+        result.reason = "未指定教学主题，本次未检索"
+        return result
+
+    if scope == "none":
+        result.reason = "教师选择本次不使用知识库"
         return result
 
     subj = normalize_subject(subject)
@@ -123,12 +189,19 @@ def build_course_context(
             retriever = get_retriever()
         except Exception as e:  # noqa: BLE001
             log.warning("课程知识检索不可用，本次生成不带知识库: %s", e)
+            result.reason = f"知识库不可用：{type(e).__name__}"
             return result
 
+    # 范围过滤与学科过滤是**并列条件**：{"subject": "物理", "origin": "seed"} 表示
+    # 既要物理、又要属于系统库。未知 scope 已在开头归一为 both（不过滤）。
+    base_scope = scope_filters(scope)
+    refused_flags: List[bool] = []
     hits: List[Dict[str, Any]] = []
     seen: set = set()
+    relaxed = False
 
-    def _collect(query: str, k: int, filters: Optional[Dict[str, Any]]) -> None:
+    def _collect(query: str, k: int, filters: Optional[Dict[str, Any]],
+                 reject_other_subject: str = "") -> None:
         try:
             res = retriever.retrieve(query, top_k=k, filters=filters,
                                      enable_rerank=enable_rerank)
@@ -136,8 +209,15 @@ def build_course_context(
             log.warning("课程知识检索失败(%s): %s", query[:24], e)
             return
         if getattr(res, "refused", False):
+            refused_flags.append(True)
             return
         for h in getattr(res, "hits", []) or []:
+            if reject_other_subject:
+                # 放宽学科后：明确属于**别的**学科的片段不能当本科依据
+                hit_subj = normalize_subject(
+                    (getattr(h, "metadata", None) or {}).get("subject"))
+                if hit_subj and hit_subj != reject_other_subject:
+                    continue
             cid = getattr(h, "chunk_id", None) or h.raw_text[:64]
             if cid in seen:
                 continue
@@ -150,16 +230,33 @@ def build_course_context(
                 "score": h.score,
             })
 
-    # 1) 学科知识：按学科过滤；过滤后查不到就退回不过滤（宁宽勿空）
+    def _merge(base: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        if not base_scope:
+            return base
+        return {**(base or {}), **base_scope}
+
+    # 1) 学科知识：按学科过滤
     filters1 = {"subject": subj} if subj else None
-    _collect(q1, top_k, filters1)
+    _collect(q1, top_k, _merge(filters1))
     if not hits and filters1:
-        _collect(q1, top_k, None)
+        # 本学科库里确实没有 → 放宽学科再找一次。**但绝不能把别的学科内容
+        # 当成本科依据**：放宽后仍按 metadata.subject 剔除明确属于其他学科的片段，
+        # 并在文本里写明"已放宽"，让教师知道含金量下降了。
+        before = len(hits)
+        _collect(q1, top_k, _merge(None), reject_other_subject=subj)
+        if len(hits) > before:
+            relaxed = True
 
     # 2) 教学策略
-    _collect(q2, method_top_k, {"type": "教学法"} if kind in ("lesson_plan", "ppt") else None)
+    _collect(q2, method_top_k,
+             _merge({"type": "教学法"} if kind in ("lesson_plan", "ppt") else None))
 
     if not hits:
+        # 必须说清"为什么没用上" —— 检索失败、拒答、还是本就没有。
+        # 上层要原样展示给教师，绝不能伪造引用假装查到了。
+        result.reason = (
+            "本次未能检索到相关知识（知识库判定为无关），生成内容请教师核验"
+            if refused_flags else "本次未能检索到相关知识，生成内容请教师核验")
         return result
 
     lines: List[str] = []
@@ -179,13 +276,144 @@ def build_course_context(
     if not lines:
         return result
 
-    result.text = (
-        "【课程知识参考（来自内置知识库，与本次生成内容一致性相关，请优先采纳）】\n"
-        + "\n".join(lines)
-        + "\n【参考完】"
-    )
+    header = f"【课程知识参考（范围：{_SCOPE_NAMES.get(scope, scope)}；"
+    header += "与本次生成内容一致性相关，请优先采纳）】"
+    if relaxed:
+        header += "\n（提示：本学科库内没有直接命中，以下为放宽学科后的内容，请教师核验）"
+    result.text = header + "\n" + "\n".join(lines) + "\n【参考完】"
     result.empty = False
+    result.used = True
+    result.relaxed = relaxed
+    result.reason = ""
+    # 只有真正用上了才进缓存：检索抖动导致的空不该让后续三路一起空着
+    if snap_key:
+        _remember_snapshot(snap_key, result)
     return result
+
+
+# ---------------------------------------------------------------------------
+# 知识快照：同一节课的四路产物必须引用**同一批**资料
+# ---------------------------------------------------------------------------
+# 光有"同一个组装函数"不够：四路仍在各自时机、各自参数下各检索一遍，
+# 检索有随机性（rerank 批次不同、query 里带了各自的产物类型词），
+# 于是教案引用 A/B、PPT 引用 C/D —— 四份产物口径对不上。
+# 这里按 (课程 id / 主题+学科+年级, 范围) 缓存一次检索结果，四路共用同一份。
+_SNAPSHOT_TTL = 1800          # 秒：够覆盖"一键生成全部"的整个过程
+_SNAPSHOT_MAX = 32            # 最多缓存多少节课，防止无限增长
+_SNAPSHOTS: "OrderedDict[str, tuple]" = OrderedDict()
+
+
+def _snapshot_key(*, lesson_id: str, topic: str, subject: str,
+                  who: str, scope: str) -> str:
+    # 有课程 id 就用它（最稳）；没有就退化成"主题+学科+年级" ——
+    # 注意**不包含产物类型**：四路要命中同一个 key，才可能共用同一批资料。
+    base = (lesson_id or "").strip()
+    if not base:
+        base = "|".join(((topic or "").strip(), (subject or "").strip(),
+                         (who or "").strip()))
+    return f"{base}::{scope}"
+
+
+def _remember_snapshot(key: str, knowledge: CourseKnowledge) -> None:
+    _SNAPSHOTS[key] = (time.time(), knowledge)
+    # 过期与超量一起清：只在写入时清理，不引入后台线程
+    now = time.time()
+    for k in [k for k, (t, _) in _SNAPSHOTS.items() if now - t > _SNAPSHOT_TTL]:
+        _SNAPSHOTS.pop(k, None)
+    while len(_SNAPSHOTS) > _SNAPSHOT_MAX:
+        _SNAPSHOTS.popitem(last=False)
+
+
+def get_snapshot(key: str) -> Optional[CourseKnowledge]:
+    hit = _SNAPSHOTS.get(key)
+    if not hit:
+        return None
+    ts, knowledge = hit
+    if time.time() - ts > _SNAPSHOT_TTL:
+        _SNAPSHOTS.pop(key, None)
+        return None
+    return knowledge
+
+
+def clear_snapshots() -> None:
+    """仅供测试与"重新检索"场景：清空快照缓存。"""
+    _SNAPSHOTS.clear()
+
+
+def compose_generation_context(
+    *,
+    topic: str,
+    subject: Optional[str] = None,
+    grade: Optional[str] = None,
+    audience: Optional[str] = None,
+    key_points: Optional[Sequence[str]] = None,
+    kind: Optional[str] = None,
+    scope: Optional[str] = "both",
+    blueprint: Any = None,
+    intent: Any = None,
+    lesson_id: Optional[str] = None,
+    use_snapshot: bool = True,
+    top_k: int = 4,
+    method_top_k: int = 2,
+    max_chars: int = 2400,
+    enable_rerank: bool = True,
+) -> Tuple[CourseKnowledge, str, Dict[str, Any]]:
+    """四路生成**唯一**的上下文组装入口。
+
+    为什么必须收成一个函数：教案 / PPT / 动画 / 游戏此前各拼各的，
+    于是同一节课拿到四段不同的上下文 —— 四份产物口径不一致的根因就在这里。
+
+    组装顺序（越具体越靠后，模型越容易记住）：
+      ① 检索到的知识（可溯源） → ② 教学意图 → ③ 教学蓝图（最贴近课堂执行）
+
+    **任何一步失败都不阻断**：知识没检索到就只带意图与蓝图；意图为空就跳过；
+    蓝图缺失（教师点了"直接生成"）也照样生成。
+
+    返回 `(knowledge, text, meta)`。`meta` 说清三件事各用上了没有 ——
+    上层要把它原样回给教师，尤其是"蓝图其实没用上"不能报成用上了。
+    """
+    from .teaching_blueprint import blueprint_to_prompt_text, normalize_blueprint
+    from .teaching_intent import (
+        TeachingIntent, intent_to_prompt_text, normalize_teaching_intent,
+    )
+
+    knowledge = build_course_context(
+        topic=topic, subject=subject, grade=grade, audience=audience,
+        key_points=key_points, kind=kind, scope=scope,
+        top_k=top_k, method_top_k=method_top_k, max_chars=max_chars,
+        enable_rerank=enable_rerank,
+        lesson_id=lesson_id, use_snapshot=use_snapshot,
+    )
+
+    parts: List[str] = []
+    if knowledge.text:
+        parts.append(knowledge.text)
+
+    meta: Dict[str, Any] = {
+        "knowledge_used": bool(knowledge.used),
+        "intent_used": False,
+        "blueprint_used": False,
+        "blueprint_status": "",
+        "shared_snapshot": bool(use_snapshot),
+    }
+
+    if intent is not None:
+        it = intent if isinstance(intent, TeachingIntent) \
+            else normalize_teaching_intent(intent)
+        it_text = intent_to_prompt_text(it)
+        if it_text:
+            parts.append(it_text)
+            meta["intent_used"] = True
+
+    if blueprint is not None:
+        bp = blueprint if hasattr(blueprint, "stages") else normalize_blueprint(blueprint)
+        meta["blueprint_status"] = getattr(bp, "status", "") or ""
+        bp_text = blueprint_to_prompt_text(bp)
+        if bp_text:
+            parts.append(bp_text)
+            meta["blueprint_used"] = True
+
+    return knowledge, "\n\n".join(parts), meta
 
 
 def append_to_requirements(requirements: str, knowledge: CourseKnowledge) -> str:
