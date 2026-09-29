@@ -152,7 +152,8 @@ def main() -> int:
     all_found = sorted({q for ps in found.values() for q in ps})
     check("扫描器没退化（至少 25 条路径）", len(all_found) >= 25, f"实得 {len(all_found)} 条")
     for must in ("/api/lesson-plan/generate-full", "/api/courseware/game/generate",
-                 "/api/ppt/status/{param}", "/api/teaching-compliance/review"):
+                 "/api/ppt/status/{param}", "/api/teaching-compliance/review",
+                 "/api/teaching/blueprint"):
         check(f"扫到了 {must}", must in all_found)
 
     print("\n=== 3. 对话链路专项（出过事的那条）===")

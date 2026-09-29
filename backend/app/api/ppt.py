@@ -6,10 +6,10 @@ import subprocess
 import tempfile
 from fastapi import APIRouter, HTTPException, BackgroundTasks, UploadFile, File, Body, Query
 from fastapi.responses import FileResponse, JSONResponse
-from typing import Optional, List, Dict, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from ..document_extract import resolve_uploaded_references
-from ..services.course_knowledge import build_course_context
+from ..services.course_knowledge import compose_generation_context
 from ..paths import GENERATED_CW, BACKEND_DIR
 from ..services.ppt_content_generator import PPTContentGenerator
 from ..services.teaching_compliance import run_compliance_gate
@@ -222,6 +222,12 @@ class PPTGenerationTask:
         self.progress = 0
         self.result = None
         self.error = None
+        # 2026-09-25 新增（**有默认值**，旧任务、磁盘上恢复的任务都不会缺这两个属性）
+        # PPT 是后台任务：生成那一刻返回不了引用，所以先挂在任务上，
+        # 等 /ppt/status 时一起给教师，否则他永远不知道这版用了哪些资料。
+        self.knowledge = None
+        self.citations = []
+        self.context_meta = None
 
 @router.post("/generate")
 async def generate_ppt(
@@ -235,6 +241,11 @@ async def generate_ppt(
     key_points: Optional[List[str]] = Body(default=None),
     reference_docs: Optional[List[str]] = Body(default=None),
     template: str = Body(default="standard"),
+    # 2026-09-25 新增的**可选**字段：不传就与以前完全一样
+    teaching_intent: Optional[Dict[str, Any]] = Body(default=None),
+    teaching_blueprint: Optional[Dict[str, Any]] = Body(default=None),
+    lesson_id: Optional[str] = Body(default=None),
+    knowledge_scope: Optional[str] = Body(default="both"),
 ):
     """生成PPT"""
     import uuid
@@ -246,14 +257,21 @@ async def generate_ppt(
     
     reference_context = resolve_uploaded_references(reference_docs)
 
-    # 四路生成共用同一份课程知识上下文（见 app/services/course_knowledge.py）。
-    # 检索失败不阻断生成 —— 最多是这次没用到知识库。
-    course_knowledge = build_course_context(
+    # 四路生成共用同一份课程上下文（compose_generation_context）—— 知识 +
+    # 教学意图 + 教学蓝图一次拼好，保证与教案拿到的是**同一段**上下文。
+    # 检索失败、蓝图缺失都不阻断生成。
+    course_knowledge, composed_context, ctx_meta = compose_generation_context(
         topic=topic, subject=subject, grade=audience, key_points=key_points,
-        kind="ppt",
+        kind="ppt", scope=knowledge_scope, intent=teaching_intent,
+        blueprint=teaching_blueprint, lesson_id=lesson_id,
     )
-    if not course_knowledge.empty:
-        reference_context = list(reference_context or []) + [course_knowledge.text]
+    if composed_context:
+        reference_context = list(reference_context or []) + [composed_context]
+    # PPT 是后台任务，生成当时拿不到结果，所以把引用先挂在任务上，
+    # 由 /ppt/status 一起返回（否则教师永远不知道这版 PPT 用了哪些资料）。
+    task.knowledge = course_knowledge.to_dict()
+    task.citations = course_knowledge.citations
+    task.context_meta = ctx_meta
 
     # 启动后台任务
     background_tasks.add_task(
@@ -274,7 +292,10 @@ async def generate_ppt(
         "success": True,
         "message": "PPT生成任务已启动，正在准备生成...",
         "task_id": task_id,
-        "estimated_time": f"约{duration//5 + 2}分钟"
+        "estimated_time": f"约{duration//5 + 2}分钟",
+        "knowledge": course_knowledge.to_dict(),
+        "citations": course_knowledge.citations,
+        "context_meta": ctx_meta,
     }
 
 async def _generate_ppt_task(task_id: str, topic: str, duration: int, audience: str, subject: str, theme_color: str, style_preference: str, key_points: list, reference_docs: list, template: str):
@@ -458,6 +479,10 @@ async def get_ppt_generation_status(task_id: str):
                     "task_dir": found_dir,
                     "files": {"pptx": os.path.basename(pptx_path)}
                 },
+                # 磁盘恢复出来的任务没有引用记录，如实给空，不编造
+                "knowledge": None,
+                "citations": [],
+                "context_meta": None,
                 "error": None
             }
         # 任务确实不存在，返回unknown状态而非404（避免前端轮询崩溃）
@@ -468,7 +493,10 @@ async def get_ppt_generation_status(task_id: str):
             "progress": 0,
             "current_step": "任务不存在或已过期",
             "result": None,
-            "error": "任务不存在，可能已过期或服务已重启"
+            "error": "任务不存在，可能已过期或服务已重启",
+            # 与上面两个分支保持同样的字段，前端不用判断字段存不存在
+            "knowledge": None,
+            "citations": [],
         }
     
     # 根据进度返回当前正在执行的步骤
@@ -497,6 +525,9 @@ async def get_ppt_generation_status(task_id: str):
         "task_id": task_id,
         "status": task.status,
         "progress": task.progress,
+        "knowledge": getattr(task, "knowledge", None),
+        "citations": getattr(task, "citations", []) or [],
+        "context_meta": getattr(task, "context_meta", None),
         "current_step": current_step,
         "result": task.result,
         "error": task.error

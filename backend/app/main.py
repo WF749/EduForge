@@ -17,6 +17,7 @@ from .api import ppt as ppt_api
 from .api import rag as rag_api
 from .api import safety as safety_api
 from .api import system as system_api
+from .api import teaching as teaching_api
 from .api import teaching_compliance as teaching_compliance_api
 from .core.errors import install_exception_handlers
 from .core.logging_setup import setup_logging
@@ -84,6 +85,8 @@ app.include_router(agent_api.router, prefix="/api/agent")
 app.include_router(safety_api.router, prefix="/api")
 # 新增：教学合规校验器（/api/teaching-compliance/check）—— 离线规则，零额度
 app.include_router(teaching_compliance_api.router, prefix="/api")
+# 教学蓝图：生成前的环节设计（2026-09-25 新增）
+app.include_router(teaching_api.router, prefix="/api")
 
 app.include_router(api_routes.router)
 

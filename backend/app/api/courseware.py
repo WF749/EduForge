@@ -4,9 +4,9 @@ import shutil
 from urllib.parse import quote
 from fastapi import APIRouter, Body, Query, Path, HTTPException
 from fastapi.responses import FileResponse
-from typing import Optional
+from typing import Any, Dict, Optional
 from ..paths import GENERATED_ANIM, GENERATED_CW, GENERATED_GAMES, GENERATED_LP
-from ..services.course_knowledge import build_course_context
+from ..services.course_knowledge import compose_generation_context
 from ..services.courseware_generator import CoursewareGenerator
 from ..services.game_generator import GameGenerator
 from ..services.animation_generator import AnimationGenerator
@@ -90,19 +90,27 @@ async def generate_game(
     audience: str = Body("大学生", description="目标受众"),
     teaching_content: str = Body("", description="教学内容（可选）"),
     game_type: Optional[str] = Body(None, description="游戏类型"),
-    provider: Optional[str] = Body(None, description="LLM提供商")
+    provider: Optional[str] = Body(None, description="LLM提供商"),
+    # 2026-09-25 新增的**可选**字段：不传就与以前完全一样
+    teaching_intent: Optional[Dict[str, Any]] = Body(default=None),
+    teaching_blueprint: Optional[Dict[str, Any]] = Body(default=None),
+    knowledge_scope: Optional[str] = Body(default="both"),
+    # 给了课程 id，四路才会共用同一份知识快照（否则引用可能对不上）
+    lesson_id: Optional[str] = Body(default=None)
 ):
     """生成互动游戏"""
     try:
         generator = GameGenerator(output_dir=GAMES_DIR)
 
-        # 四路生成共用同一份课程知识上下文（见 app/services/course_knowledge.py）
-        course_knowledge = build_course_context(
+        # 四路生成共用同一份课程上下文（compose_generation_context）
+        course_knowledge, composed_context, ctx_meta = compose_generation_context(
             topic=topic, audience=audience, kind="game",
+            scope=knowledge_scope, intent=teaching_intent,
+            blueprint=teaching_blueprint, lesson_id=lesson_id,
         )
         effective_content = teaching_content
-        if not course_knowledge.empty:
-            effective_content = f"{teaching_content}\n\n{course_knowledge.text}".strip()
+        if composed_context:
+            effective_content = f"{teaching_content}\n\n{composed_context}".strip()
 
         result = generator.generate(
             topic=topic,
@@ -142,7 +150,11 @@ async def generate_game(
             "message": "游戏生成成功",
             "game": game_payload,
             "compliance": compliance,
-            "offline": offline
+            "offline": offline,
+            # 本次用到知识库的哪些依据（可溯源）。此前游戏一路完全没有引用。
+            "knowledge": course_knowledge.to_dict(),
+            "citations": course_knowledge.citations,
+            "context_meta": ctx_meta
         }
 
     except Exception as e:
@@ -229,7 +241,13 @@ async def generate_animation(
     teaching_content: str = Body("", description="教学内容（可选）"),
     duration: int = Body(5, description="动画时长（分钟）"),
     style: str = Body("auto", description="动画风格：与 /animation/styles 一致"),
-    provider: Optional[str] = Body(None, description="LLM提供商")
+    provider: Optional[str] = Body(None, description="LLM提供商"),
+    # 2026-09-25 新增的**可选**字段：不传就与以前完全一样
+    teaching_intent: Optional[Dict[str, Any]] = Body(default=None),
+    teaching_blueprint: Optional[Dict[str, Any]] = Body(default=None),
+    knowledge_scope: Optional[str] = Body(default="both"),
+    # 给了课程 id，四路才会共用同一份知识快照（否则引用可能对不上）
+    lesson_id: Optional[str] = Body(default=None)
 ):
     """生成动画演示"""
     try:
@@ -239,13 +257,15 @@ async def generate_animation(
             "mathematics": "数学", "physics": "物理", "chemistry": "化学",
             "biology": "生物", "geography": "地理", "general": "综合",
         }.get(subject, subject)
-        # 四路生成共用同一份课程知识上下文（见 app/services/course_knowledge.py）
-        course_knowledge = build_course_context(
+        # 四路生成共用同一份课程上下文（compose_generation_context）
+        course_knowledge, composed_context, ctx_meta = compose_generation_context(
             topic=topic, subject=subject, audience=audience, kind="animation",
+            scope=knowledge_scope, intent=teaching_intent,
+            blueprint=teaching_blueprint, lesson_id=lesson_id,
         )
         content_with_subject = f"学科：{subject_name}\n{teaching_content}".strip()
-        if not course_knowledge.empty:
-            content_with_subject = f"{content_with_subject}\n\n{course_knowledge.text}"
+        if composed_context:
+            content_with_subject = f"{content_with_subject}\n\n{composed_context}"
         result = generator.generate(
             topic=topic,
             audience=audience,
@@ -287,7 +307,11 @@ async def generate_animation(
             "message": "动画生成成功",
             "animation": animation_payload,
             "compliance": compliance,
-            "offline": offline
+            "offline": offline,
+            # 本次用到知识库的哪些依据（可溯源）。此前动画一路完全没有引用。
+            "knowledge": course_knowledge.to_dict(),
+            "citations": course_knowledge.citations,
+            "context_meta": ctx_meta
         }
 
     except Exception as e:

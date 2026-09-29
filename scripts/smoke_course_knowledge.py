@@ -95,31 +95,32 @@ check("内容来自物理篇", any("物理" in (c.get("source") or "") for c in 
 check("文本里有明确的知识块标记", "【课程知识参考" in k.text)
 
 print("\n=== 3. 检索不可用 → 不阻断，返回空 ===")
-k2 = build_course_context(topic="浮力", subject="物理", retriever=BrokenRetriever())
+k2 = build_course_context(topic="浮力", subject="物理", retriever=BrokenRetriever(), use_snapshot=False)
 check("异常被吞掉，返回空上下文", k2.empty and k2.text == "")
 check("空上下文不会拼出脏文本", append_to_requirements("原需求", k2) == "原需求")
 
 print("\n=== 4. 知识库没有 → 不阻断，返回空 ===")
-k3 = build_course_context(topic="浮力", subject="物理", retriever=EmptyRetriever())
+k3 = build_course_context(topic="浮力", subject="物理", retriever=EmptyRetriever(), use_snapshot=False)
 check("拒答时返回空", k3.empty)
 
 print("\n=== 5. 过滤确实生效（按学科过滤；查不到会退回不过滤）===")
 r = RecordingRetriever(n=3)
-k4 = build_course_context(topic="浮力", subject="物理", kind="lesson_plan", retriever=r)
+k4 = build_course_context(topic="浮力", subject="物理", kind="lesson_plan", retriever=r, use_snapshot=False)
 check("第一路查询带了 subject 过滤",
       r.calls and r.calls[0]["filters"] == {"subject": "物理"}, str(r.calls[0]["filters"]))
 check("教案/课件第二路带 type=教学法 过滤",
       any(c["filters"] == {"type": "教学法"} for c in r.calls), str([c["filters"] for c in r.calls]))
 
 r2 = RecordingRetriever(n=0)
-k5 = build_course_context(topic="浮力", subject="物理", kind="lesson_plan", retriever=r2)
+k5 = build_course_context(topic="浮力", subject="物理", kind="lesson_plan", retriever=r2, use_snapshot=False)
 check("过滤后没结果 → 退回不过滤再查一次",
       any(c["filters"] is None for c in r2.calls),
       str([c["filters"] for c in r2.calls]))
 
 print("\n=== 6. 动画/游戏不需要 type=教学法 过滤 ===")
 r3 = RecordingRetriever(n=2)
-build_course_context(topic="浮力", subject="physics", kind="animation", retriever=r3)
+build_course_context(topic="浮力", subject="physics", kind="animation",
+                     retriever=r3, use_snapshot=False)
 check("英文学科 key 也被归一成中文后过滤",
       r3.calls[0]["filters"] == {"subject": "物理"}, str(r3.calls[0]["filters"]))
 check("动画不带 type=教学法 过滤",
@@ -145,13 +146,38 @@ targets = {
 }
 for name, path in targets.items():
     src = path.read_text(encoding="utf-8")
-    check(f"{name} 调用了 build_course_context",
-          "build_course_context" in src and "course_knowledge" in src)
+    # 四路的**唯一**入口是 compose_generation_context（它内部再调
+    # build_course_context）。四路各自拼上下文正是"四路不一致"的根源，
+    # 所以这里钉的是入口只有一个，而不是某个具体函数名。
+    check(f"{name} 调用了统一的 compose_generation_context",
+          "compose_generation_context" in src)
 # 且不能有人另起炉灶直接调 retriever
 for name, path in targets.items():
     src = path.read_text(encoding="utf-8")
     check(f"{name} 没有绕过统一入口直接调检索器",
           "get_retriever()" not in src, "发现直连")
+
+print("\n=== 9. 静态：四路请求真的把意图与蓝图带上了（不能只在后端准备好）===")
+# 后端接好了而前端不传，等于教师永远用不上 —— 这类"两头各对一半"的
+# 静默失效在本项目出过不止一次，所以前端请求体也要静态钉住。
+fe = ROOT / "frontend" / "src" / "api" / "lessonArtifacts.js"
+fe_src = fe.read_text(encoding="utf-8")
+for field in ("teaching_intent", "teaching_blueprint", "knowledge_scope"):
+    n = fe_src.count(f"{field}:")
+    check(f"四路请求都带了 {field}", n >= 4, f"实得 {n} 处（教案/PPT/动画/游戏各一处）")
+
+store_src = (ROOT / "frontend" / "src" / "store" / "lesson.js").read_text(encoding="utf-8")
+check("store 提供了 intentPayload（意图由扁平字段派生，不另存副本）",
+      "function intentPayload()" in store_src)
+check("store 的意图以扁平字段为真值（topic/subject/grade 写在扩展字段之后）",
+      "topic: topic.value" in store_src and "intentExtras" in store_src)
+check("store 持久化里不含产物正文",
+      "teachingBlueprint: teachingBlueprint.value" in store_src)
+
+for name, path in targets.items():
+    src = path.read_text(encoding="utf-8")
+    check(f"{name} 回了 context_meta（如实说明蓝图用上没有）",
+          "context_meta" in src or "ctx_meta" in src)
 
 print(f"\n通过 {len(PASS)} 项，失败 {len(FAIL)} 项")
 if FAIL:

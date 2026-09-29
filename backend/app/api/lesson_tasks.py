@@ -30,6 +30,7 @@ from fastapi import APIRouter, Body, HTTPException, Path, Query
 from .. import persist
 from ..core.logging_setup import get_logger
 from ..services import artifact_versions
+from ..services.teaching_intent import sync_intent_with_flat
 
 router = APIRouter()
 log = get_logger("lesson_tasks")
@@ -115,6 +116,54 @@ def _normalize_options(raw: Any) -> Dict[str, Any]:
     if isinstance(raw.get("gameType"), str):
         out["gameType"] = _slug(raw["gameType"], 40)
     return out
+
+
+def _normalize_teaching_intent_field(raw: Any,
+                                    base: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """教学意图：**只保留结构化字段与封顶后的文本**，不存任何产物正文。
+
+    `base` 必须传进来 —— 教学意图是**现有课程字段的视图**，不是另一份副本。
+    只传 teachingIntent 本身的话，topic / grade 都不在里面，`stage` 就派生不出来，
+    于是台账里存下一份学科年级齐全、唯独学段为空的残缺意图。
+    """
+    from ..services.teaching_intent import normalize_teaching_intent
+
+    try:
+        return normalize_teaching_intent(raw, base=base).to_dict()
+    except Exception as e:  # noqa: BLE001
+        # 教学意图是"锦上添花"：解析炸了不能让整节课存不进去。
+        log.warning("教学意图归一化失败，已按空意图保存: %s", e)
+        return {}
+
+
+def _normalize_blueprint_field(raw: Any) -> Dict[str, Any]:
+    """教学蓝图：只存环节结构与摘要，不存教案/PPT 正文。"""
+    from ..services.teaching_blueprint import normalize_blueprint
+
+    return normalize_blueprint(raw).to_dict()
+
+
+def _restore_workflow_field(raw: Any) -> Dict[str, Any]:
+    """读取（而非写入）时的归一化：把"生成中"降级成"已中断、可恢复"。
+
+    写进去的时候必须原样保存 `generating`（否则轮询中的请求会以为自己失败了）；
+    但**读出来**时进程可能早就重启了，恢复成"生成中"会让教师永远等下去。
+    所以 restore 只发生在读路径上。
+    """
+    from ..services.teaching_workflow import normalize_workflow
+
+    try:
+        return normalize_workflow(raw, restore=True).to_dict()
+    except Exception as e:  # noqa: BLE001
+        log.warning("工作流状态恢复失败，按初始状态处理: %s", e)
+        return {}
+
+
+def _normalize_workflow_field(raw: Any) -> Dict[str, Any]:
+    """工作流状态：只存状态与指针，不存产物正文。"""
+    from ..services.teaching_workflow import normalize_workflow
+
+    return normalize_workflow(raw).to_dict()
 
 
 def _summary(task: Dict[str, Any]) -> Dict[str, Any]:
@@ -224,6 +273,40 @@ async def upsert_lesson_task(body: Dict[str, Any] = Body(default={})):
         merged.update(_normalize_options(body["options"]))
         task["options"] = merged
 
+    # ---- 教学意图 / 蓝图 / 工作流（2026-09-25 新增，**全部可选**）--------
+    # 三个字段都是可选的：不传就跟以前完全一样（旧请求照常工作）。
+    # 关键点：**只存结构化状态、摘要与引用关系，绝不写产物正文** ——
+    # 台账"只存指针不存正文"的约定不能破，否则会把教案全文复制一份进来。
+    # 因此这里对三个字段都做**结构归一化 + 长度封顶**，而不是原样落库。
+    if "teachingIntent" in body:
+        # 以"现有任务值 + 本次提交的扁平字段"为底座，保证教学意图与
+        # topic/subject/grade/duration/difficulty 是同一份真值（不另存副本）。
+        # 只更新传上来的字段是既有语义：本次没传的沿用任务里已有的。
+        flat_base = {
+            k: body[k] if k in body else task.get(k)
+            for k in ("topic", "subject", "grade", "duration", "difficulty")
+        }
+        if "stage" in body:
+            flat_base["stage"] = body["stage"]
+        task["teachingIntent"] = _normalize_teaching_intent_field(
+            body["teachingIntent"], base=flat_base)
+
+    # 双向收敛：**只要课上有教学意图，就必须与扁平字段一致**。
+    # 放在 intent 块之后、且不受"本次有没有传 intent"影响 ——
+    # 否则"先保存意图、之后只改主题"会留下两个主题，后续生成依据不明。
+    if isinstance(task.get("teachingIntent"), dict) and task["teachingIntent"]:
+        merged, flat_patch = sync_intent_with_flat(
+            task["teachingIntent"],
+            {k: task.get(k) for k in ("topic", "subject", "grade",
+                                      "duration", "difficulty")})
+        task["teachingIntent"] = merged
+        for k, v in flat_patch.items():
+            task[k] = v
+    if "teachingBlueprint" in body:
+        task["teachingBlueprint"] = _normalize_blueprint_field(body["teachingBlueprint"])
+    if "workflow" in body:
+        task["workflow"] = _normalize_workflow_field(body["workflow"])
+
     task.setdefault("artifacts", {})
     for t in ARTIFACT_TYPES:
         task["artifacts"].setdefault(t, _empty_artifact())
@@ -248,6 +331,11 @@ async def get_lesson_task(task_id: str = Path(...)):
     task = (store.get("tasks") or {}).get(_slug(task_id, 64))
     if not task:
         raise HTTPException(status_code=404, detail="课程任务不存在")
+    task = dict(task)
+    # 读路径上做状态恢复：持久化的"生成中"若原样返回，
+    # 刷新页面后教师会看到一个永远转不完的进度条。
+    if task.get("workflow"):
+        task["workflow"] = _restore_workflow_field(task["workflow"])
     return {"success": True, "task": task}
 
 
