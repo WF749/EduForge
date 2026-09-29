@@ -28,8 +28,30 @@
   --transition: all 0.3s ease;
 }
 
-// 浅色主题
-:root.light {
+// ---------------------------------------------------------------------------
+// 语义化 token：组件**只许用这些**，不许再各自写 rgba(255,255,255,.55) 之类。
+// 之前深浅色切换是"死代码"——变量在 `:root.light` 里定义得整整齐齐，
+// 但工作台组件一处都没消费，硬编码了 50 多处颜色，切了等于没切。
+// ---------------------------------------------------------------------------
+:root,
+[data-theme='dark'] {
+  --wb-bg: #0a0e27;
+  --wb-surface: rgba(26, 31, 78, 0.6);
+  --wb-surface-2: rgba(255, 255, 255, 0.04);
+  --wb-hover: rgba(0, 200, 255, 0.1);
+  --wb-text: #ffffff;
+  --wb-text-2: rgba(255, 255, 255, 0.72);
+  --wb-text-3: rgba(255, 255, 255, 0.45);
+  --wb-border: rgba(255, 255, 255, 0.1);
+  --wb-border-strong: rgba(0, 200, 255, 0.3);
+  --wb-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  --wb-warn-bg: rgba(230, 162, 60, 0.16);
+  --wb-warn-text: #f0b357;
+  --wb-risk-text: #ffb35c;
+}
+
+:root.light,
+[data-theme='light'] {
   --bg-dark: #f0f4f8;
   --bg-card: rgba(255, 255, 255, 0.85);
   --bg-hover: rgba(0, 200, 255, 0.08);
@@ -38,6 +60,20 @@
   --text-muted: #718096;
   --border-color: rgba(0, 200, 255, 0.2);
   --border-glow: 0 0 10px rgba(0, 200, 255, 0.3);
+
+  --wb-bg: #f0f4f8;
+  --wb-surface: rgba(255, 255, 255, 0.92);
+  --wb-surface-2: rgba(15, 23, 42, 0.04);
+  --wb-hover: rgba(0, 160, 210, 0.08);
+  --wb-text: #1a202c;
+  --wb-text-2: rgba(26, 32, 44, 0.75);
+  --wb-text-3: rgba(26, 32, 44, 0.5);
+  --wb-border: rgba(15, 23, 42, 0.12);
+  --wb-border-strong: rgba(0, 160, 210, 0.35);
+  --wb-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  --wb-warn-bg: rgba(217, 119, 6, 0.12);
+  --wb-warn-text: #92610a;
+  --wb-risk-text: #b45309;
 }
 
 // 紧凑模式

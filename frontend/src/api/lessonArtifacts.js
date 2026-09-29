@@ -40,7 +40,11 @@ export async function generateLessonPlan(ctx) {
     requirements: ctx.requirements,
     reference_files: ctx.referenceIds,
     // 给了课程 id，后端会把成品落为该课教案的 v1 —— 之后的"按指令修改"才有基线
-    lesson_id: ctx.lessonId || undefined
+    lesson_id: ctx.lessonId || undefined,
+    // 教学意图 / 蓝图 / 知识库范围：四路共用同一份，保证口径一致
+    teaching_intent: ctx.teachingIntent,
+    teaching_blueprint: ctx.teachingBlueprint,
+    knowledge_scope: ctx.knowledgeScope
   }), '教案生成失败')
 
   if (!created.lesson_plan) throw new Error(created.message || '教案内容为空，请重试')
@@ -60,7 +64,11 @@ export async function generateLessonPlan(ctx) {
     // 教案是平铺文件（没有任务目录），用文件名作为归属依据
     fileName: exported.filename || '',
     compliance: created.compliance || null,
-    summary: 'Word 教案已导出'
+    summary: 'Word 教案已导出',
+    // 引用与知识库使用情况：教师要知道这版依据了什么
+    knowledge: created.knowledge || null,
+    citations: Array.isArray(created.citations) ? created.citations.slice(0, 8) : [],
+    contextMeta: created.teaching_blueprint || null
   }
 }
 
@@ -188,7 +196,11 @@ export async function generatePpt(ctx, { themeColor = '蓝色系', onProgress } 
     style_preference: '专业严谨',
     key_points: ctx.keyPoints,
     reference_docs: ctx.referenceIds,
-    template: 'standard'
+    template: 'standard',
+    teaching_intent: ctx.teachingIntent,
+    teaching_blueprint: ctx.teachingBlueprint,
+    knowledge_scope: ctx.knowledgeScope,
+    lesson_id: ctx.lessonId || undefined
   }), 'PPT 任务创建失败')
 
   if (!created.task_id) throw new Error(created.message || 'PPT 任务创建失败')
@@ -208,7 +220,11 @@ export async function generatePpt(ctx, { themeColor = '蓝色系', onProgress } 
         previewRoute: `/preview/${encodeURIComponent(created.task_id)}`,
         originDir: dirNameOf(status.result.task_dir),
         compliance: status.result.compliance || null,
-        summary: `共 ${countSlides(status.result)} 页`
+        summary: `共 ${countSlides(status.result)} 页`,
+        // 引用在发起时就确定了（快照），所以取发起时的那一份即可
+        knowledge: created.knowledge || null,
+        citations: Array.isArray(created.citations) ? created.citations.slice(0, 8) : [],
+        contextMeta: created.context_meta || null
       }
     }
     if (status.status === 'failed' || status.status === 'unknown') {
@@ -236,7 +252,11 @@ export async function generateAnimation(ctx, { minutes = 5 } = {}) {
     audience: ctx.grade,
     teaching_content: ctx.teachingContent,
     duration: minutes,
-    style: 'auto'
+    style: 'auto',
+    teaching_intent: ctx.teachingIntent,
+    teaching_blueprint: ctx.teachingBlueprint,
+    knowledge_scope: ctx.knowledgeScope,
+    lesson_id: ctx.lessonId || undefined
   }), '动画生成失败')
 
   const a = data.animation || {}
@@ -253,7 +273,10 @@ export async function generateAnimation(ctx, { minutes = 5 } = {}) {
     originDir: dirNameOf(a.task_dir),
     compliance: data.compliance || null,
     offline: data.offline || null,
-    summary: a.scenes?.length ? `${a.scenes.length} 个场景` : 'HTML5 动画'
+    summary: a.scenes?.length ? `${a.scenes.length} 个场景` : 'HTML5 动画',
+    knowledge: data.knowledge || null,
+    citations: Array.isArray(data.citations) ? data.citations.slice(0, 8) : [],
+    contextMeta: data.context_meta || null
   }
 }
 
@@ -263,7 +286,11 @@ export async function generateGame(ctx, { gameType } = {}) {
     topic: ctx.topic,
     audience: ctx.grade,
     teaching_content: ctx.teachingContent,
-    game_type: gameType || undefined
+    game_type: gameType || undefined,
+    teaching_intent: ctx.teachingIntent,
+    teaching_blueprint: ctx.teachingBlueprint,
+    knowledge_scope: ctx.knowledgeScope,
+    lesson_id: ctx.lessonId || undefined
   }), '游戏生成失败')
 
   const g = data.game || {}
@@ -281,7 +308,10 @@ export async function generateGame(ctx, { gameType } = {}) {
     originDir: dirNameOf(g.task_dir),
     compliance: data.compliance || null,
     offline: data.offline || null,
-    summary: count ? `${count} 道题` : 'HTML5 可玩游戏'
+    summary: count ? `${count} 道题` : 'HTML5 可玩游戏',
+    knowledge: data.knowledge || null,
+    citations: Array.isArray(data.citations) ? data.citations.slice(0, 8) : [],
+    contextMeta: data.context_meta || null
   }
 }
 
@@ -300,7 +330,12 @@ export function contextPayload(store) {
     requirements: store.requirementsText,
     keyPoints: store.keyPointList,
     referenceIds: store.referenceIds,
-    teachingContent
+    teachingContent,
+    // 四路共用同一份教学意图 / 蓝图 / 知识库范围 ——
+    // 不传的话四路各按自己的理解生成，同一节课给出四套说法。
+    teachingIntent: store.intentPayload ? store.intentPayload() : undefined,
+    teachingBlueprint: store.teachingBlueprint || undefined,
+    knowledgeScope: store.knowledgeScope || 'both'
   }
 }
 

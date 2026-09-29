@@ -2,7 +2,33 @@
   <div class="workbench">
     <LessonContextBar />
 
-    <div class="wb-body" :class="{ 'is-side-collapsed': sideCollapsed }">
+    <div class="wb-body" :class="{ 'is-side-collapsed': sideCollapsed, 'is-rail-open': railOpen }">
+      <!-- 左栏：课程历史 ⇄ 版本时间线。
+           默认收起，展开时**浮在对话之上**而不是挤占宽度 ——
+           对话始终是主舞台，换课/回退是低频动作，不值得长期占着宽度。 -->
+      <button
+        v-if="!railOpen"
+        class="wb-rail-open"
+        type="button"
+        title="课程历史与版本时间线"
+        @click="railOpen = true"
+      >
+        <el-icon :size="14"><Fold /></el-icon>
+        <span>课程 / 版本</span>
+      </button>
+
+      <transition name="rail">
+        <aside v-if="railOpen" class="wb-rail">
+          <SideRail
+            :kind="citationKind"
+            :busy="anyRunning"
+            @close="railOpen = false"
+            @switch="onSwitchTask"
+            @revert="onRevert"
+          />
+        </aside>
+      </transition>
+
       <!-- 主舞台：对话。成品是它的附属，不再是并列的两半 -->
       <main class="wb-chat">
         <LessonChat
@@ -41,7 +67,16 @@
         </header>
 
         <div class="wb-side-body">
-          <component :is="currentPanel" />
+          <!-- 蓝图面板要接教师的确认/跳过，单独渲染；其余面板是无状态展示 -->
+          <BlueprintPanel
+            v-if="activeTab === 'blueprint'"
+            :busy="anyRunning || store.blueprintLoading"
+            @confirm="onBlueprintConfirm"
+            @skip="onBlueprintSkip"
+            @regenerate="onBlueprintRegenerate"
+          />
+          <CitationPanel v-else-if="activeTab === 'citation'" :kind="citationKind" />
+          <component v-else :is="currentPanel" />
         </div>
       </section>
 
@@ -70,11 +105,15 @@ import { computed, ref, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   HomeFilled, Files, Document, VideoCamera, TrophyBase,
-  DArrowLeft, DArrowRight
+  DArrowLeft, DArrowRight, Collection, Aim, Link, Fold
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import LessonContextBar from '@/components/lesson/LessonContextBar.vue'
 import LessonChat from '@/components/lesson/LessonChat.vue'
+import BlueprintPanel from '@/components/lesson/BlueprintPanel.vue'
+import TeachingIntentCard from '@/components/lesson/TeachingIntentCard.vue'
+import CitationPanel from '@/components/lesson/CitationPanel.vue'
+import SideRail from '@/components/lesson/SideRail.vue'
 import OverviewPanel from '@/components/lesson/panels/OverviewPanel.vue'
 import LessonPlanPanel from '@/components/lesson/panels/LessonPlanPanel.vue'
 import PptPanel from '@/components/lesson/panels/PptPanel.vue'
@@ -84,7 +123,7 @@ import { useLessonStore } from '@/store/lesson'
 import { useArtifactRunner } from '@/composables/useArtifactRunner'
 import {
   generateLessonPlan, generatePpt, generateAnimation, generateGame,
-  reviseLessonPlan, contextPayload
+  reviseLessonPlan, revertVersion, contextPayload
 } from '@/api/lessonArtifacts'
 
 const route = useRoute()
@@ -92,23 +131,34 @@ const store = useLessonStore()
 
 const activeTab = ref('lesson_plan')
 const sideCollapsed = ref(false)
+// 左栏默认收起：换课与回退是低频动作，不该长期占着对话的宽度
+const railOpen = ref(false)
 
 // 顺序按"一节课的产出顺序"排，概览放最后 —— 它是回看用的，不是产出
 const tabs = [
+  { id: 'intent', name: '意图', icon: Aim },
+  { id: 'blueprint', name: '蓝图', icon: Collection },
   { id: 'lesson_plan', name: '教案', icon: Files },
   { id: 'ppt', name: 'PPT', icon: Document },
   { id: 'animation', name: '动画', icon: VideoCamera },
   { id: 'game', name: '游戏', icon: TrophyBase },
+  { id: 'citation', name: '引用', icon: Link },
   { id: 'overview', name: '概览', icon: HomeFilled }
 ]
 
 const panels = {
   overview: OverviewPanel,
+  intent: TeachingIntentCard,
+  blueprint: BlueprintPanel,
+  citation: CitationPanel,
   lesson_plan: LessonPlanPanel,
   ppt: PptPanel,
   animation: AnimationPanel,
   game: GamePanel
 }
+/** 引用面板要看的是"哪一类产物"的依据；放在非产物页时回落到教案 */
+const citationKind = computed(() =>
+  activeTab.value in runners ? activeTab.value : 'lesson_plan')
 const currentPanel = computed(() => panels[activeTab.value] || OverviewPanel)
 
 // 四个执行器各持一份，但 running 从 store 派生，
@@ -153,6 +203,81 @@ async function ensureTask() {
   return Boolean(store.taskId)
 }
 
+// 蓝图确认前"待生成"的产物类型。教师可能从对话里说"生成PPT"进到这里，
+// 点确认后要生成的就是它，而不是默认教案。
+let pendingKinds = []
+
+/**
+ * 蓝图闸门：**默认生成、可确认、可跳过、失败不拦截**。
+ *
+ * 返回 true 表示"已把决定权交给教师，本次先不生成"；
+ * 返回 false 表示可以直接生成。
+ */
+async function ensureBlueprint(kind) {
+  const st = store.blueprintStatus
+  if (st === 'confirmed' || st === 'skipped') return false   // 教师已表态
+  if (!runners[kind]) return false
+
+  pendingKinds = [kind]
+  if (!store.hasBlueprint) {
+    const r = await store.requestLessonBlueprint()
+    if (!r.ok) {
+      // 蓝图失败**不能**拦住生成：面板上永远留着"直接生成"这个出口
+      ElMessage.warning({
+        message: `${r.error || '蓝图未能生成'} —— 可以直接生成，也可以稍后重试`,
+        duration: 5000
+      })
+    } else if (r.degraded) {
+      ElMessage.info({ message: '蓝图用了通用骨架，可以改成你想要的环节', duration: 4000 })
+    }
+  }
+  openPanel('blueprint')
+  return true
+}
+
+async function runGenerate(kinds) {
+  if (!(await ensureTask())) {
+    ElMessage.error('课程同步失败，请刷新页面重试')
+    return
+  }
+  store.workflow = { ...store.workflow, state: 'generating' }
+  for (const kind of kinds) {
+    const runner = runners[kind]
+    if (!runner || runner.running.value) continue
+    // 生成时把成品栏让出来看进度
+    activeTab.value = kind
+    const ok = await runner.run(() => GENERATORS[kind](contextPayload(store)))
+    if (ok) ElMessage.success('生成完成')
+    else ElMessage.error(store.artifacts[kind]?.error || '生成失败')
+  }
+  const failed = kinds.some((k) => store.artifacts[k]?.status === 'failed')
+  store.workflow = { ...store.workflow, state: failed ? 'failed' : 'completed' }
+  pendingKinds = []
+}
+
+function kindsToRun() {
+  const list = pendingKinds.filter((k) => runners[k])
+  return list.length ? list : [activeTab.value in runners ? activeTab.value : 'lesson_plan']
+}
+
+function onBlueprintConfirm() {
+  if (!store.confirmBlueprint()) {
+    // 没有蓝图却点了确认（理论上不会）：按跳过处理，不卡住教师
+    store.skipBlueprint()
+  }
+  runGenerate(kindsToRun())
+}
+
+function onBlueprintSkip() {
+  store.skipBlueprint()
+  runGenerate(kindsToRun())
+}
+
+async function onBlueprintRegenerate() {
+  const r = await store.requestLessonBlueprint()
+  if (!r.ok) ElMessage.warning(r.error || '蓝图未能生成，可以直接生成')
+}
+
 async function handleGenerate(kind) {
   if (!store.ready) {
     // 这条提示要能教会新手怎么做，而不是只宣布一个失败。
@@ -163,17 +288,30 @@ async function handleGenerate(kind) {
     })
     return
   }
-  const runner = runners[kind]
-  if (!runner || runner.running.value) return
-  if (!(await ensureTask())) {
-    ElMessage.error('课程同步失败，请刷新页面重试')
+  // 先过蓝图这一关；教师要直接生成时它会放行
+  if (await ensureBlueprint(kind)) return
+  await runGenerate([kind])
+}
+
+/** 左栏换课完成后的收尾：课切走了，蓝图也要跟着换（不能拿上一节课的蓝图去生成） */
+function onSwitchTask({ ok }) {
+  if (!ok) {
+    ElMessage.warning('切换课程失败，仍停留在当前这节课')
     return
   }
-  // 生成时把成品栏让出来看进度；但不动用户已经收起的意图之外的布局
-  activeTab.value = kind
-  const ok = await runner.run(() => GENERATORS[kind](contextPayload(store)))
-  if (ok) ElMessage.success('生成完成')
-  else ElMessage.error(store.artifacts[kind]?.error || '生成失败')
+  store.discardBlueprint()
+  railOpen.value = false
+}
+
+async function onRevert(version) {
+  const kind = citationKind.value
+  const runner = runners[kind]
+  if (!runner || runner.running.value) return
+  if (!(await ensureTask())) return
+  const ok = await runner.run(() =>
+    revertVersion({ lessonId: store.taskId, kind, version, ctx: contextPayload(store) }))
+  if (ok) ElMessage.success(`已回到第 ${version} 版`)
+  else ElMessage.error(store.artifacts[kind]?.error || '回退失败')
 }
 
 async function handleRevise({ kind, instruction }) {
@@ -277,8 +415,8 @@ onMounted(async () => {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: rgba(8, 12, 33, 0.72);
-  border: 1px solid rgba(0, 200, 255, 0.14);
+  background: var(--wb-surface);
+  border: 1px solid var(--wb-border);
   border-radius: 16px;
   overflow: hidden;
 }
@@ -288,7 +426,7 @@ onMounted(async () => {
   align-items: center;
   gap: 2px;
   padding: 8px 8px 8px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid var(--wb-border);
   flex: none;
 }
 
@@ -300,18 +438,18 @@ onMounted(async () => {
   background: transparent;
   border: 1px solid transparent;
   border-radius: 9px;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--wb-text-3);
   font-size: 12.5px;
   font-family: inherit;
   cursor: pointer;
   transition: all 0.18s ease;
 
-  &:hover { background: rgba(0, 200, 255, 0.08); color: #fff; }
+  &:hover { background: var(--wb-hover); color: var(--wb-text); }
 
   &.active {
-    background: rgba(0, 200, 255, 0.14);
-    border-color: rgba(0, 200, 255, 0.38);
-    color: #fff;
+    background: var(--wb-hover);
+    border-color: var(--wb-border-strong);
+    color: var(--wb-text);
   }
 }
 
@@ -322,7 +460,7 @@ onMounted(async () => {
   width: 28px;
   height: 28px;
   margin-left: auto;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--wb-text-3);
   background: transparent;
   border: 1px solid transparent;
   border-radius: 8px;
@@ -335,6 +473,56 @@ onMounted(async () => {
     border-color: rgba(0, 200, 255, 0.3);
   }
 }
+
+/* 左栏：浮在对话之上，宽度不参与 grid —— 展开时对话一像素都不让 */
+.wb-rail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 300px;
+  max-width: 82vw;
+  z-index: 20;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--wb-surface);
+  border: 1px solid var(--wb-border-strong);
+  box-shadow: var(--wb-shadow);
+}
+
+.wb-rail-open {
+  position: absolute;
+  top: 8px;
+  left: 0;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 6px;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--wb-text-3);
+  background: var(--wb-surface);
+  border: 1px solid var(--wb-border);
+  border-left: none;
+  border-radius: 0 10px 10px 0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  span { writing-mode: vertical-rl; }
+
+  &:hover {
+    color: var(--wb-text);
+    background: var(--wb-hover);
+    border-color: var(--wb-border-strong);
+  }
+}
+
+.rail-enter-active,
+.rail-leave-active { transition: transform 0.2s ease, opacity 0.2s ease; }
+.rail-enter-from,
+.rail-leave-to { transform: translateX(-12px); opacity: 0; }
 
 .wb-side-body {
   flex: 1;
@@ -363,9 +551,9 @@ onMounted(async () => {
   font-family: inherit;
   font-size: 12px;
   letter-spacing: 0.08em;
-  color: rgba(255, 255, 255, 0.55);
-  background: rgba(8, 12, 33, 0.92);
-  border: 1px solid rgba(0, 200, 255, 0.28);
+  color: var(--wb-text-3);
+  background: var(--wb-surface);
+  border: 1px solid var(--wb-border-strong);
   border-right: none;
   border-radius: 10px 0 0 10px;
   cursor: pointer;
@@ -375,8 +563,8 @@ onMounted(async () => {
   span { writing-mode: vertical-rl; }
 
   &:hover {
-    color: #fff;
-    background: rgba(0, 200, 255, 0.16);
+    color: var(--wb-text);
+    background: var(--wb-hover);
   }
 }
 
@@ -429,6 +617,56 @@ onMounted(async () => {
   .workbench { padding: 12px 12px 16px; gap: 12px; }
   .wb-chat { min-height: 70vh; }
   .wb-tab-name { display: none; }
-  .wb-side-body { padding: 12px; }
+  /* 左栏：浮在对话之上，宽度不参与 grid —— 展开时对话一像素都不让 */
+.wb-rail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 300px;
+  max-width: 82vw;
+  z-index: 20;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--wb-surface);
+  border: 1px solid var(--wb-border-strong);
+  box-shadow: var(--wb-shadow);
+}
+
+.wb-rail-open {
+  position: absolute;
+  top: 8px;
+  left: 0;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 6px;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--wb-text-3);
+  background: var(--wb-surface);
+  border: 1px solid var(--wb-border);
+  border-left: none;
+  border-radius: 0 10px 10px 0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  span { writing-mode: vertical-rl; }
+
+  &:hover {
+    color: var(--wb-text);
+    background: var(--wb-hover);
+    border-color: var(--wb-border-strong);
+  }
+}
+
+.rail-enter-active,
+.rail-leave-active { transition: transform 0.2s ease, opacity 0.2s ease; }
+.rail-enter-from,
+.rail-leave-to { transform: translateX(-12px); opacity: 0; }
+
+.wb-side-body { padding: 12px; }
 }
 </style>
