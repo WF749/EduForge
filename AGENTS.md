@@ -28,7 +28,7 @@ Vue3 + FastAPI 单体，后端托管前端构建产物，教案/PPT/动画/游�
 8. **不要为了"顺手"引入新依赖**。先查 `pyproject.toml` / `frontend/package.json`，
    能复用现有能力就复用；确需新增，在 PR/提交信息里说明理由。
 9. **不要擅自 `git commit` 或 `git push`**。改动留在工作区，由用户自己验证后再决定提交；
-   只有用户明确说"提交""推送"时才执行。**提交前先跑通下面的 751 项验证。**
+   只有用户明确说"提交""推送"时才执行。**提交前先跑通下面的 988 项验证。**
 
 ## 目录地图（按需读，不要全读）
 
@@ -54,22 +54,23 @@ PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_tasks.py
 PYTHONPATH=backend uv run --project backend python scripts/smoke_llm_service.py         # 14 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_artifact_versions.py   # 53 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_plan_revise.py  # 37 项
-PYTHONPATH=backend uv run --project backend python scripts/smoke_api_contract.py        # 13 项
+PYTHONPATH=backend uv run --project backend python scripts/smoke_api_contract.py        # 14 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_offline_artifact.py    # 27 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_teaching_review.py     # 27 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_tutor.py        # 49 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_lesson_docx.py         # 35 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_knowledge_base.py      # 56 项
 PYTHONPATH=backend uv run --project backend python scripts/smoke_rag_seed_sync.py    # 31 项
-PYTHONPATH=backend uv run --project backend python scripts/smoke_course_knowledge.py  # 32 项
+PYTHONPATH=backend uv run --project backend python scripts/smoke_teaching_workflow.py   # 209 项
+PYTHONPATH=backend uv run --project backend python scripts/smoke_course_knowledge.py  # 41 项
 node scripts/smoke_chat_action.mjs                                                      # 45 项
 node scripts/smoke_dialogue_fields.mjs                                                  # 25 项
-node scripts/smoke_lesson_intent.mjs                                                    # 47 项
+node scripts/smoke_lesson_intent.mjs                                                    # 65 项
 node scripts/smoke_speech.mjs                                                           # 21 项
 node scripts/smoke_markdown_code.mjs                                                    # 23 项
 ```
 
-**当前基线：751 项全绿（70 + 77 + 29 + 40 + 14 + 53 + 37 + 13 + 27 + 27 + 49 + 35 + 56 + 31 + 32 + 45 + 25 + 47 + 21 + 23）。跑出红色必须修到绿，或明确说明为什么基线要变。**
+**当前基线：988 项全绿（70 + 77 + 29 + 40 + 14 + 53 + 37 + 14 + 27 + 27 + 49 + 35 + 56 + 31 + 41 + 209 + 45 + 25 + 65 + 21 + 23）。跑出红色必须修到绿，或明确说明为什么基线要变。**
 
 改动前端后额外确认：`git status` 里**不应出现** `frontend/dist/`（它不在版本控制内）。
 
@@ -146,6 +147,9 @@ node scripts/smoke_markdown_code.mjs                                            
   **Python 的 repr 印进 Word**（线上真的产出过 `{'具体目标': "能准确说出…`）；
   `- ` 伪列表在 Word 里只是破折号，多行缩进靠空格硬凑。
   测试拿这三种**真实出现过的坏输入**去建文档，再反过来查产物里没有这些痕迹。
+- 动了深浅色主题（`store/theme.js`、`assets/styles/main.scss` 的 `--wb-*` token）→
+  组件里**不许再写** `rgba(255,255,255,0.x)`：那套硬编码正是"浅色主题是死代码"的根因。
+  新增组件一律用 token；改完必须**两个主题各看一遍**（顶栏图标切换，刷新后应保持）。
 - 动了预置知识库（`knowledge_base/`）或检索评测集（`evals/rag_eval_set.jsonl`）→
   必跑 `smoke_knowledge_base.py`，并跑一次 `make eval`。
   **预置知识库是交付内容**：教师的第一次备课不该以"先上传资料"为前提。
@@ -162,6 +166,13 @@ node scripts/smoke_markdown_code.mjs                                            
      origin=upload 两个字段表达同一件事，种子靠"恰好没写 origin"侥幸存活）；
   ③ 文件改了要重建、文件删了要移除（曾只看 id 在不在，改了查不到新的、
      删了还在检索旧的，两头都静默）。
+- 动了教学意图 / 蓝图 / 工作流（`app/services/teaching_{intent,blueprint,workflow}.py`、
+  `app/api/teaching.py`）→ 必跑 `smoke_teaching_workflow.py`。它钉的都属于
+  **"操作成功、内容却是错的"**：① 台账里意图与扁平字段必须收敛成一份真值
+  （曾出现同一节课两个主题，且不报错）；② 只有 `status=confirmed` 的蓝图
+  才注入四路（草稿/跳过不得指导生成，响应也不许报 used=True）；
+  ③ 同一节课的四路必须共用同一份知识**快照**，不是各检索一遍；
+  ④ 状态恢复：`generating` 从台账读出来必须降级成 `failed(recoverable)`。
 - 动了"四路生成取知识"（`app/services/course_knowledge.py`）→ 必跑
   `smoke_course_knowledge.py`。它钉的是**四路必须共用同一份课程知识上下文**：
   教案/PPT/动画/游戏此前完全不查知识库，同一节课能给出四套互不一致的说法。
