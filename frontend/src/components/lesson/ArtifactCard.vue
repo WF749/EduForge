@@ -209,7 +209,7 @@ async function openPreview() {
   .ac-name {
     font-size: 16px;
     font-weight: 600;
-    color: #fff;
+    color: var(--wb-text);
   }
 
   .ac-summary {
@@ -221,7 +221,7 @@ async function openPreview() {
 .ac-meta {
   margin-top: 4px;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--wb-text-3);
 }
 
 .ac-error {

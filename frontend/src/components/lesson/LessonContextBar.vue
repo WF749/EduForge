@@ -212,7 +212,7 @@ async function confirmReset() {
   .ctx-summary {
     flex: none;
     font-size: 12.5px;
-    color: rgba(255, 255, 255, 0.45);
+    color: var(--wb-text-3);
     white-space: nowrap;
 
     b { color: rgba(0, 200, 255, 0.8); font-weight: 500; }
@@ -228,7 +228,7 @@ async function confirmReset() {
   flex-direction: column;
   gap: 12px;
   padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  border-top: 1px solid var(--wb-border);
 }
 
 .ctx-row {
@@ -259,7 +259,7 @@ async function confirmReset() {
 
   .ctx-label, .ctx-unit {
     font-size: 13px;
-    color: rgba(255, 255, 255, 0.55);
+    color: var(--wb-text-2);
     white-space: nowrap;
   }
 }

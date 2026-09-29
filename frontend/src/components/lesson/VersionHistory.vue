@@ -149,7 +149,7 @@ watch(() => [store.taskId, store.artifacts[props.kind]?.at], load)
   align-items: center;
   gap: 8px;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--wb-text-2);
 
   .vb-title {
     font-weight: 600;
@@ -173,13 +173,13 @@ watch(() => [store.taskId, store.artifacts[props.kind]?.at], load)
   padding-left: 18px;
   font-size: 12px;
   line-height: 1.7;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--wb-text-2);
 }
 
 .vb-history {
   :deep(.el-collapse-item__header) {
     font-size: 12px;
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--wb-text-2);
   }
 }
 
@@ -201,7 +201,7 @@ watch(() => [store.taskId, store.artifacts[props.kind]?.at], load)
 
   .rv-no {
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.85);
+    color: var(--wb-text);
     min-width: 32px;
   }
 

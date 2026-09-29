@@ -141,7 +141,7 @@ async function load() {
   flex-direction: column;
   gap: 18px;
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.78);
+  color: var(--wb-text-2);
 }
 
 .ctx-lead {
@@ -168,7 +168,7 @@ async function load() {
   margin: 0 0 8px;
   font-size: 13px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--wb-text);
 }
 
 .ctx-list {
@@ -186,7 +186,7 @@ async function load() {
   dt {
     flex: none;
     width: 76px;
-    color: rgba(255, 255, 255, 0.42);
+    color: var(--wb-text-3);
   }
 
   dd {
@@ -194,7 +194,7 @@ async function load() {
     flex: 1;
     word-break: break-word;
 
-    &.is-empty { color: rgba(255, 255, 255, 0.25); }
+    &.is-empty { color: var(--wb-text-3); }
   }
 }
 
@@ -214,7 +214,7 @@ async function load() {
   }
 
   .ca-name { flex: 1; }
-  .ca-status { color: rgba(255, 255, 255, 0.45); }
+  .ca-status { color: var(--wb-text-3); }
 }
 
 .ca-dot {
@@ -222,7 +222,7 @@ async function load() {
   height: 7px;
   border-radius: 50%;
   flex: none;
-  background: rgba(255, 255, 255, 0.22);
+  background: var(--wb-border-strong);
 
   &.dot-done { background: #00ff88; }
   &.dot-running { background: #00c8ff; }
@@ -233,7 +233,7 @@ async function load() {
   margin: 8px 0 0;
   font-size: 12px;
   line-height: 1.7;
-  color: rgba(255, 255, 255, 0.42);
+  color: var(--wb-text-3);
 
   b { color: rgba(0, 200, 255, 0.9); }
 }
@@ -247,7 +247,7 @@ async function load() {
   line-height: 1.7;
   white-space: pre-wrap;
   word-break: break-word;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--wb-text-2);
   background: rgba(0, 0, 0, 0.35);
   border-radius: 8px;
 }
@@ -266,13 +266,13 @@ async function load() {
   .el-drawer__header {
     margin-bottom: 0;
     padding: 16px 20px;
-    color: #fff;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--wb-text);
+    border-bottom: 1px solid var(--wb-border);
   }
 
   .el-drawer__title {
     font-size: 15px;
-    color: #fff;
+    color: var(--wb-text);
   }
 
   .el-drawer__body {
@@ -280,7 +280,7 @@ async function load() {
     background: #0a0e27;
   }
 
-  .el-drawer__close-btn { color: rgba(255, 255, 255, 0.6); }
+  .el-drawer__close-btn { color: var(--wb-text-2); }
 
   .el-collapse {
     border-top: none;
@@ -290,8 +290,8 @@ async function load() {
   .el-collapse-item__header,
   .el-collapse-item__wrap {
     background: transparent;
-    border-color: rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.72);
+    border-color: var(--wb-border);
+    color: var(--wb-text-2);
     font-size: 12.5px;
   }
 
