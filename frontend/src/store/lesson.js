@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, reactive, computed, watch } from 'vue'
 import { upsertTask, fetchTask, putArtifact, fetchTasks, archiveTask } from '@/api/lessonTasks'
+import { requestBlueprint } from '@/api/teaching'
 
 /**
  * 「一节课」的上下文与产物台账。
@@ -91,6 +92,32 @@ export const useLessonStore = defineStore('lesson', () => {
   const animationMinutes = ref(5)
   const gameType = ref('选择题')
 
+  // ---- 教学意图 / 蓝图 / 工作流（2026-09-25 新增）------------------------
+  // ⚠️ 单一真值：topic/subject/grade/duration/difficulty **只存在上面的扁平 ref 里**。
+  // teachingIntent 只保存"扁平字段之外的扩展"（目标、知识点、重难点、方法…），
+  // 发出去时由 intentPayload 把扁平字段覆盖上去 ——
+  // 否则教师改了主题而意图里还是旧的，同一节课会有两个主题，生成依据不明。
+  const intentExtras = reactive({
+    goals: [],
+    knowledgePoints: [],
+    focusPoints: [],
+    hardPoints: [],
+    methods: [],
+    interactions: [],
+    artifactKinds: [],
+    stylePreference: '',
+    learnerNote: '',
+    constraints: ''
+  })
+  const teachingBlueprint = ref(null)   // { status, stages, summary, source, error, ... }
+  const blueprintLoading = ref(false)
+  const knowledgeScope = ref('both')    // system | personal | both | none
+  const workflow = ref({ state: 'collecting', missingFields: [], activeKinds: [] })
+
+  const blueprintStatus = computed(() => teachingBlueprint.value?.status || '')
+  const hasBlueprint = computed(() => Array.isArray(teachingBlueprint.value?.stages)
+    && teachingBlueprint.value.stages.length > 0)
+
   // ---- 持久化 -------------------------------------------------------------
   let hydrated = false
 
@@ -108,6 +135,11 @@ export const useLessonStore = defineStore('lesson', () => {
         pptTheme: pptTheme.value,
         animationMinutes: animationMinutes.value,
         gameType: gameType.value,
+        // 只存结构化状态与摘要，不存任何产物正文
+        intentExtras,
+        teachingBlueprint: teachingBlueprint.value,
+        knowledgeScope: knowledgeScope.value,
+        workflow: workflow.value,
         artifacts
       }))
     } catch {
@@ -133,6 +165,25 @@ export const useLessonStore = defineStore('lesson', () => {
       if (typeof saved.pptTheme === 'string') pptTheme.value = saved.pptTheme
       if (Number.isFinite(saved.animationMinutes)) animationMinutes.value = saved.animationMinutes
       if (typeof saved.gameType === 'string') gameType.value = saved.gameType
+      if (saved.intentExtras && typeof saved.intentExtras === 'object') {
+        for (const k of Object.keys(intentExtras)) {
+          const v = saved.intentExtras[k]
+          if (Array.isArray(v)) intentExtras[k] = v.slice(0, 12)
+          else if (typeof v === 'string') intentExtras[k] = v
+        }
+      }
+      if (saved.teachingBlueprint && typeof saved.teachingBlueprint === 'object') {
+        teachingBlueprint.value = saved.teachingBlueprint
+      }
+      if (typeof saved.knowledgeScope === 'string') knowledgeScope.value = saved.knowledgeScope
+      if (saved.workflow && typeof saved.workflow === 'object') {
+        // 与后端 restore 同一套语义：进程早就没了，恢复成"生成中"会永远转圈
+        const st = saved.workflow.state
+        workflow.value = (st === 'generating' || st === 'reviewing')
+          ? { state: 'failed', missingFields: [], activeKinds: [],
+              lastError: { stage: 'restore', message: '上次生成被中断，请重新生成', recoverable: true } }
+          : saved.workflow
+      }
       if (saved.artifacts) {
         for (const a of ARTIFACTS) {
           const src = saved.artifacts[a.id]
@@ -149,7 +200,8 @@ export const useLessonStore = defineStore('lesson', () => {
 
   hydrate()
   watch([topic, subject, grade, duration, difficulty, keyPoints, referenceFiles,
-    pptTheme, animationMinutes, gameType, artifacts], persist, { deep: true })
+    pptTheme, animationMinutes, gameType, artifacts,
+    intentExtras, teachingBlueprint, knowledgeScope, workflow], persist, { deep: true })
 
   // ---- 后端台账同步 -------------------------------------------------------
   // 先读本地存档保证首屏立刻有内容，再异步去后端拉权威版本覆盖。
@@ -178,7 +230,11 @@ export const useLessonStore = defineStore('lesson', () => {
           pptTheme: pptTheme.value,
           animationMinutes: animationMinutes.value,
           gameType: gameType.value
-        }
+        },
+        // 新增三字段**可选**：后端按子白名单归一化，不传就与以前完全一致
+        teachingIntent: intentPayload(),
+        teachingBlueprint: teachingBlueprint.value || undefined,
+        workflow: workflow.value || undefined
       })
       const isNew = !taskId.value
       taskId.value = task.id
@@ -271,6 +327,21 @@ export const useLessonStore = defineStore('lesson', () => {
             src.status === 'running' ? { status: 'idle', error: '上次生成被中断，请重新生成' } : {})
         }
       }
+      // 教学意图：只回填**扩展字段**。扁平字段上方已经恢复过，
+      // 再让意图覆盖一遍就等于让旧意图改掉教师刚填的主题。
+      if (task.teachingIntent && typeof task.teachingIntent === 'object') {
+        for (const k of Object.keys(intentExtras)) {
+          const v = task.teachingIntent[k]
+          if (Array.isArray(v)) intentExtras[k] = v.slice(0, 12)
+          else if (typeof v === 'string') intentExtras[k] = v
+        }
+      }
+      if (task.teachingBlueprint && typeof task.teachingBlueprint === 'object') {
+        teachingBlueprint.value = task.teachingBlueprint
+      }
+      if (task.workflow && typeof task.workflow === 'object') {
+        workflow.value = task.workflow
+      }
       return true
     } catch {
       return false
@@ -278,7 +349,8 @@ export const useLessonStore = defineStore('lesson', () => {
   }
 
   watch([topic, subject, grade, duration, difficulty, keyPoints, referenceFiles,
-    pptTheme, animationMinutes, gameType], scheduleSync)
+    pptTheme, animationMinutes, gameType,
+    intentExtras, teachingBlueprint, knowledgeScope, workflow], scheduleSync)
 
   // ---- 派生 ---------------------------------------------------------------
   const ready = computed(() => !!topic.value.trim())
@@ -297,6 +369,24 @@ export const useLessonStore = defineStore('lesson', () => {
     const base = keyPoints.value.trim()
     return base ? `${base}\n内容难度：${difficultyLabel.value}` : `内容难度：${difficultyLabel.value}`
   })
+
+  /**
+   * 发给后端的**教学意图**：扁平字段 + 扩展字段。
+   *
+   * 扁平字段写在后面 —— 它们是真值。教师改了主题，这里立刻跟着变，
+   * 不会留下"意图里是旧主题"的第二份真值。
+   */
+  function intentPayload() {
+    return {
+      ...intentExtras,
+      stage: level.value,
+      topic: topic.value,
+      subject: subject.value,
+      grade: grade.value,
+      duration: duration.value,
+      difficulty: difficulty.value
+    }
+  }
 
   const doneCount = computed(
     () => ARTIFACTS.filter(a => artifacts[a.id].status === 'done').length
@@ -317,6 +407,68 @@ export const useLessonStore = defineStore('lesson', () => {
     }
   }
 
+  // ---- 教学蓝图 -----------------------------------------------------------
+  /**
+   * 默认生成蓝图。**失败也必须可继续**：返回 { ok, degraded, error }，
+   * 调用方据此决定展示，但无论如何都保留"直接生成"的出口。
+   */
+  async function requestLessonBlueprint() {
+    if (blueprintLoading.value) return { ok: false, degraded: true, error: '' }
+    blueprintLoading.value = true
+    workflow.value = { ...workflow.value, state: 'blueprint_ready' }
+    try {
+      const d = await requestBlueprint({
+        intent: intentPayload(),
+        scope: knowledgeScope.value,
+        lessonId: taskId.value,
+        topic: topic.value
+      })
+      if (d?.blueprint) {
+        teachingBlueprint.value = { ...d.blueprint, status: d.blueprint.status || 'draft' }
+        workflow.value = { ...workflow.value, state: 'awaiting_confirmation' }
+        return { ok: true, degraded: d.degraded === true, error: d.error || '' }
+      }
+      // 连骨架都没拿到：照旧允许直接生成，只是这次没有蓝图
+      teachingBlueprint.value = null
+      workflow.value = { ...workflow.value, state: 'intent_ready' }
+      return { ok: false, degraded: true, error: d?.error || '蓝图服务未返回内容' }
+    } finally {
+      blueprintLoading.value = false
+    }
+  }
+
+  /** 教师确认蓝图：只有确认过的蓝图才会被注入四路生成 */
+  function confirmBlueprint() {
+    if (!teachingBlueprint.value) return false
+    teachingBlueprint.value = { ...teachingBlueprint.value, status: 'confirmed' }
+    workflow.value = { ...workflow.value, state: 'generating' }
+    return true
+  }
+
+  /** 教师点"直接生成"：跳过蓝图，不拦人 */
+  function skipBlueprint() {
+    if (teachingBlueprint.value) {
+      teachingBlueprint.value = { ...teachingBlueprint.value, status: 'skipped' }
+    }
+    workflow.value = { ...workflow.value, state: 'generating' }
+  }
+
+  /** 教师改了蓝图（增删改环节）：改完回到未确认，避免"改了却仍按旧版生成" */
+  function setBlueprintStages(stages) {
+    if (!teachingBlueprint.value) return
+    teachingBlueprint.value = {
+      ...teachingBlueprint.value,
+      stages,
+      status: 'draft',
+      source: 'teacher'
+    }
+  }
+
+  function discardBlueprint() {
+    teachingBlueprint.value = null
+    workflow.value = { ...workflow.value, state: 'collecting' }
+  }
+
   /** 换一节课：上下文与产物台账一起清空 */
   function resetLesson() {
     taskId.value = ''
@@ -331,6 +483,12 @@ export const useLessonStore = defineStore('lesson', () => {
     pptTheme.value = '蓝色系'
     animationMinutes.value = 5
     gameType.value = '选择题'
+    // 换课时教学意图只保留"结构性空壳"，不带上一节课的目标与知识点过来
+    for (const k of Object.keys(intentExtras)) {
+      intentExtras[k] = Array.isArray(intentExtras[k]) ? [] : ''
+    }
+    teachingBlueprint.value = null
+    workflow.value = { state: 'collecting', missingFields: [], activeKinds: [] }
     for (const a of ARTIFACTS) Object.assign(artifacts[a.id], emptyArtifact())
   }
 
@@ -387,9 +545,13 @@ export const useLessonStore = defineStore('lesson', () => {
     ready, difficultyLabel, level, referenceIds, keyPointList, requirementsText,
     doneCount, runningCount,
     recentTasks,
+    intentExtras, teachingBlueprint, blueprintStatus, hasBlueprint, blueprintLoading,
+    knowledgeScope, workflow, intentPayload,
     setContext, resetLesson, addReference, removeReference,
     setArtifact, resetArtifact, applyQuery, toQuery, persist,
     syncContext, pushArtifact, restoreFromServer,
-    loadRecent, switchTask, setArchived
+    loadRecent, switchTask, setArchived,
+    requestLessonBlueprint, confirmBlueprint, skipBlueprint,
+    setBlueprintStages, discardBlueprint
   }
 })
