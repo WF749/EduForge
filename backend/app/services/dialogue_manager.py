@@ -10,12 +10,21 @@ from .intent_service import intent_service
 
 
 class DialogueState(Enum):
-    """对话状态枚举"""
+    """对话状态枚举
+
+    ⚠️ 只追加、不改动、不删除已有成员：
+      教学工作流（services/teaching_workflow.py）会把自己的状态映射到这套枚举上，
+      老数据里存的 "initial"/"clarifying"/… 也必须能继续解析。
+      REVIEWING 与 FAILED 是 2026-09-25 为教学工作流**新增**的，
+      原五个成员的值与语义完全不变。
+    """
     INITIAL = "initial"           # 初始状态
     CLARIFYING = "clarifying"     # 澄清/追问中
     CONFIRMING = "confirming"     # 确认中
     EXECUTING = "executing"       # 执行中
     COMPLETED = "completed"       # 已完成
+    REVIEWING = "reviewing"       # 质量检查中（教学工作流新增）
+    FAILED = "failed"             # 失败但可恢复（教学工作流新增）
 
 
 @dataclass
