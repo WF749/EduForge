@@ -1,584 +1,544 @@
 <template>
-  <div class="app-wrapper">
-    <!-- 背景效果 -->
-    <div class="bg-grid"></div>
-    <div class="bg-gradient"></div>
-    <ParticleBackground />
-
-    <!-- 顶部导航 -->
-    <header class="app-header">
-      <div class="header-left">
-        <div class="logo-container">
-          <div class="logo-icon">
-            <svg viewBox="0 0 40 40" width="36" height="36">
-              <defs>
-                <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stop-color="#00c8ff"/>
-                  <stop offset="50%" stop-color="#00ff88"/>
-                  <stop offset="100%" stop-color="#7c3aed"/>
-                </linearGradient>
-              </defs>
-              <circle cx="20" cy="20" r="18" fill="none" stroke="url(#logoGradient)" stroke-width="2.5"/>
-              <circle cx="20" cy="20" r="10" fill="url(#logoGradient)" opacity="0.3"/>
-              <circle cx="20" cy="20" r="5" fill="url(#logoGradient)"/>
-              <circle cx="20" cy="12" r="2" fill="#fff" opacity="0.8"/>
-            </svg>
-          </div>
-          <div class="logo-text">
-            <span class="brand-name">EduForge</span>
-            <span class="brand-tag">AI教学智能体</span>
-          </div>
-        </div>
+  <div class="shell" :class="{ 'shell--collapsed': collapsed }">
+    <!-- 侧边导航：桌面常驻，移动端换成底部 Tab -->
+    <aside class="shell__nav" :aria-label="'主导航'">
+      <div class="brand" @click="$router.push('/')">
+        <span class="brand__mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
+            <path d="M12 3 3 7.5l9 4.5 9-4.5L12 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+            <path d="M5 11v5c0 1.7 3.1 3 7 3s7-1.3 7-3v-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span v-show="!collapsed" class="brand__text">
+          <b>EduForge</b>
+          <small>教铸 · 备课工作台</small>
+        </span>
       </div>
 
-      <nav class="header-nav">
-        <router-link
-          v-for="item in navItems"
-          :key="item.path"
-          :to="item.path"
-          class="nav-item"
-          :class="{ active: $route.path === item.path }"
-        >
-          <el-icon :size="18"><component :is="item.icon" /></el-icon>
-          <span>{{ item.name }}</span>
-          <div class="nav-indicator"></div>
-        </router-link>
+      <nav class="nav">
+        <template v-for="group in navGroups" :key="group.label">
+          <p v-show="!collapsed" class="nav__group">{{ group.label }}</p>
+          <router-link
+            v-for="item in group.items"
+            :key="item.path"
+            :to="item.path"
+            class="nav__item"
+            :class="{ 'is-active': isActive(item) }"
+            :title="collapsed ? item.name : ''"
+          >
+            <el-icon :size="18"><component :is="item.icon" /></el-icon>
+            <span v-show="!collapsed" class="nav__label">{{ item.name }}</span>
+            <span v-show="!collapsed && item.ops" class="nav__ops">运维</span>
+          </router-link>
+        </template>
       </nav>
 
-      <div class="header-right">
-        <!-- 系统状态 -->
-        <div class="system-status">
-          <div class="status-item" :class="{ active: hasApiKey }">
-            <span class="status-dot"></span>
-            <span class="status-label">{{ hasApiKey ? '在线' : '演示' }}</span>
-          </div>
-          <!-- 数据流向：常驻展示，让"数据去了哪"每次都看得见 -->
+      <button
+        class="nav__collapse"
+        type="button"
+        :aria-label="collapsed ? '展开导航' : '收起导航'"
+        :aria-expanded="!collapsed"
+        @click="collapsed = !collapsed"
+      >
+        <el-icon :size="16"><component :is="collapsed ? Expand : Fold" /></el-icon>
+        <span v-show="!collapsed">收起</span>
+      </button>
+    </aside>
+
+    <div class="shell__body">
+      <!-- 顶栏：只放全局状态，不放页面操作（页面操作在各页自己的 PageHeader 里） -->
+      <header class="topbar">
+        <div class="topbar__left">
+          <span class="topbar__crumb">{{ currentName }}</span>
+        </div>
+        <div class="topbar__right">
+          <!--
+            生成中指示：只要工作台在跑生成任务，任何页面都能看到。
+            生成会长时间占用后端，别的页面因此变慢 —— 不说清原因，
+            教师只会觉得"系统卡了/坏了"。这是对"为什么慢"的解释，不是装饰。
+          -->
+          <span v-if="runningKinds.length" class="topbar__chip is-running" role="status">
+            <i class="topbar__spinner" aria-hidden="true" />
+            正在生成{{ runningKinds.join('、') }}<span class="topbar__chip-extra"> · 其他页面可能响应较慢</span>
+          </span>
+
+          <!-- 数据流向常驻：让"数据去了哪"每次都看得见 -->
           <DataFlowBadge />
-          <div class="status-item">
-            <el-icon :size="14"><Clock /></el-icon>
-            <span class="status-label">{{ currentTime }}</span>
-          </div>
+          <span class="topbar__chip" :class="{ 'is-demo': !hasApiKey }">
+            <i class="topbar__dot" aria-hidden="true" />
+            {{ hasApiKey ? '模型已配置' : '演示模式' }}
+          </span>
+          <el-dropdown trigger="click" @command="onTheme">
+            <button class="icon-btn" type="button" aria-label="外观设置">
+              <el-icon :size="18"><component :is="themeIcon" /></el-icon>
+            </button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="light" :disabled="theme.mode === 'light'">
+                  浅色
+                </el-dropdown-item>
+                <el-dropdown-item command="dark" :disabled="theme.mode === 'dark'">
+                  深色
+                </el-dropdown-item>
+                <el-dropdown-item command="system" :disabled="theme.mode === 'system'">
+                  跟随系统
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+          <router-link to="/settings" class="icon-btn" aria-label="设置">
+            <el-icon :size="18"><Setting /></el-icon>
+          </router-link>
         </div>
+      </header>
 
-        <!-- 深浅色切换：放在顶栏，全站一致，不用每个页面各找一遍 -->
-        <button
-          class="theme-btn"
-          type="button"
-          :title="theme.isDark ? '切换到浅色' : '切换到深色'"
-          :aria-label="theme.isDark ? '切换到浅色' : '切换到深色'"
-          @click="theme.toggle()"
-        >
-          <el-icon :size="18"><component :is="theme.isDark ? Sunny : Moon" /></el-icon>
+      <!-- 演示模式横幅：不配置 Key 时生成结果是假的，必须提前说清 -->
+      <div v-if="!hasApiKey && !demoDismissed" class="banner" role="status">
+        <el-icon><InfoFilled /></el-icon>
+        <span>
+          当前未配置模型服务的 API Key，生成类功能会返回演示内容。
+          <router-link to="/settings">去设置</router-link>
+        </span>
+        <button class="banner__close" type="button" aria-label="关闭提示" @click="demoDismissed = true">
+          <el-icon :size="14"><Close /></el-icon>
         </button>
-
-        <!-- 设置按钮 -->
-        <router-link to="/settings" class="settings-btn">
-          <el-icon :size="20"><Setting /></el-icon>
-        </router-link>
-      </div>
-    </header>
-
-    <!-- 主内容区 -->
-    <main class="app-main">
-      <router-view v-slot="{ Component }">
-        <transition name="slide-fade" mode="out-in">
-          <keep-alive :include="['ChatView','CoursewareView','AnimationView','GameView','WorkbenchView']">
-            <component :is="Component" />
-          </keep-alive>
-        </transition>
-      </router-view>
-    </main>
-
-    <!-- 底部状态栏 -->
-    <footer class="app-footer">
-      <div class="footer-left">
-        <div class="footer-brand">
-          <svg viewBox="0 0 24 24" width="16" height="16" class="footer-icon">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" fill="none" stroke="currentColor" stroke-width="2"/>
-          </svg>
-          <span>EduForge | AI 教学备课智能体</span>
-        </div>
       </div>
 
-      <div class="footer-center">
-        <span class="copyright">© 2026 EduForge</span>
-      </div>
+      <main class="shell__main" :class="{ 'shell__main--flush': isWorkbench }">
+        <router-view v-slot="{ Component }">
+          <transition name="fade" mode="out-in">
+            <keep-alive :include="KEEP_ALIVE">
+              <component :is="Component" />
+            </keep-alive>
+          </transition>
+        </router-view>
+      </main>
 
-      <div class="footer-right">
-        <div class="tech-stack">
-          <span class="tech-badge vue">Vue 3</span>
-          <span class="tech-badge fastapi">FastAPI</span>
-          <span class="tech-badge ai">AI</span>
-          <span class="tech-badge rag">RAG</span>
-        </div>
-      </div>
-    </footer>
+      <footer class="shell__footer">
+        <span>EduForge · 多模态 AI 互动式教学智能体</span>
+        <span class="wb-muted">Vue 3 · FastAPI · RAG</span>
+      </footer>
+    </div>
+
+    <!-- 移动端底部 Tab -->
+    <nav class="tabbar" aria-label="底部导航">
+      <router-link
+        v-for="item in mobileTabs"
+        :key="item.path"
+        :to="item.path"
+        class="tabbar__item"
+        :class="{ 'is-active': isActive(item) }"
+      >
+        <el-icon :size="20"><component :is="item.icon" /></el-icon>
+        <span>{{ item.name }}</span>
+      </router-link>
+    </nav>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useAppStore } from '@/store/app'
-import ParticleBackground from '@/components/ParticleBackground.vue'
+import { computed, ref, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import {
+  HomeFilled, Collection, FolderOpened,
+  Reading, Setting, Expand, Fold, Close, InfoFilled, Sunny, Moon, Monitor
+} from '@element-plus/icons-vue'
 import DataFlowBadge from '@/components/DataFlowBadge.vue'
+import { useAppStore } from '@/store/app'
 import { useThemeStore } from '@/store/theme'
-// 图标是全局注册的，这里导入只为导航栏数组使用
-import { HomeFilled, Collection, Setting, Clock, Sunny, Moon } from '@element-plus/icons-vue'
+import { ARTIFACTS, useLessonStore } from '@/store/lesson'
 
+/**
+ * 应用外壳：导航 + 顶栏 + 内容 + 页脚。
+ *
+ * 两条刻意的取舍：
+ *  1. **顶栏不放页面操作**。旧版顶栏又是课程切换又是生成按钮，页面自己的
+ *     操作却藏在卡片里，教师要在两个地方找按钮。现在顶栏只放全局状态，
+ *     页面操作一律进各页的 PageHeader。
+ *  2. **工作台不吃外层滚动**（`shell__main--flush`）。工作台是三栏自滚动布局，
+ *     再套一层滚动条会出现"滚到底还有一截"。
+ */
+const route = useRoute()
 const store = useAppStore()
-
-const hasApiKey = computed(() => store.hasApiKey)
-const currentTime = ref('')
-
-// 导航只保留"围绕一节课"的入口。旧的功能页（/chat /courseware /animation /game）
-// 路由仍然保留、可直接访问，只是不再占据导航栏——工作台出问题时有退路。
 const theme = useThemeStore()
 
-const navItems = [
-  { path: '/', name: '备课工作台', icon: HomeFilled },
-  { path: '/knowledge', name: '知识库', icon: Collection },
-  { path: '/history', name: '历史作品', icon: Clock },
+const collapsed = ref(false)
+const demoDismissed = ref(false)
+
+/**
+ * 一级导航只留三组。
+ *
+ * 「生成中心」和「通用问答」**故意不在这里**：
+ * 它们与工作台做的是同一件事（生成四类产物 / 提问），并列会让新手
+ * 第一件事就是"判断该去哪个页面"。两个路由都保留、都能直接访问，
+ * 但入口降为工作台里的次级操作（高级生成设置 / 对话模式切换）。
+ */
+const navGroups = [
+  {
+    label: '备课',
+    items: [
+      { path: '/', name: '工作台', icon: HomeFilled },
+      { path: '/lessons', name: '我的备课', icon: Collection }
+    ]
+  },
+  {
+    label: '资源',
+    items: [
+      { path: '/library', name: '资源库', icon: FolderOpened },
+      { path: '/knowledge', name: '知识库', icon: Reading }
+    ]
+  },
+  {
+    label: '系统',
+    items: [
+      { path: '/compliance', name: '合规中心', icon: 'Lock' },
+      { path: '/settings', name: '设置', icon: Setting },
+      { path: '/system', name: '系统监控', icon: 'Odometer', ops: true }
+    ]
+  }
+]
+
+const mobileTabs = [
+  { path: '/', name: '工作台', icon: HomeFilled },
+  { path: '/lessons', name: '我的备课', icon: Collection },
+  { path: '/library', name: '资源库', icon: FolderOpened },
+  { path: '/knowledge', name: '知识库', icon: Reading },
   { path: '/settings', name: '设置', icon: Setting }
 ]
 
-// 更新时间
-function updateTime() {
-  const now = new Date()
-  currentTime.value = now.toLocaleTimeString('zh-CN', {
-    hour: '2-digit',
-    minute: '2-digit'
-  })
+// 工作台内部自己滚，外层容器不能再垫 padding
+const isWorkbench = computed(() => route.path === '/' || route.path === '/workbench')
+
+const KEEP_ALIVE = ['WorkbenchView', 'LessonsView', 'LibraryView', 'GenerateView', 'AssistantView']
+
+const currentName = computed(() => {
+  const all = navGroups.flatMap(g => g.items)
+  const hit = all.find(i => isActive(i))
+  return hit ? hit.name : ''
+})
+
+const themeIcon = computed(() => {
+  if (theme.mode === 'system') return Monitor
+  return theme.isDark ? Moon : Sunny
+})
+
+const hasApiKey = computed(() => store.hasApiKey)
+
+/**
+ * 正在生成的产物名。
+ *
+ * 直接读备课台账里的 running 状态，不另建一套"忙碌标记" ——
+ * 两套状态迟早会不一致（一个说在跑、一个说空闲），
+ * 而这里的唯一职责就是如实反映"后端正在忙"。
+ */
+const lesson = useLessonStore()
+const runningKinds = computed(() =>
+  ARTIFACTS.filter(a => lesson.artifacts[a.id]?.status === 'running').map(a => a.name))
+
+function isActive(item) {
+  // /generate 与它的五个子类型都算命中"生成中心"
+  if (item.path === '/generate') return route.path.startsWith('/generate')
+  if (item.path === '/') return route.path === '/' || route.path === '/workbench'
+  return route.path === item.path || route.path.startsWith(item.path + '/')
 }
 
-let timeInterval = null
+function onTheme(cmd) {
+  theme.setMode(cmd)
+}
 
-onMounted(async () => {
-  await store.fetchConfig()
-  updateTime()
-  timeInterval = setInterval(updateTime, 1000)
-})
-
-onUnmounted(() => {
-  if (timeInterval) {
-    clearInterval(timeInterval)
-  }
-})
+onMounted(() => store.fetchConfig())
+// 换了模型配置要立刻反映到顶栏的"演示模式"标识上
+watch(() => store.hasApiKey, () => { demoDismissed.value = false })
 </script>
 
-<style lang="scss" scoped>
-.app-wrapper {
+<style scoped>
+.shell {
+  display: flex;
+  height: 100%;
+  background: var(--wb-bg);
+}
+
+/* ---------------- 侧边导航 ---------------- */
+.shell__nav {
+  width: var(--nav-w);
+  flex: 0 0 var(--nav-w);
+  background: var(--wb-surface);
+  border-right: 1px solid var(--wb-border);
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
-  position: relative;
+  transition: width var(--dur) var(--ease), flex-basis var(--dur) var(--ease);
+}
+
+.shell--collapsed .shell__nav {
+  width: var(--nav-w-collapsed);
+  flex-basis: var(--nav-w-collapsed);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  height: var(--topbar-h);
+  padding: 0 var(--sp-4);
+  cursor: pointer;
+  border-bottom: 1px solid var(--wb-border);
+}
+
+.brand__mark {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--brand-soft-2);
+  color: var(--brand-text);
+}
+
+
+.brand__text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
   overflow: hidden;
 }
 
-// 背景效果
-.bg-grid {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-image:
-    linear-gradient(rgba(0, 200, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 200, 255, 0.03) 1px, transparent 1px);
-  background-size: 40px 40px;
-  pointer-events: none;
-  z-index: 0;
-  
-  // 浅色主题适配
-  :root.light & {
-    background-image:
-      linear-gradient(rgba(0, 200, 255, 0.05) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0, 200, 255, 0.05) 1px, transparent 1px);
-  }
-}
+.brand__text b { font-size: var(--fs-md); color: var(--wb-text); }
+.brand__text small { font-size: 11px; color: var(--wb-text-3); }
 
-.bg-gradient {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background:
-    radial-gradient(ellipse at 20% 20%, rgba(0, 200, 255, 0.08) 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 80%, rgba(124, 58, 237, 0.06) 0%, transparent 50%),
-    radial-gradient(ellipse at 50% 50%, rgba(0, 255, 136, 0.04) 0%, transparent 70%);
-  pointer-events: none;
-  z-index: 0;
-  
-  // 浅色主题适配 - 更淡的背景
-  :root.light & {
-    background:
-      radial-gradient(ellipse at 20% 20%, rgba(0, 200, 255, 0.15) 0%, transparent 50%),
-      radial-gradient(ellipse at 80% 80%, rgba(124, 58, 237, 0.08) 0%, transparent 50%),
-      radial-gradient(ellipse at 50% 50%, rgba(0, 255, 136, 0.05) 0%, transparent 70%);
-  }
-}
-
-// 顶部导航
-.app-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 68px;
-  padding: 0 28px;
-  background: rgba(26, 31, 78, 0.98);
-  border-bottom: 1px solid rgba(0, 200, 255, 0.2);
-  position: relative;
-  z-index: 100;
-
-  &::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: linear-gradient(90deg,
-      transparent 0%,
-      rgba(0, 200, 255, 0.5) 20%,
-      rgba(0, 255, 136, 0.5) 50%,
-      rgba(124, 58, 237, 0.5) 80%,
-      transparent 100%
-    );
-  }
-}
-
-.header-left {
-  .logo-container {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-
-    .logo-icon {
-      position: relative;
-      animation: logo-pulse 3s ease-in-out infinite;
-
-      &::before {
-        content: '';
-        position: absolute;
-        inset: -4px;
-        background: radial-gradient(circle, rgba(0, 200, 255, 0.3) 0%, transparent 70%);
-        border-radius: 50%;
-        animation: logo-glow 2s ease-in-out infinite;
-      }
-    }
-
-    .logo-text {
-      display: flex;
-      flex-direction: column;
-
-      .brand-name {
-        font-size: 20px;
-        font-weight: 800;
-        background: linear-gradient(135deg, #00c8ff 0%, #00ff88 50%, #7c3aed 100%);
-        -webkit-background-clip: text;
-        background-clip: text;
-        -webkit-text-fill-color: transparent;
-        color: transparent;
-        background-size: 200% auto;
-        animation: text-gradient 4s ease infinite;
-      }
-
-      .brand-tag {
-        font-size: 11px;
-        color: var(--text-muted);
-        letter-spacing: 1px;
-      }
-    }
-  }
-}
-
-@keyframes logo-pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.02); }
-}
-
-@keyframes logo-glow {
-  0%, 100% { opacity: 0.5; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.1); }
-}
-
-@keyframes text-gradient {
-  0%, 100% { background-position: 0% center; }
-  50% { background-position: 100% center; }
-}
-
-.header-nav {
-  display: flex;
-  gap: 6px;
-
-  .nav-item {
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 20px;
-    border-radius: 10px;
-    color: #c8d0dc;
-    text-decoration: none;
-    font-size: 14px;
-    font-weight: 500;
-    transition: all 0.3s ease;
-
-    .nav-indicator {
-      position: absolute;
-      bottom: 4px;
-      left: 50%;
-      transform: translateX(-50%) scaleX(0);
-      width: 20px;
-      height: 2px;
-      background: linear-gradient(90deg, #00c8ff, #00ff88);
-      border-radius: 1px;
-      transition: transform 0.3s ease;
-    }
-
-    &:hover {
-      background: rgba(0, 200, 255, 0.08);
-      color: var(--primary);
-
-      .nav-indicator {
-        transform: translateX(-50%) scaleX(0.5);
-      }
-    }
-
-    &.active {
-      background: rgba(0, 200, 255, 0.12);
-      color: var(--primary);
-
-      .nav-indicator {
-        transform: translateX(-50%) scaleX(1);
-      }
-    }
-  }
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-
-  .system-status {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 6px 14px;
-    background: rgba(0, 200, 255, 0.08);
-    border: 1px solid rgba(0, 200, 255, 0.15);
-    border-radius: 20px;
-
-    .status-item {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 12px;
-      color: #8b95a5;
-
-      &.active {
-        color: var(--accent);
-      }
-
-      .status-dot {
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: #ff6b6b;
-        transition: background 0.3s ease;
-      }
-
-      &.active .status-dot {
-        background: var(--accent);
-        box-shadow: 0 0 8px var(--accent);
-        animation: status-pulse 2s ease-in-out infinite;
-      }
-
-      .status-label {
-        font-weight: 500;
-      }
-    }
-  }
-
-  // 主题切换按钮与设置按钮同一套尺寸与反馈，避免出现"看着像能点其实不能点"
-  .theme-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    margin-right: 8px;
-    padding: 0;
-    border: 1px solid var(--wb-border);
-    border-radius: 10px;
-    background: var(--wb-surface-2);
-    color: var(--wb-text-2);
-    cursor: pointer;
-    transition: all 0.2s ease;
-
-    &:hover {
-      color: var(--primary);
-      border-color: var(--wb-border-strong);
-      transform: translateY(-1px);
-    }
-    &:active {
-      transform: translateY(0);
-    }
-  }
-
-  .settings-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
-    color: #c8d0dc;
-    text-decoration: none;
-    transition: all 0.3s ease;
-
-    &:hover {
-      background: rgba(0, 200, 255, 0.1);
-      color: var(--primary);
-    }
-  }
-}
-
-@keyframes status-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-// 主内容区
-.app-main {
-  flex: 1;
+.nav {
+  flex: 1 1 auto;
   overflow-y: auto;
-  position: relative;
-  z-index: 1;
-
-  // 自定义滚动条
-  &::-webkit-scrollbar {
-    width: 6px;
-  }
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  &::-webkit-scrollbar-thumb {
-    background: rgba(0, 200, 255, 0.2);
-    border-radius: 3px;
-    &:hover {
-      background: rgba(0, 200, 255, 0.4);
-    }
-  }
+  padding: var(--sp-3) var(--sp-2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-// 底部状态栏
-.app-footer {
+.nav__group {
+  margin: var(--sp-3) var(--sp-2) var(--sp-1);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--wb-text-3);
+}
+
+.nav__item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 9px var(--sp-3);
+  border-radius: var(--radius-sm);
+  color: var(--wb-text-2);
+  font-size: var(--fs-base);
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+
+.nav__item:hover {
+  background: var(--wb-hover);
+  color: var(--wb-text);
+}
+
+.nav__item.is-active {
+  background: var(--wb-active);
+  color: var(--brand-text);
+  font-weight: 600;
+}
+
+
+.nav__label { flex: 1 1 auto; overflow: hidden; white-space: nowrap; }
+
+.nav__ops {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--wb-surface-3);
+  color: var(--wb-text-3);
+}
+
+.nav__collapse {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: var(--sp-2);
+  padding: 8px var(--sp-3);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--wb-text-3);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+
+.nav__collapse:hover { background: var(--wb-hover); color: var(--wb-text); }
+
+/* ---------------- 主体 ---------------- */
+.shell__body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  height: var(--topbar-h);
+  flex: 0 0 var(--topbar-h);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 44px;
-  padding: 0 24px;
-  background: rgba(26, 31, 78, 0.98);
-  border-top: 1px solid rgba(0, 200, 255, 0.2);
-  position: relative;
-  z-index: 1;
+  gap: var(--sp-3);
+  padding: 0 var(--sp-5);
+  background: var(--wb-surface);
+  border-bottom: 1px solid var(--wb-border);
+}
 
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
+.topbar__crumb { font-size: var(--fs-md); font-weight: 600; color: var(--wb-text); }
+.topbar__right { display: flex; align-items: center; gap: var(--sp-3); }
+
+.topbar__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-xs);
+  background: var(--success-bg);
+  color: var(--wb-ok-text);
+}
+
+.topbar__chip.is-demo {
+  background: var(--warning-bg);
+  color: var(--wb-warn-text);
+}
+
+.topbar__chip.is-running {
+  background: var(--brand-soft);
+  color: var(--brand-text);
+}
+
+.topbar__spinner {
+  width: 10px;
+  height: 10px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: topbar-spin 0.8s linear infinite;
+}
+
+@keyframes topbar-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 窄屏保留"正在生成 X"，只砍掉解释性的后半句 —— 状态本身不能藏起来 */
+@media (max-width: 900px) {
+  .topbar__chip-extra { display: none; }
+}
+
+.topbar__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.icon-btn {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--wb-text-2);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+
+.icon-btn:hover { background: var(--wb-hover); color: var(--wb-text); }
+
+/* 演示模式横幅 */
+.banner {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-5);
+  background: var(--warning-bg);
+  color: var(--wb-warn-text);
+  font-size: var(--fs-sm);
+  border-bottom: 1px solid var(--wb-border);
+}
+
+.banner a { color: inherit; font-weight: 600; text-decoration: underline; }
+
+.banner__close {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+}
+
+.shell__main {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* 工作台自己管理滚动，外层不垫 */
+.shell__main--flush { overflow: hidden; }
+
+.shell__footer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-5);
+  border-top: 1px solid var(--wb-border);
+  background: var(--wb-surface);
+  font-size: var(--fs-xs);
+  color: var(--wb-text-3);
+}
+
+/* ---------------- 移动端 ---------------- */
+.tabbar { display: none; }
+
+@media (max-width: 768px) {
+  .shell__nav { display: none; }
+
+  .topbar { padding: 0 var(--sp-3); }
+  .topbar__right :deep(.wb-flow-badge) { display: none; }
+
+  .shell__footer { display: none; }
+
+  .tabbar {
+    display: flex;
+    position: fixed;
     left: 0;
     right: 0;
-    height: 1px;
-    background: linear-gradient(90deg,
-      transparent 0%,
-      rgba(0, 200, 255, 0.3) 30%,
-      rgba(0, 255, 136, 0.3) 70%,
-      transparent 100%
-    );
+    bottom: 0;
+    z-index: 20;
+    background: var(--wb-surface);
+    border-top: 1px solid var(--wb-border);
+    padding-bottom: env(safe-area-inset-bottom);
   }
 
-  .footer-left {
-    .footer-brand {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 12px;
-      color: #8b95a5;
-
-      .footer-icon {
-        color: var(--primary);
-        opacity: 0.6;
-      }
-    }
+  .tabbar__item {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 0;
+    font-size: 11px;
+    color: var(--wb-text-3);
   }
 
-  .footer-center {
-    .copyright {
-      font-size: 11px;
-      color: #8b95a5;
-      opacity: 0.8;
-    }
-  }
+  .tabbar__item.is-active { color: var(--brand-text); font-weight: 600; }
 
-  .footer-right {
-    .tech-stack {
-      display: flex;
-      gap: 8px;
-
-      .tech-badge {
-        padding: 3px 10px;
-        font-size: 11px;
-        font-weight: 600;
-        border-radius: 4px;
-        letter-spacing: 0.5px;
-
-        &.vue {
-          background: rgba(66, 184, 131, 0.15);
-          color: #42b883;
-          border: 1px solid rgba(66, 184, 131, 0.3);
-        }
-
-        &.fastapi {
-background: rgba(0, 150, 136, 0.15);
-          color: #009688;
-          border: 1px solid rgba(0, 150, 136, 0.3);
-        }
-
-        &.ai {
-          background: rgba(124, 58, 237, 0.15);
-          color: #a855f7;
-          border: 1px solid rgba(124, 58, 237, 0.3);
-        }
-
-        &.rag {
-          background: rgba(0, 200, 255, 0.15);
-          color: var(--primary);
-          border: 1px solid rgba(0, 200, 255, 0.3);
-        }
-      }
-    }
-  }
-}
-
-// 路由动画
-.slide-fade-enter-active {
-  transition: all 0.3s ease-out;
-}
-
-.slide-fade-leave-active {
-  transition: all 0.2s ease-in;
-}
-
-.slide-fade-enter-from {
-  opacity: 0;
-  transform: translateY(10px);
-}
-
-.slide-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-10px);
+  .shell__main { padding-bottom: 56px; }
 }
 </style>

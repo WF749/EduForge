@@ -128,7 +128,7 @@ def expand_topic_for_instruction(
 要求：内容必须与「{subject}」和「{topic}」强相关；若主题较宽，请自动聚焦为**一节{duration}分钟课**可完成的子范围。"""
 
     try:
-        raw = llm_service.chat(prompt, [])
+        raw = llm_service.chat(prompt, [], purpose="topic_expansion")
         if not raw or not raw.strip():
             print(f"topic_expansion: LLM返回为空 (topic={topic})")
             return {}

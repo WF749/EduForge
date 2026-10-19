@@ -451,7 +451,7 @@ class CoursewareGeneratorV2:
 }}
 """
         
-        goals_response = llm_service.chat(goals_prompt)
+        goals_response = llm_service.chat(goals_prompt, purpose="courseware_content")
         
         try:
             teaching_goals = json.loads(goals_response)
@@ -503,7 +503,7 @@ class CoursewareGeneratorV2:
 ]
 """
         
-        outline_response = llm_service.chat(outline_prompt)
+        outline_response = llm_service.chat(outline_prompt, purpose="courseware_content")
         
         try:
             outline = json.loads(outline_response)
@@ -599,7 +599,7 @@ class CoursewareGeneratorV2:
     "teaching_notes": "讲解要点"
 }}
 """
-            content_response = llm_service.chat(content_prompt)
+            content_response = llm_service.chat(content_prompt, purpose="courseware_content")
             
             try:
                 content = json.loads(content_response)

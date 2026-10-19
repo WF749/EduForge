@@ -14,8 +14,11 @@ from ...core.crypto import crypto_utils
 from ...core.config import settings
 from ...core.errors import DataEgressBlockedError
 from ...core.harness.exceptions import LLMUnavailableError
+from ...core.logging_setup import get_logger
 import sqlite3
 import os
+
+log = get_logger("llm.service")
 
 
 def _guard(*, prompt: str, history: List[Dict], base_url: str, provider: str) -> Dict[str, Any]:
@@ -250,16 +253,44 @@ class LLMService:
         base_url: Optional[str],
         model: Optional[str],
         temperature: Optional[float],
+        purpose: str = "chat",
+        stage: str = "",
     ) -> Dict[str, Any]:
-        """把调用入参和DB配置合并成运行时配置"""
+        """把调用入参和DB配置合并成运行时配置。
+
+        温度**按本次请求**解析（见 `core.sampling`）：
+          - 调用点明确指定 → 保留（内部约定，不被全局设置覆盖）；
+          - 否则看采样模式：手动用设置页的值，自动按用途/阶段策略；
+          - 模型不接受该参数 → 解析为 None，provider 层整个字段不发。
+        解析只影响返回值，**不改写任何全局配置** —— 并发任务会互相污染。
+        """
+        from ...core.sampling import describe, resolve_temperature
+
         effective_provider = provider or self.get_active_provider()
         cfg = self.get_config(effective_provider) or {}
+        model_name = model if model is not None else cfg.get("model")
+
+        decision = resolve_temperature(
+            purpose=purpose,
+            stage=stage,
+            explicit=temperature,
+            config={
+                "samplingMode": cfg.get("samplingMode"),
+                "temperature": cfg.get("temperature"),
+            },
+            provider=effective_provider,
+            model=model_name,
+        )
+        log.debug(describe(decision))
+
         return {
             "provider": effective_provider,
             "api_key": api_key if api_key is not None else cfg.get("api_key"),
             "base_url": base_url if base_url is not None else cfg.get("base_url"),
-            "model": model if model is not None else cfg.get("model"),
-            "temperature": temperature if temperature is not None else cfg.get("temperature", 0.7),
+            "model": model_name,
+            # 模型不 temperature 时为 None —— provider 层会整个字段不发
+            "temperature": decision.value if decision.sent else None,
+            "sampling": decision.to_dict(),
         }
     
     def chat_completions(
@@ -271,12 +302,14 @@ class LLMService:
         base_url: Optional[str] = None,
         temperature: Optional[float] = None,
         model: Optional[str] = None,
+        purpose: str = "chat",
+        stage: str = "",
     ) -> str:
         """对话生成"""
         import time as _time
         last_error = None
         try:
-            runtime = self._resolve_runtime_config(provider, api_key, base_url, model, temperature)
+            runtime = self._resolve_runtime_config(provider, api_key, base_url, model, temperature, purpose, stage)
             provider_instance = self.get_provider(runtime["provider"])
 
             # 数据流向守卫：PPT / 课件 / 动画 / 游戏生成全走本方法，
@@ -357,10 +390,12 @@ class LLMService:
         base_url: Optional[str] = None,
         temperature: Optional[float] = None,
         model: Optional[str] = None,
+        purpose: str = "chat",
+        stage: str = "",
     ) -> Generator[str, None, None]:
         """流式对话生成"""
         try:
-            runtime = self._resolve_runtime_config(provider, api_key, base_url, model, temperature)
+            runtime = self._resolve_runtime_config(provider, api_key, base_url, model, temperature, purpose, stage)
             provider_instance = self.get_provider(runtime["provider"])
 
             # 数据流向守卫：命中阻断时只产出提示，绝不发出请求 ——
@@ -421,12 +456,14 @@ class LLMService:
         base_url: Optional[str] = None,
         temperature: Optional[float] = None,
         model: Optional[str] = None,
+        purpose: str = "chat",
+        stage: str = "",
     ) -> Generator[str, None, None]:
         """视觉识图流式对话 - 自动路由到对应供应商的视觉API"""
         if history is None:
             history = []
         try:
-            runtime = self._resolve_runtime_config(provider, api_key, base_url, model, temperature)
+            runtime = self._resolve_runtime_config(provider, api_key, base_url, model, temperature, purpose, stage)
             provider_name = runtime["provider"]
 
             # DashScope(通义千问)使用专用 MultiModalConversation API
@@ -560,6 +597,8 @@ class LLMService:
                     "api_key": pe["api_key"],
                     "base_url": pe["base_url"],
                     "model": pe["model"],
+                    # 旧配置没有 samplingMode → core.sampling 一律按自动模式处理
+                    "samplingMode": pe.get("samplingMode"),
                     "temperature": pe["temperature"],
                     "is_active": pe["is_active"],
                 }

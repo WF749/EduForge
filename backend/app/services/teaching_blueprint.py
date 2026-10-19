@@ -421,7 +421,7 @@ def generate_blueprint(
 
     try:
         from .llm_service import llm_service
-        raw = llm_service.chat(prompt, provider=provider) or ""
+        raw = llm_service.chat(prompt, provider=provider, purpose="teaching_blueprint") or ""
     except Exception as e:  # noqa: BLE001 —— 见上方说明：失败不得阻断
         fallback.error = f"蓝图生成调用失败：{type(e).__name__}"
         return fallback

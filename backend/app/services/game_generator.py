@@ -118,7 +118,7 @@ class GameGenerator:
 - 只输出JSON格式数据，不要其他说明文字"""
 
         try:
-            result = llm_service.chat(prompt)
+            result = llm_service.chat(prompt, purpose="game_code")
             # 尝试解析JSON
             import re
             json_match = re.search(r'\{.*\}', result, re.DOTALL)

@@ -1,7 +1,7 @@
 """Anthropic Claude LLM实现"""
 import requests
 from typing import List, Dict, Optional, Any, Generator
-from .base import LLMProviderBase
+from .base import LLMProviderBase, sampling_kwargs
 from .token_limit import resolve_max_tokens
 
 class AnthropicProvider(LLMProviderBase):
@@ -84,7 +84,7 @@ class AnthropicProvider(LLMProviderBase):
         data = {
             "model": model or "claude-3-5-sonnet-latest",
             "messages": messages,
-            "temperature": temperature,
+            **sampling_kwargs(temperature),
             # 教案等长内容需足够大的输出上限，否则会被截断成不完整 JSON
             "max_tokens": resolve_max_tokens()
         }
@@ -142,7 +142,7 @@ class AnthropicProvider(LLMProviderBase):
         data = {
             "model": model or "claude-3-5-sonnet-latest",
             "messages": messages,
-            "temperature": temperature,
+            **sampling_kwargs(temperature),
             "max_tokens": 2048,
             "stream": True
         }

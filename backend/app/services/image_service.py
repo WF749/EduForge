@@ -475,7 +475,7 @@ class ImageService:
 只输出JSON, 不要其他内容。"""
 
         try:
-            response = llm_service.chat(prompt, [])
+            response = llm_service.chat(prompt, [], purpose="structured_extract")
             import json
             # 尝试解析
             text = response.strip()

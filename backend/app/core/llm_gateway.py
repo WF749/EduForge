@@ -35,6 +35,7 @@ from .errors import (
 from .logging_setup import get_logger, set_context
 from .observability import Span, estimate_cost_cny, metrics
 from .providers import build_auth_headers, get_provider, resolve_base_url, resolve_model
+from .sampling import describe as describe_sampling, resolve_temperature
 
 log = get_logger("llm.gateway")
 
@@ -201,11 +202,16 @@ def llm_chat(
     json_mode: bool = False,
     api_key: Optional[str] = None,
     base_url: Optional[str] = None,
+    stage: str = "",
 ) -> str:
     """调用大模型，返回完整文本。失败抛 AppError（绝不返回空串冒充成功）。
 
     `api_key` / `base_url` 用于「保存前试连」：设置页需要拿输入框里尚未落盘的
     Key 探测厂商，此时不能要求用户先保存再测试。
+
+    `purpose` / `stage` 决定本次调用的**任务用途与执行阶段**，供采样策略解析温度。
+    `temperature` 只在调用点**明确指定**时才传（内部约定，如规划/修复/验证），
+    普通调用一律留空走自动策略。
     """
     from ..persist import get_active_llm_settings
 
@@ -218,7 +224,13 @@ def llm_chat(
     custom_base = (base_url or "").strip() or None
     base_url = resolve_base_url(prov_key, custom_base)
     model_name = resolve_model(prov_key, model or cfg.get("model"))
-    temp = cfg.get("temperature") if temperature is None else temperature
+
+    # 采样参数**按本次请求**解析，不改写全局配置 —— 并发任务会互相污染。
+    sampling = resolve_temperature(
+        purpose=purpose, stage=stage, explicit=temperature,
+        config=cfg, provider=prov_key, model=model_name,
+    )
+    log.debug(describe_sampling(sampling))
 
     set_context(agent_name=purpose, step_name=f"{prov_key}/{model_name}")
 
@@ -291,8 +303,8 @@ def llm_chat(
         "messages": messages,
         "stream": False,
     }
-    if temp is not None:
-        payload["temperature"] = float(temp)
+    if sampling.sent:
+        payload["temperature"] = float(sampling.value)
     if max_tokens:
         payload["max_tokens"] = int(max_tokens)
     if json_mode:
@@ -305,7 +317,7 @@ def llm_chat(
     last_exc: Optional[Exception] = None
     for attempt in range(1, max_retries + 2):
         span = Span(kind="llm", name=model_name, provider=prov_key, model=model_name, attempt=attempt,
-                    meta={"purpose": purpose})
+                    meta={"purpose": purpose, "stage": stage, "sampling": sampling.to_dict()})
         try:
             with httpx.Client(timeout=timeout, verify=False) as client:
                 resp = client.post(url, headers=headers, json=payload)
@@ -405,8 +417,13 @@ async def llm_stream(
     model: Optional[str] = None,
     temperature: Optional[float] = None,
     timeout: float = DEFAULT_TIMEOUT,
+    stage: str = "",
 ) -> AsyncIterator[str]:
-    """流式输出。**首包即校验状态码**，错误会以可读文本产出而非静默空白。"""
+    """流式输出。**首包即校验状态码**，错误会以可读文本产出而非静默空白。
+
+    采样策略与 `llm_chat` 完全一致（同一个 resolve_temperature），
+    避免"同步和流式拿到不同的温度"。
+    """
     from ..persist import get_active_llm_settings
 
     cfg = get_active_llm_settings()
@@ -415,7 +432,13 @@ async def llm_stream(
     api_key = cfg.get("api_key") or ""
     base_url = resolve_base_url(prov_key, cfg.get("base_url"))
     model_name = resolve_model(prov_key, model or cfg.get("model"))
-    temp = cfg.get("temperature") if temperature is None else temperature
+
+    # 采样参数**按本次请求**解析，不改写全局配置 —— 并发任务会互相污染。
+    sampling = resolve_temperature(
+        purpose=purpose, stage=stage, explicit=temperature,
+        config=cfg, provider=prov_key, model=model_name,
+    )
+    log.debug(describe_sampling(sampling))
 
     set_context(agent_name=purpose, step_name=f"{prov_key}/{model_name}")
 
@@ -473,15 +496,16 @@ async def llm_stream(
         "stream": True,
         "stream_options": {"include_usage": True},
     }
-    if temp is not None:
-        payload["temperature"] = float(temp)
+    if sampling.sent:
+        payload["temperature"] = float(sampling.value)
 
     url = f"{base_url}/chat/completions"
     headers = {"Content-Type": "application/json", "Accept": "text/event-stream"}
     headers.update(build_auth_headers(prov_key, api_key))
 
     span = Span(kind="llm", name=model_name, provider=prov_key, model=model_name,
-                meta={"purpose": purpose, "stream": True})
+                meta={"purpose": purpose, "stage": stage, "stream": True,
+                      "sampling": sampling.to_dict()})
     try:
         async with httpx.AsyncClient(timeout=timeout, verify=False) as client:
             async with client.stream("POST", url, headers=headers, json=payload) as resp:

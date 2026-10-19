@@ -1,380 +1,486 @@
-// 全局样式
+// ---------------------------------------------------------------------------
+// EduForge 设计系统 · 全局样式
+//
+// 三条硬规矩：
+//  1. 颜色一律走变量。组件里再写 rgba(255,255,255,.x) 会让深浅色切换变成死代码
+//     （历史故障：浅色 token 定义得整整齐齐，但组件一处都没消费，切了等于没切）。
+//  2. 语义变量用 --wb-*，只分 light / dark 两套，由 <html data-theme> 切换。
+//  3. 间距、圆角、阴影、字阶只从下面这套阶梯里取，不出现魔法数字。
+// ---------------------------------------------------------------------------
+
+// ============================== 品牌与语义色 ==============================
 :root {
-  // 科技感配色
-  --primary: #00c8ff;
-  --primary-dark: #0099cc;
-  --primary-light: #66d9ff;
-  --secondary: #7c3aed;
-  --accent: #00ff88;
-  
-  // 背景色
-  --bg-dark: #0a0e27;
-  --bg-card: rgba(26, 31, 78, 0.6);
-  --bg-hover: rgba(0, 200, 255, 0.1);
-  
-  // 文字色
-  --text-primary: #ffffff;
-  --text-secondary: #a0aec0;
-  --text-muted: #6b7280;
-  
-  // 边框
-  --border-color: rgba(0, 200, 255, 0.3);
-  --border-glow: 0 0 10px rgba(0, 200, 255, 0.5);
-  
-  // 字体
-  --font-main: 'Microsoft YaHei', 'PingFang SC', -apple-system, sans-serif;
-  
-  // 动画
-  --transition: all 0.3s ease;
+  --brand-50: #eff9ff;
+  --brand-100: #dff2fe;
+  --brand-300: #7dd3fc;
+  --brand-500: #0ea5e9;   // 主色：保留原 cyan 家族，降饱和以适应长时间阅读
+  --brand-600: #0284c7;
+  --brand-700: #0369a1;
+
+  --ai-500: #7c3aed;      // AI 标识色：只用于"AI 生成"标记，不参与主操作
+  --ai-100: #ede9fe;
+
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --info: #6366f1;
+
+  --success-bg: rgba(16, 185, 129, 0.12);
+  --warning-bg: rgba(245, 158, 11, 0.14);
+  --danger-bg: rgba(239, 68, 68, 0.12);
+  --info-bg: rgba(99, 102, 241, 0.12);
+
+  // ---- 字体 ----
+  --font-sans: 'Inter', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC',
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, 'Courier New', monospace;
+  --font-main: var(--font-sans);
+
+  // 字阶（行高：正文 1.6，标题 1.3）
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-base: 14px;
+  --fs-md: 16px;
+  --fs-lg: 20px;
+  --fs-xl: 24px;
+  --fs-2xl: 32px;
+
+  // ---- 间距（4px 基准）----
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+
+  // ---- 圆角 ----
+  --radius-sm: 6px;    // 控件
+  --radius-md: 10px;   // 卡片
+  --radius-lg: 16px;   // 弹窗
+  --radius-pill: 999px;
+
+  // ---- 阴影 ----
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.12);
+
+  // ---- 动效 ----
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --dur-fast: 120ms;
+  --dur: 200ms;
+
+  // ---- 布局 ----
+  --nav-w: 232px;
+  --nav-w-collapsed: 64px;
+  --topbar-h: 56px;
 }
 
-// ---------------------------------------------------------------------------
-// 语义化 token：组件**只许用这些**，不许再各自写 rgba(255,255,255,.55) 之类。
-// 之前深浅色切换是"死代码"——变量在 `:root.light` 里定义得整整齐齐，
-// 但工作台组件一处都没消费，硬编码了 50 多处颜色，切了等于没切。
-// ---------------------------------------------------------------------------
+// ============================== 浅色（默认）==============================
 :root,
-[data-theme='dark'] {
-  --wb-bg: #0a0e27;
-  --wb-surface: rgba(26, 31, 78, 0.6);
-  --wb-surface-2: rgba(255, 255, 255, 0.04);
-  --wb-hover: rgba(0, 200, 255, 0.1);
-  --wb-text: #ffffff;
-  --wb-text-2: rgba(255, 255, 255, 0.72);
-  --wb-text-3: rgba(255, 255, 255, 0.45);
-  --wb-border: rgba(255, 255, 255, 0.1);
-  --wb-border-strong: rgba(0, 200, 255, 0.3);
-  --wb-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
-  --wb-warn-bg: rgba(230, 162, 60, 0.16);
-  --wb-warn-text: #f0b357;
-  --wb-risk-text: #ffb35c;
-}
-
-:root.light,
 [data-theme='light'] {
-  --bg-dark: #f0f4f8;
-  --bg-card: rgba(255, 255, 255, 0.85);
-  --bg-hover: rgba(0, 200, 255, 0.08);
-  --text-primary: #1a202c;
-  --text-secondary: #4a5568;
-  --text-muted: #718096;
-  --border-color: rgba(0, 200, 255, 0.2);
-  --border-glow: 0 0 10px rgba(0, 200, 255, 0.3);
+  --wb-bg: #f4f6fa;
+  --wb-bg-elevated: #ffffff;
+  --wb-surface: #ffffff;
+  --wb-surface-2: #f7f9fc;
+  --wb-surface-3: #eef2f7;
+  --wb-hover: rgba(14, 165, 233, 0.08);
+  --wb-active: rgba(14, 165, 233, 0.14);
 
-  --wb-bg: #f0f4f8;
-  --wb-surface: rgba(255, 255, 255, 0.92);
-  --wb-surface-2: rgba(15, 23, 42, 0.04);
-  --wb-hover: rgba(0, 160, 210, 0.08);
-  --wb-text: #1a202c;
-  --wb-text-2: rgba(26, 32, 44, 0.75);
-  --wb-text-3: rgba(26, 32, 44, 0.5);
-  --wb-border: rgba(15, 23, 42, 0.12);
-  --wb-border-strong: rgba(0, 160, 210, 0.35);
-  --wb-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
-  --wb-warn-bg: rgba(217, 119, 6, 0.12);
+  // 对比度都过 4.5:1：次要/辅助文字也必须看得清，不能靠调淡来"分层"
+  --wb-text: #101828;        // 15.8:1
+  --wb-text-2: #475467;      // 7.5:1
+  --wb-text-3: #697586;      // 4.9:1
+  --wb-text-inverse: #ffffff;
+
+  --wb-border: #e3e8ef;
+  --wb-border-strong: #d0d5dd;
+  --wb-focus: #0ea5e9;
+
+  --wb-shadow: var(--shadow-md);
+  --wb-shadow-lg: var(--shadow-lg);
+
+  --wb-warn-bg: var(--warning-bg);
   --wb-warn-text: #92610a;
-  --wb-risk-text: #b45309;
+  --wb-risk-text: #b42318;
+  --wb-ok-text: #067647;
+
+  --wb-code-bg: #f2f4f7;
+  --wb-mask: rgba(16, 24, 40, 0.45);
+
+  // 品牌色的"可自适应"变体。
+  // 直接用 --brand-50 / --brand-100 当背景和描边是错的：它们是**不透明**的浅色，
+  // 深色主题下会变成一片白雾（实测：对话区顶部出现一块发白的渐变，
+  // 里面小字浅底浅字完全读不出来）。凡是"品牌色 + 透明"的用法都走这四个令牌。
+  --brand-soft: rgba(14, 165, 233, 0.08);
+  --brand-soft-2: rgba(14, 165, 233, 0.14);
+  --brand-border: rgba(14, 165, 233, 0.3);
+  --brand-text: #0369a1;   // 浅底 5.9:1
+  --brand-glow: rgba(14, 165, 233, 0.1);
 }
 
-// 紧凑模式
-:root.compact-mode {
-  .app-header {
-    height: 56px !important;
-    padding: 0 16px !important;
-  }
-  
-  .header-nav .nav-item {
-    padding: 8px 14px !important;
-    font-size: 13px !important;
-  }
-  
-  .app-footer {
-    height: 36px !important;
-    padding: 0 16px !important;
-  }
-  
-  .logo-text .brand-name {
-    font-size: 16px !important;
-  }
-  
-  .logo-text .brand-tag {
-    display: none !important;
-  }
-  
-  .system-status {
-    padding: 4px 10px !important;
-    font-size: 11px !important;
-  }
+// ============================== 深色 ===============================
+[data-theme='dark'] {
+  --wb-bg: #0b1220;
+  --wb-bg-elevated: #111a2b;
+  --wb-surface: #131d30;
+  --wb-surface-2: #182339;
+  --wb-surface-3: #1e2b44;
+  --wb-hover: rgba(56, 189, 248, 0.12);
+  --wb-active: rgba(56, 189, 248, 0.2);
+
+  --wb-text: #f2f5fa;        // 14.9:1
+  --wb-text-2: #c2cddc;      // 9.2:1
+  --wb-text-3: #98a5b8;      // 5.6:1
+  --wb-text-inverse: #0b1220;
+
+  --wb-border: #24334d;
+  --wb-border-strong: #33456a;
+  --wb-focus: #38bdf8;
+
+  --wb-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --wb-shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.6);
+
+  --wb-warn-bg: rgba(245, 158, 11, 0.16);
+  --wb-warn-text: #fbbf24;
+  --wb-risk-text: #fda29b;
+  --wb-ok-text: #6ee7b7;
+
+  --wb-code-bg: #0d1626;
+  --wb-mask: rgba(2, 6, 16, 0.62);
+
+  // 深色下的品牌色变体：一律走透明度，避免出现不透明浅块
+  --brand-soft: rgba(56, 189, 248, 0.12);
+  --brand-soft-2: rgba(56, 189, 248, 0.2);
+  --brand-border: rgba(56, 189, 248, 0.34);
+  --brand-text: #7dd3fc;   // 深底 8.6:1
+  --brand-glow: rgba(56, 189, 248, 0.12);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55);
 }
 
-// 重置样式
-* {
-  margin: 0;
-  padding: 0;
+// ============================== 重置 ===============================
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
-html, body {
-  width: 100%;
+html,
+body,
+#app {
   height: 100%;
-  overflow: hidden;
 }
 
 body {
-  font-family: var(--font-main);
-  background: var(--bg-dark);
-  color: var(--text-primary);
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--fs-base);
+  line-height: 1.6;
+  color: var(--wb-text);
+  background: var(--wb-bg);
+  -webkit-font-smoothing: antialiased;
+  transition: background-color var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+
+h1, h2, h3, h4, h5 {
+  margin: 0;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--wb-text);
+}
+
+p { margin: 0 0 var(--sp-2); }
+a { color: var(--brand-text); text-decoration: none; }
+
+
+// 可见焦点：键盘用户必须能看清落点，鼠标点击不显示轮廓
+:focus-visible {
+  outline: 2px solid var(--wb-focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+:focus:not(:focus-visible) { outline: none; }
+
+// 滚动条
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb {
+  background: var(--wb-border-strong);
+  border-radius: var(--radius-pill);
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track { background: transparent; }
+
+// 尊重系统的"减少动效"
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+// ============================== 布局工具类 ===============================
+.wb-page {
+  padding: var(--sp-5);
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+.wb-stack { display: flex; flex-direction: column; gap: var(--sp-4); }
+.wb-stack-sm { display: flex; flex-direction: column; gap: var(--sp-2); }
+.wb-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+.wb-row-between { justify-content: space-between; }
+.wb-grow { flex: 1 1 auto; min-width: 0; }
+.wb-muted { color: var(--wb-text-3); }
+.wb-dim { color: var(--wb-text-2); }
+.wb-mono { font-family: var(--font-mono); }
+.wb-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+// 卡片：全站唯一的容器外观
+.wb-card {
+  background: var(--wb-surface);
+  border: 1px solid var(--wb-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.wb-card-pad { padding: var(--sp-4); }
+
+.wb-card-title {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  margin-bottom: var(--sp-1);
+}
+
+.wb-card-hint {
+  font-size: var(--fs-sm);
+  color: var(--wb-text-3);
   line-height: 1.6;
 }
 
-#app {
-  width: 100%;
-  height: 100%;
+// 区块标题（页面内小节）
+.wb-section-title {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
 }
 
-// 滚动条样式
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: rgba(0, 200, 255, 0.05);
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(0, 200, 255, 0.3);
-  border-radius: 3px;
-  
-  &:hover {
-    background: rgba(0, 200, 255, 0.5);
-  }
-}
-
-// 通用卡片样式
-.glass-card {
-  background: rgba(26, 31, 78, 0.95);
-  border: 1px solid rgba(0, 200, 255, 0.3);
-  border-radius: 16px;
-  transition: var(--transition);
-  
-  &:hover {
-    border-color: var(--primary);
-    box-shadow: var(--border-glow);
-  }
-}
-
-// 科技感按钮
-.btn-tech {
-  position: relative;
-  padding: 12px 24px;
-  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-  border: none;
-  border-radius: 8px;
-  color: white;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
+// 视觉隐藏但对读屏可见
+.wb-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
   overflow: hidden;
-  transition: var(--transition);
-  
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-    transition: 0.5s;
-  }
-  
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 5px 20px rgba(0, 200, 255, 0.4);
-    
-    &::before {
-      left: 100%;
-    }
-  }
-  
-  &:active {
-    transform: translateY(0);
-  }
-  
-  &.secondary {
-    background: transparent;
-    border: 1px solid var(--primary);
-    
-    &:hover {
-      background: rgba(0, 200, 255, 0.1);
-    }
-  }
-  
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none;
-    
-    &::before {
-      display: none;
-    }
-  }
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
-// 输入框样式
-.input-tech {
-  width: 100%;
-  padding: 12px 16px;
-  background: rgba(10, 14, 39, 0.8);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  color: var(--text-primary);
-  font-size: 14px;
-  transition: var(--transition);
-  
-  &::placeholder {
-    color: var(--text-muted);
-  }
-  
-  &:focus {
-    outline: none;
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(0, 200, 255, 0.2);
-  }
-}
-
-// 标题样式
-.title-gradient {
-  background: linear-gradient(135deg, var(--primary), var(--accent));
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: transparent;
-}
-
-// 动画关键帧
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
-}
-
-@keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 5px var(--primary); }
-  50% { box-shadow: 0 0 20px var(--primary), 0 0 40px var(--primary); }
-}
-
-@keyframes scan-line {
-  0% { top: 0; }
-  100% { top: 100%; }
-}
-
-@keyframes text-shimmer {
-  0% { background-position: -200% center; }
-  100% { background-position: 200% center; }
-}
-
-// 网格背景
-.grid-bg {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-image: 
-    linear-gradient(rgba(0, 200, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 200, 255, 0.03) 1px, transparent 1px);
-  background-size: 50px 50px;
-  pointer-events: none;
-  z-index: 0;
-}
-
-// Element Plus 覆盖
+// ============================== Element Plus 对齐 ===============================
+// 让第三方组件跟上本项目的 token，否则会出现"卡片是新的、弹窗还是旧的"。
 .el-button {
-  &--primary {
-    background: linear-gradient(135deg, var(--primary), var(--primary-dark)) !important;
-    border: none !important;
-  }
+  border-radius: var(--radius-sm);
+  font-weight: 500;
 }
 
-.el-input {
-  --el-input-bg-color: rgba(10, 14, 39, 0.8) !important;
-  --el-input-border-color: var(--border-color) !important;
-  --el-input-text-color: var(--text-primary) !important;
-  --el-input-placeholder-color: var(--text-muted) !important;
-  
-  .el-input__wrapper {
-    background: rgba(10, 14, 39, 0.8) !important;
-    box-shadow: none !important;
-    border: 1px solid var(--border-color) !important;
-    
-    &:hover {
-      border-color: var(--primary) !important;
-    }
-    
-    &.is-focus {
-      border-color: var(--primary) !important;
-      box-shadow: 0 0 0 3px rgba(0, 200, 255, 0.2) !important;
-    }
-  }
+.el-card,
+.el-dialog,
+.el-drawer,
+.el-popover,
+.el-dropdown-menu,
+.el-message-box {
+  border-radius: var(--radius-md) !important;
+  border-color: var(--wb-border) !important;
 }
 
-.el-dialog {
-  background: var(--bg-card) !important;
-  backdrop-filter: blur(20px) !important;
-  border: 1px solid var(--border-color) !important;
-  border-radius: 16px !important;
-  
-  .el-dialog__header {
-    border-bottom: 1px solid var(--border-color);
-  }
-  
-  .el-dialog__title {
-    color: var(--text-primary) !important;
-  }
+.el-dialog { border-radius: var(--radius-lg) !important; }
+
+.el-input__wrapper,
+.el-textarea__inner,
+.el-select__wrapper {
+  border-radius: var(--radius-sm) !important;
+  background-color: var(--wb-bg-elevated) !important;
+  box-shadow: 0 0 0 1px var(--wb-border) inset !important;
 }
 
-.el-upload-dragger {
-  background: rgba(10, 14, 39, 0.6) !important;
-  border: 2px dashed var(--border-color) !important;
-  border-radius: 12px !important;
-  
-  &:hover {
-    border-color: var(--primary) !important;
-  }
+.el-input__inner,
+.el-textarea__inner {
+  color: var(--wb-text) !important;
 }
 
-.el-progress {
-  --el-progress-fill-color: linear-gradient(135deg, var(--primary), var(--accent)) !important;
+.el-form-item__label {
+  color: var(--wb-text-2) !important;
+  font-size: var(--fs-sm) !important;
+  font-weight: 500;
 }
 
-// 页面容器
-.page-container {
-  width: 100%;
-  height: 100%;
-  position: relative;
-  z-index: 1;
+.el-table {
+  --el-table-border-color: var(--wb-border);
+  --el-table-header-bg-color: var(--wb-surface-2);
+  background-color: transparent !important;
 }
 
-// 动画类
-.animate-float {
-  animation: float 3s ease-in-out infinite;
+.el-table th.el-table__cell {
+  color: var(--wb-text-2) !important;
+  font-weight: 600;
 }
 
-.animate-pulse-glow {
-  animation: pulse-glow 2s ease-in-out infinite;
+.el-table td.el-table__cell {
+  color: var(--wb-text) !important;
 }
 
-// 工具类
-.text-gradient {
-  background: linear-gradient(135deg, var(--primary), var(--accent));
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: transparent;
+.el-table__row:hover > td.el-table__cell {
+  background-color: var(--wb-hover) !important;
 }
 
-.glow-text {
-  text-shadow: 0 0 10px var(--primary);
+.el-tabs__item { color: var(--wb-text-2) !important; }
+.el-tabs__item.is-active { color: var(--brand-text) !important; }
+
+.el-dialog__title,
+.el-drawer__title {
+  color: var(--wb-text) !important;
+  font-weight: 600;
 }
+
+.el-divider { border-color: var(--wb-border) !important; }
+
+// Element Plus 的折叠面板与表格行默认用 `fill-color-blank`（纯白）打底，
+// 不吃上面的语义令牌 —— 深色主题下会露出一整块白。
+// 实测位置：设置页「开发者选项」的折叠头、生成中心六阶段的结果折叠区。
+.el-collapse,
+.el-collapse-item__header,
+.el-collapse-item__wrap,
+.el-collapse-item__content {
+  background-color: transparent !important;
+  border-color: var(--wb-border) !important;
+  color: var(--wb-text-2) !important;
+}
+
+.el-collapse-item__header {
+  font-size: var(--fs-sm);
+  color: var(--wb-text-2) !important;
+}
+
+.el-collapse-item__arrow { color: var(--wb-text-3); }
+
+.el-table {
+  --el-table-tr-bg-color: transparent;
+  --el-table-row-hover-bg-color: var(--wb-hover);
+  --el-table-expanded-cell-bg-color: transparent;
+}
+
+// 折叠面板内的表单标签同样是写死的深灰，深色下会消失
+.el-collapse-item__content .el-form-item__label { color: var(--wb-text-2) !important; }
+
+// Element Plus 的**默认按钮**用 `fill-color-blank`（纯白）打底，分页与数字输入的
+// 加减按钮用 `fill-color-light` —— 这些都不吃 `--wb-*` 令牌，深色主题下会露出
+// 一整排白块（实测：设置页/资源库/通用问答页各命中 10+ 个）。
+// 变体按钮（primary / danger / text / link）会在自身选择器里覆盖这些变量，
+// 所以在基类上改是安全的。
+.el-button {
+  --el-button-bg-color: var(--wb-surface-2);
+  --el-button-border-color: var(--wb-border);
+  --el-button-text-color: var(--wb-text);
+  --el-button-hover-bg-color: var(--wb-hover);
+  --el-button-hover-border-color: var(--wb-border-strong);
+  --el-button-hover-text-color: var(--wb-text);
+  --el-button-active-bg-color: var(--wb-active);
+  --el-button-disabled-bg-color: var(--wb-surface-2);
+  --el-button-disabled-border-color: var(--wb-border);
+  // 默认禁用文字色偏淡到几乎读不出（实测对比 1.63），禁用也要能看清写的是什么
+  --el-button-disabled-text-color: var(--wb-text-3);
+}
+
+.el-pager li,
+.el-pagination button {
+  background-color: var(--wb-surface-2) !important;
+  color: var(--wb-text-2) !important;
+  border-color: var(--wb-border) !important;
+}
+
+.el-pager li.is-active { color: var(--brand-text) !important; }
+
+.el-input-number__decrease,
+.el-input-number__increase {
+  background-color: var(--wb-surface-2) !important;
+  color: var(--wb-text-2) !important;
+  border-color: var(--wb-border) !important;
+}
+
+.el-radio-button__inner {
+  background-color: var(--wb-surface-2) !important;
+  color: var(--wb-text-2) !important;
+  border-color: var(--wb-border) !important;
+  box-shadow: none !important;
+}
+
+.el-radio-button.is-active .el-radio-button__inner {
+  background-color: var(--brand-500) !important;
+  border-color: var(--brand-500) !important;
+  color: #fff !important;
+}
+
+// 代码块右上角的「复制」按钮由 utils/markdown.js 注入到 v-html 里，
+// 只有对话组件内部写了 :deep 样式，其它渲染位置会退回浏览器默认的浅灰底
+.copy-btn {
+  padding: 2px 7px;
+  font-size: 11px;
+  font-family: inherit;
+  color: var(--wb-text-2);
+  background: var(--wb-surface-2);
+  border: 1px solid var(--wb-border);
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.copy-btn:hover { background: var(--wb-hover); }
+
+// 变体按钮的 `is-plain` 用的是 danger-light-9 这类**浅色**底，深色下仍是一块白
+.el-button--danger.is-plain {
+  --el-button-bg-color: var(--danger-bg);
+  --el-button-border-color: rgba(239, 68, 68, 0.42);
+  --el-button-text-color: var(--wb-risk-text);
+  --el-button-hover-bg-color: var(--danger-bg);
+  --el-button-hover-text-color: var(--wb-risk-text);
+}
+
+.el-button--primary.is-plain {
+  --el-button-bg-color: var(--brand-soft);
+  --el-button-border-color: var(--brand-border);
+  --el-button-text-color: var(--brand-text);
+}
+
+// ============================== 响应式 ===============================
+// ≥1440 三栏；1024~1440 收窄；768~1024 单栏；<768 移动
+@media (max-width: 1024px) {
+  .wb-page { padding: var(--sp-4); }
+}
+
+@media (max-width: 768px) {
+  .wb-page { padding: var(--sp-3); }
+  :root { --nav-w: 0px; }
+}
+
+// ============================== 路由过渡 ===============================
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity var(--dur) var(--ease);
+}
+
+.fade-enter-from,
+.fade-leave-to { opacity: 0; }

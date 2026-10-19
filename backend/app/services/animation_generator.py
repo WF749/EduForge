@@ -243,7 +243,7 @@ class AnimationGenerator:
 要求：knowledge_points 必须 3-5 个，彼此不同且都紧扣「{topic}」，difficulty 取 1-3（1基础/2进阶/3难点）。"""
 
         try:
-            result = llm_service.chat(prompt)
+            result = llm_service.chat(prompt, purpose="animation_code")
             start = result.find('{')
             if start < 0:
                 return None
@@ -304,7 +304,7 @@ class AnimationGenerator:
 请直接输出完整的HTML源码，不要任何解释文字。"""
 
         try:
-            result = llm_service.chat(prompt)
+            result = llm_service.chat(prompt, purpose="animation_code")
 
             html_match = re.search(r"<!DOCTYPE html>.*?</html>", result, re.DOTALL | re.IGNORECASE)
             if not html_match:
@@ -822,7 +822,7 @@ requestAnimationFrame(animateLoop);
 要求：scenes至少4个，每场景紧扣教学内容。"""
 
         try:
-            result = llm_service.chat(prompt)
+            result = llm_service.chat(prompt, purpose="animation_code")
             start = result.find('{')
             if start >= 0:
                 depth = 0

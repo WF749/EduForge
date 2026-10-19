@@ -150,7 +150,7 @@ class IntentService:
 - clarification_questions: 需要澄清的问题（如果有）"""
         
         # 调用LLM进行意图分析
-        response = llm_service.chat(prompt, [], "")
+        response = llm_service.chat(prompt, [], "", purpose="intent_extract")
         
         # 解析LLM响应
         try:

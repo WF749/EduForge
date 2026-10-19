@@ -1,6 +1,6 @@
 """OpenAI LLM实现"""
 from typing import List, Dict, Optional, Any, Generator
-from .base import LLMProviderBase
+from .base import LLMProviderBase, sampling_kwargs
 from .token_limit import resolve_max_tokens
 
 try:
@@ -84,7 +84,7 @@ class OpenAIProvider(LLMProviderBase):
             response = client.chat.completions.create(
                 model=model or "gpt-3.5-turbo",
                 messages=messages,
-                temperature=temperature,
+                **sampling_kwargs(temperature),
                 # 教案等长内容需足够大的输出上限，否则会被截断成不完整 JSON
                 max_tokens=resolve_max_tokens(),
                 timeout=120  # 教案等长内容生成需要更长时间
@@ -153,7 +153,7 @@ class OpenAIProvider(LLMProviderBase):
             stream = client.chat.completions.create(
                 model=model or "gpt-3.5-turbo",
                 messages=messages,
-                temperature=temperature,
+                **sampling_kwargs(temperature),
                 max_tokens=2048,
                 stream=True
             )

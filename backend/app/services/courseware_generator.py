@@ -720,7 +720,7 @@ class CoursewareGenerator:
 
 请确保内容具体、可操作，适合{audience}的认知水平。"""
 
-        return llm_service.chat(prompt)
+        return llm_service.chat(prompt, purpose="courseware_content")
 
     def _generate_ppt_content(self, topic: str, duration: int, audience: str, lesson_plan: str,
                              template: str, subject: str, teaching_style: dict) -> str:
@@ -739,7 +739,7 @@ class CoursewareGenerator:
 
 内容要简洁明了，重点突出，页面数量与{duration}分钟的课程时长相匹配（建议6-10页）。"""
 
-        return llm_service.chat(prompt)
+        return llm_service.chat(prompt, purpose="courseware_content")
 
     def _generate_animation_ideas(self, topic: str, lesson_plan: str, subject: str,
                                  audience: str, teaching_style: dict, duration: int = 45) -> str:
@@ -758,7 +758,7 @@ class CoursewareGenerator:
 
 动画创意要生动有趣，帮助{audience}理解抽象概念。"""
 
-        return llm_service.chat(prompt)
+        return llm_service.chat(prompt, purpose="courseware_content")
 
     def _generate_interactive_games(self, topic: str, audience: str, lesson_plan: str,
                                    teaching_style: dict) -> str:
@@ -778,7 +778,7 @@ class CoursewareGenerator:
 
 游戏要与教学内容紧密相关，适合{audience}的年龄和认知水平。"""
 
-        return llm_service.chat(prompt)
+        return llm_service.chat(prompt, purpose="courseware_content")
 
     def generate_outline(self, topic: str, provider: Optional[str] = None, subject: str = "general") -> str:
         """生成课件大纲"""
@@ -794,7 +794,7 @@ class CoursewareGenerator:
 
 请确保大纲结构清晰，内容全面。"""
 
-        return llm_service.chat(prompt)
+        return llm_service.chat(prompt, purpose="courseware_content")
 
     def get_templates(self) -> list:
         """获取课件模板列表"""
@@ -893,7 +893,7 @@ class CoursewareGenerator:
 
 请以JSON格式输出，包含knowledge_goals、ability_goals、emotional_goals三个数组。"""
         
-        response = llm_service.chat(prompt)
+        response = llm_service.chat(prompt, purpose="courseware_content")
         
         # 尝试解析JSON响应
         try:
@@ -991,7 +991,7 @@ class CoursewareGenerator:
   ...
 ]"""
         
-        response = llm_service.chat(prompt)
+        response = llm_service.chat(prompt, purpose="courseware_content")
         
         # 尝试解析JSON响应
         try:
@@ -1193,7 +1193,7 @@ class CoursewareGenerator:
 - visual_elelements：视觉元素提示
 - notes：讲师备注"""
         
-        response = llm_service.chat(prompt)
+        response = llm_service.chat(prompt, purpose="courseware_content")
         
         try:
             import json
@@ -1292,7 +1292,7 @@ class CoursewareGenerator:
 - teaching_notes：讲解要点
 - media_type：推荐的媒体类型（image/table/formula）"""
         
-        response = llm_service.chat(prompt)
+        response = llm_service.chat(prompt, purpose="courseware_content")
         
         try:
             import json
@@ -1354,7 +1354,7 @@ class CoursewareGenerator:
 - interaction_suggestions：互动建议
 - notes：讲师备注"""
         
-        response = llm_service.chat(prompt)
+        response = llm_service.chat(prompt, purpose="courseware_content")
         
         try:
             import json
@@ -1429,7 +1429,7 @@ class CoursewareGenerator:
 - homework：课后作业
 - notes：讲师备注"""
         
-        response = llm_service.chat(prompt)
+        response = llm_service.chat(prompt, purpose="courseware_content")
         
         try:
             import json
@@ -1490,7 +1490,7 @@ class CoursewareGenerator:
 - practice_projects：实践项目
 - notes：讲师备注"""
         
-        response = llm_service.chat(prompt)
+        response = llm_service.chat(prompt, purpose="courseware_content")
         
         try:
             import json
@@ -1565,7 +1565,7 @@ class CoursewareGenerator:
 - font_specs：字体规范
 - color_scheme：颜色方案"""
         
-        response = llm_service.chat(prompt)
+        response = llm_service.chat(prompt, purpose="courseware_content")
         
         try:
             import json

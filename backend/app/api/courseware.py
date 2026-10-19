@@ -3,6 +3,7 @@ import os
 import shutil
 from urllib.parse import quote
 from fastapi import APIRouter, Body, Query, Path, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from typing import Any, Dict, Optional
 from ..paths import GENERATED_ANIM, GENERATED_CW, GENERATED_GAMES, GENERATED_LP
@@ -42,7 +43,8 @@ async def generate_courseware(
     try:
         generator = CoursewareGenerator(output_dir=OUTPUT_DIR)
 
-        result = generator.generate(
+        result = await run_in_threadpool(
+            generator.generate,
             topic=topic,
             duration=duration,
             audience=audience,
@@ -103,7 +105,9 @@ async def generate_game(
         generator = GameGenerator(output_dir=GAMES_DIR)
 
         # 四路生成共用同一份课程上下文（compose_generation_context）
-        course_knowledge, composed_context, ctx_meta = compose_generation_context(
+        # 检索要算向量，同样是重活：一并丢线程池
+        course_knowledge, composed_context, ctx_meta = await run_in_threadpool(
+            compose_generation_context,
             topic=topic, audience=audience, kind="game",
             scope=knowledge_scope, intent=teaching_intent,
             blueprint=teaching_blueprint, lesson_id=lesson_id,
@@ -112,7 +116,8 @@ async def generate_game(
         if composed_context:
             effective_content = f"{teaching_content}\n\n{composed_context}".strip()
 
-        result = generator.generate(
+        result = await run_in_threadpool(
+            generator.generate,
             topic=topic,
             audience=audience,
             teaching_content=effective_content,
@@ -258,7 +263,9 @@ async def generate_animation(
             "biology": "生物", "geography": "地理", "general": "综合",
         }.get(subject, subject)
         # 四路生成共用同一份课程上下文（compose_generation_context）
-        course_knowledge, composed_context, ctx_meta = compose_generation_context(
+        # 检索要算向量，同样是重活：一并丢线程池
+        course_knowledge, composed_context, ctx_meta = await run_in_threadpool(
+            compose_generation_context,
             topic=topic, subject=subject, audience=audience, kind="animation",
             scope=knowledge_scope, intent=teaching_intent,
             blueprint=teaching_blueprint, lesson_id=lesson_id,
@@ -266,7 +273,8 @@ async def generate_animation(
         content_with_subject = f"学科：{subject_name}\n{teaching_content}".strip()
         if composed_context:
             content_with_subject = f"{content_with_subject}\n\n{composed_context}"
-        result = generator.generate(
+        result = await run_in_threadpool(
+            generator.generate,
             topic=topic,
             audience=audience,
             teaching_content=content_with_subject,
@@ -491,7 +499,8 @@ async def preview_courseware(
     """预览课件大纲"""
     try:
         generator = CoursewareGenerator(output_dir=OUTPUT_DIR)
-        outline = generator.generate_outline(topic=topic, provider=provider, subject="general")
+        outline = await run_in_threadpool(
+            generator.generate_outline, topic=topic, provider=provider, subject="general")
 
         return {
             "success": True,
@@ -654,7 +663,11 @@ async def analyze_requirements(
     try:
         generator = CoursewareGenerator(output_dir=OUTPUT_DIR)
 
-        requirements = generator.analyze_requirements(
+        # 模型调用是同步阻塞的：直接 await 会占满事件循环，
+        # 生成期间整台服务器无法响应其它请求（教师切到别的页面只会一直转圈）。
+        # 一律丢进线程池，生成期间全站照常可用。
+        requirements = await run_in_threadpool(
+            generator.analyze_requirements,
             topic=topic,
             audience=audience,
             duration=duration,
@@ -686,7 +699,7 @@ async def generate_outline(
 
         # 从请求数据中提取requirements
         requirements = request_data.get("requirements", request_data)
-        outline = generator.generate_ppt_outline(requirements)
+        outline = await run_in_threadpool(generator.generate_ppt_outline, requirements)
 
         return {
             "success": True,
@@ -719,7 +732,8 @@ async def generate_detailed_content(
                 "message": "缺少必要的参数"
             }
 
-        detailed_content = generator.generate_detailed_content(outline, requirements)
+        detailed_content = await run_in_threadpool(
+            generator.generate_detailed_content, outline, requirements)
 
         return {
             "success": True,
@@ -744,7 +758,8 @@ async def generate_visual_style(
     try:
         generator = CoursewareGenerator(output_dir=OUTPUT_DIR)
 
-        style = generator.generate_visual_style(topic, subject, audience)
+        style = await run_in_threadpool(
+            generator.generate_visual_style, topic, subject, audience)
 
         return {
             "success": True,
@@ -774,7 +789,11 @@ async def generate_full_courseware(
         generator = CoursewareGenerator(output_dir=OUTPUT_DIR)
 
         # 阶段1：需求解析与课件定位
-        requirements = generator.analyze_requirements(
+        # 模型调用是同步阻塞的：直接 await 会占满事件循环，
+        # 生成期间整台服务器无法响应其它请求（教师切到别的页面只会一直转圈）。
+        # 一律丢进线程池，生成期间全站照常可用。
+        requirements = await run_in_threadpool(
+            generator.analyze_requirements,
             topic=topic,
             audience=audience,
             duration=duration,
@@ -784,16 +803,19 @@ async def generate_full_courseware(
         )
 
         # 阶段2：结构化大纲生成
-        outline = generator.generate_ppt_outline(requirements)
+        outline = await run_in_threadpool(generator.generate_ppt_outline, requirements)
 
         # 阶段3：分页面精细化内容生成
-        detailed_content = generator.generate_detailed_content(outline, requirements)
+        detailed_content = await run_in_threadpool(
+            generator.generate_detailed_content, outline, requirements)
 
         # 阶段4：PPT视觉与格式规范生成
-        style = generator.generate_visual_style(topic, subject, audience)
+        style = await run_in_threadpool(
+            generator.generate_visual_style, topic, subject, audience)
 
         # 生成最终课件
-        result = generator.generate(
+        result = await run_in_threadpool(
+            generator.generate,
             topic=topic,
             duration=duration,
             audience=audience,

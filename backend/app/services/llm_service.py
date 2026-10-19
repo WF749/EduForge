@@ -17,18 +17,34 @@ class LLMServices:
         # 设置激活的LLM提供商
         self.set_active_provider(provider)
     
-    def chat(self, message: str, history: List[Dict] = None, knowledge: str = "", provider: Optional[str] = None):
-        """与LLM对话"""
+    def chat(
+        self,
+        message: str,
+        history: List[Dict] = None,
+        knowledge: str = "",
+        provider: Optional[str] = None,
+        purpose: str = "chat",
+        stage: str = "",
+    ):
+        """与LLM对话。
+
+        `purpose` / `stage` 说明本次调用的**任务用途与执行阶段**，供采样策略
+        自动选择温度（见 `core.sampling`）。生成类调用应当传入，例如：
+          - 教案 / 课件正文 → `lesson_plan_content` / `courseware_content`
+          - 课堂活动、游戏玩法构思 → `activity_design` / `gameplay_ideation`
+          - 动画 / 游戏**代码**生成 → `animation_code` / `game_code`
+        """
         if history is None:
             history = []
-        
+
         # 调用新的统一LLM服务
         prompt = message
         if knowledge:
             prompt = f"{message}\n\n{knowledge}"
-        return new_llm_service.chat_completions(prompt, history, provider=provider)
+        return new_llm_service.chat_completions(
+            prompt, history, provider=provider, purpose=purpose, stage=stage)
     
-    def stream_chat(self, message: str, history: List[Dict] = None, knowledge: str = "", provider: Optional[str] = None):
+    def stream_chat(self, message: str, history: List[Dict] = None, knowledge: str = "", provider: Optional[str] = None, purpose: str = "chat", stage: str = ""):
         """流式与LLM对话"""
         if history is None:
             history = []
@@ -40,13 +56,15 @@ class LLMServices:
         
         # 调用新的统一LLM服务
         for chunk in new_llm_service.stream_chat_completions(
-            prompt=prompt, 
-            history=history, 
-            provider=provider, 
-            api_key=None, 
-            base_url=None, 
-            temperature=None, 
-            model=None
+            prompt=prompt,
+            history=history,
+            provider=provider,
+            api_key=None,
+            base_url=None,
+            temperature=None,
+            model=None,
+            purpose=purpose,
+            stage=stage
         ):
             yield chunk
     

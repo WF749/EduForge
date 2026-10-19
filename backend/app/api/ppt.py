@@ -5,6 +5,7 @@ import sys
 import subprocess
 import tempfile
 from fastapi import APIRouter, HTTPException, BackgroundTasks, UploadFile, File, Body, Query
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, JSONResponse
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -260,7 +261,9 @@ async def generate_ppt(
     # 四路生成共用同一份课程上下文（compose_generation_context）—— 知识 +
     # 教学意图 + 教学蓝图一次拼好，保证与教案拿到的是**同一段**上下文。
     # 检索失败、蓝图缺失都不阻断生成。
-    course_knowledge, composed_context, ctx_meta = compose_generation_context(
+    # 检索要算向量，是重活：丢线程池，别占着事件循环
+    course_knowledge, composed_context, ctx_meta = await run_in_threadpool(
+        compose_generation_context,
         topic=topic, subject=subject, grade=audience, key_points=key_points,
         kind="ppt", scope=knowledge_scope, intent=teaching_intent,
         blueprint=teaching_blueprint, lesson_id=lesson_id,
@@ -298,8 +301,14 @@ async def generate_ppt(
         "context_meta": ctx_meta,
     }
 
-async def _generate_ppt_task(task_id: str, topic: str, duration: int, audience: str, subject: str, theme_color: str, style_preference: str, key_points: list, reference_docs: list, template: str):
-    """PPT生成后台任务"""
+def _generate_ppt_task(task_id: str, topic: str, duration: int, audience: str, subject: str, theme_color: str, style_preference: str, key_points: list, reference_docs: list, template: str):
+    """PPT生成后台任务。
+
+    刻意写成**同步**函数：Starlette 的 BackgroundTasks 对同步函数会自动丢进
+    线程池执行，对 async 函数则直接在事件循环里跑。这里全是阻塞的模型调用与
+    子进程调用，写成 async 就等于在响应返回之后把整个服务再占住几分钟 ——
+    教师此时切到「我的备课」「设置」，只会看到一直转不完的骨架屏。
+    """
     task = generation_tasks.get(task_id)
     if not task:
         return
@@ -637,8 +646,8 @@ async def modify_ppt(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"修改PPT失败: {str(e)}")
 
-async def _generate_modified_ppt_task(task_id: str, modified_ppt_data: Dict, task_dir: str):
-    """生成修改后的PPT"""
+def _generate_modified_ppt_task(task_id: str, modified_ppt_data: Dict, task_dir: str):
+    """生成修改后的PPT。同步实现 → Starlette 会在线程池里跑，不阻塞事件循环。"""
     task = generation_tasks.get(task_id)
     if not task:
         return
@@ -673,10 +682,13 @@ async def analyze_ppt_requirements(
 ):
     """分析PPT需求"""
     try:
-        ctx = ppt_content_generator.prepare_teaching_context(
+        # 模型调用同步阻塞：放进线程池，避免生成期间把整个事件循环占住
+        ctx = await run_in_threadpool(
+            ppt_content_generator.prepare_teaching_context,
             topic, duration, audience, subject, key_points or [], reference_docs or []
         )
-        outline = ppt_content_generator.generate_ppt_outline(
+        outline = await run_in_threadpool(
+            ppt_content_generator.generate_ppt_outline,
             topic,
             duration,
             audience,
@@ -685,7 +697,7 @@ async def analyze_ppt_requirements(
             ctx.get("teaching_content") or "",
             expansion=ctx.get("expansion") or {},
         )
-        
+
         # 分析需求
         requirements = {
             "basic_info": {
@@ -725,10 +737,12 @@ async def generate_ppt_outline(
         key_points = requirements.get("key_points", requirements.get("basic_info", {}).get("key_points", []))
         reference_docs = requirements.get("reference_docs", requirements.get("basic_info", {}).get("reference_docs", []))
 
-        ctx = ppt_content_generator.prepare_teaching_context(
+        ctx = await run_in_threadpool(
+            ppt_content_generator.prepare_teaching_context,
             topic, duration, audience, subject, key_points or [], reference_docs or []
         )
-        outline = ppt_content_generator.generate_ppt_outline(
+        outline = await run_in_threadpool(
+            ppt_content_generator.generate_ppt_outline,
             topic,
             duration,
             audience,
@@ -737,7 +751,7 @@ async def generate_ppt_outline(
             ctx.get("teaching_content") or "",
             expansion=ctx.get("expansion") or {},
         )
-        
+
         return {
             "success": True,
             "outline": outline
@@ -763,10 +777,12 @@ async def generate_ppt_detailed_content(
         key_points = requirements.get("key_points", requirements.get("basic_info", {}).get("key_points", []))
         reference_docs = requirements.get("reference_docs", requirements.get("basic_info", {}).get("reference_docs", []))
 
-        ctx = ppt_content_generator.prepare_teaching_context(
+        ctx = await run_in_threadpool(
+            ppt_content_generator.prepare_teaching_context,
             topic, duration, audience, subject, key_points or [], reference_docs or []
         )
-        detailed_content = ppt_content_generator.generate_detailed_content(
+        detailed_content = await run_in_threadpool(
+            ppt_content_generator.generate_detailed_content,
             outline,
             topic,
             duration,
@@ -797,7 +813,8 @@ async def generate_ppt_visual_style(
     """生成PPT视觉风格"""
     try:
         # 生成视觉风格
-        visual_style = ppt_content_generator.generate_visual_style(
+        visual_style = await run_in_threadpool(
+            ppt_content_generator.generate_visual_style,
             topic, audience, 45, subject, theme_color, style_preference
         )
         
@@ -970,7 +987,7 @@ async def refine_ppt(
 输出格式: [{{...}}, {{...}}, ...]"""
     
     try:
-        response = llm_service.chat(prompt)
+        response = await run_in_threadpool(llm_service.chat, prompt)
         
         # 解析LLM输出
         import re as re_module

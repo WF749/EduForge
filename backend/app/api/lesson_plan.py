@@ -2,6 +2,7 @@
 # 支持全学段教案生成的完整流程
 
 from fastapi import APIRouter, Body, Query, Path, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from typing import Optional, List, Dict, Any
 from urllib.parse import quote
@@ -44,7 +45,11 @@ async def analyze_lesson_plan_requirements(
 ):
     """阶段1：全学段需求解析与合规校验"""
     try:
-        result = lesson_plan_generator.analyze_requirements(
+        # 模型调用是同步阻塞的，放在事件循环里会把**整台服务器**占住：
+        # 生成期间教师切到「我的备课」「设置」，那些请求只会一直排队，
+        # 界面上表现为永远转不完的骨架屏。丢进线程池，其它页面照常可用。
+        result = await run_in_threadpool(
+            lesson_plan_generator.analyze_requirements,
             level=level,
             subject=subject,
             grade=grade,
@@ -72,7 +77,8 @@ async def generate_lesson_plan_outline(
 ):
     """阶段2：教案结构化大纲生成"""
     try:
-        outline = lesson_plan_generator.generate_outline(requirements)
+        outline = await run_in_threadpool(
+            lesson_plan_generator.generate_outline, requirements)
 
         return {
             "success": True,
@@ -94,7 +100,8 @@ async def generate_lesson_plan_content(
 ):
     """阶段3：分模块精细化内容生成"""
     try:
-        lesson_plan = lesson_plan_generator.generate_detailed_content(outline, requirements)
+        lesson_plan = await run_in_threadpool(
+            lesson_plan_generator.generate_detailed_content, outline, requirements)
 
         return {
             "success": True,
@@ -117,7 +124,8 @@ async def validate_lesson_plan_compliance(
 ):
     """阶段4：教学合规性与学段/专业适配性双重校验"""
     try:
-        validation_result = lesson_plan_generator.validate_compliance(lesson_plan, level, subject)
+        validation_result = await run_in_threadpool(
+            lesson_plan_generator.validate_compliance, lesson_plan, level, subject)
 
         return {
             "success": True,
@@ -194,7 +202,8 @@ async def revise_lesson_plan(
         }
 
     try:
-        result = lesson_plan_generator.modify_lesson_plan(
+        result = await run_in_threadpool(
+            lesson_plan_generator.modify_lesson_plan,
             existing_lesson_plan=base,
             level=level,
             subject=subject,
@@ -261,7 +270,8 @@ async def export_lesson_plan(
 ):
     """阶段6：多格式导出与跨模块内容同步"""
     try:
-        exported_content = lesson_plan_generator.export_lesson_plan(
+        exported_content = await run_in_threadpool(
+            lesson_plan_generator.export_lesson_plan,
             lesson_plan, export_format, output_dir=LESSON_PLAN_DIR, topic=topic
         )
 
@@ -305,7 +315,8 @@ async def generate_lesson_plan_from_ppt(
 ):
     """从PPT生成匹配的教案"""
     try:
-        lesson_plan = lesson_plan_generator.generate_from_ppt(
+        lesson_plan = await run_in_threadpool(
+            lesson_plan_generator.generate_from_ppt,
             ppt_content=ppt_content,
             level=level,
             subject=subject,
@@ -358,7 +369,9 @@ async def generate_full_lesson_plan(
         # 的 compose_generation_context）—— 知识 + 教学意图 + 教学蓝图一次拼好，
         # 保证四类产物拿到的是**同一段**上下文。
         # 检索失败、蓝图缺失都不阻断生成 —— 最多是这次没用到它们。
-        course_knowledge, composed_context, ctx_meta = compose_generation_context(
+        # 检索要算向量，也是重的：同样不能占着事件循环
+        course_knowledge, composed_context, ctx_meta = await run_in_threadpool(
+            compose_generation_context,
             topic=topic, subject=subject, grade=grade, kind="lesson_plan",
             scope=knowledge_scope, intent=teaching_intent,
             blueprint=teaching_blueprint, lesson_id=lesson_id,
@@ -368,7 +381,8 @@ async def generate_full_lesson_plan(
             if composed_context else effective_requirements
         )
 
-        requirements_result = lesson_plan_generator.analyze_requirements(
+        requirements_result = await run_in_threadpool(
+            lesson_plan_generator.analyze_requirements,
             level=level,
             subject=subject,
             grade=grade,
@@ -378,13 +392,16 @@ async def generate_full_lesson_plan(
         )
 
         # 阶段2：教案结构化大纲生成
-        outline = lesson_plan_generator.generate_outline(requirements_result)
+        outline = await run_in_threadpool(
+            lesson_plan_generator.generate_outline, requirements_result)
 
         # 阶段3：分模块精细化内容生成
-        lesson_plan = lesson_plan_generator.generate_detailed_content(outline, requirements_result)
+        lesson_plan = await run_in_threadpool(
+            lesson_plan_generator.generate_detailed_content, outline, requirements_result)
 
         # 阶段4：教学合规性与学段/专业适配性双重校验
-        validation_result = lesson_plan_generator.validate_compliance(lesson_plan, level, subject)
+        validation_result = await run_in_threadpool(
+            lesson_plan_generator.validate_compliance, lesson_plan, level, subject)
         corrected_lesson_plan = validation_result["corrected_lesson_plan"]
 
         # 阶段5：出厂质检闸门（纯规则离线扫描，只报告不阻断）

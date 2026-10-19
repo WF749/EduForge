@@ -1,1119 +1,514 @@
 <template>
-  <div class="knowledge-view">
-    <div class="knowledge-container">
-      <!-- Page Header -->
-      <div class="page-header">
-        <div class="header-info">
-          <h1>本地知识库管理</h1>
-          <p class="subtitle">构建和管理您的专业知识库，用于RAG检索增强</p>
-        </div>
+  <div class="wb-page">
+    <PageHeader
+      title="知识库"
+      description="内置教学法与学科资料，加上你自己上传的课件。生成时可以选择用哪一部分。"
+    >
+      <template #actions>
+        <!-- 不占一级导航的次级入口：查着资料顺手想出一份成品时从这里进 -->
+        <el-dropdown trigger="click" @command="onQuickMake">
+          <el-button :icon="MagicStick">
+            快速制作
+            <el-icon><ArrowDown /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="lesson-plan">教案</el-dropdown-item>
+              <el-dropdown-item command="courseware">课件（六阶段）</el-dropdown-item>
+              <el-dropdown-item command="ppt">PPT 课件</el-dropdown-item>
+              <el-dropdown-item command="animation">动画演示</el-dropdown-item>
+              <el-dropdown-item command="game">互动游戏</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <el-button :icon="Refresh" :loading="loadingStatus" @click="loadStatus">刷新状态</el-button>
+      </template>
+    </PageHeader>
+
+    <!-- 状态条：降级必须说清，否则教师会以为系统坏了 -->
+    <div class="wb-card wb-card-pad status">
+      <div class="status__item">
+        <span class="wb-muted">索引状态</span>
+        <StatusTag :status="statusOk ? 'done' : 'degraded'" :label="statusOk ? '正常' : '需要重建'" />
       </div>
-
-      <!-- Stats Cards -->
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-icon documents">
-            <el-icon :size="28"><Document /></el-icon>
-          </div>
-          <div class="stat-content">
-            <span class="stat-value">{{ stats.total_documents || 0 }}</span>
-            <span class="stat-label">文档数量</span>
-          </div>
-        </div>
-
-        <div class="stat-card">
-          <div class="stat-icon chunks">
-            <el-icon :size="28"><Grid /></el-icon>
-          </div>
-          <div class="stat-content">
-            <span class="stat-value">{{ stats.total_chunks || 0 }}</span>
-            <span class="stat-label">知识块</span>
-          </div>
-        </div>
-
-        <div class="stat-card">
-          <div class="stat-icon status" :class="{ active: stats.status === 'ready' }">
-            <el-icon :size="28"><Connection /></el-icon>
-          </div>
-          <div class="stat-content">
-            <span class="stat-value">{{ stats.status || '未知' }}</span>
-            <span class="stat-label">服务状态</span>
-          </div>
-        </div>
+      <div class="status__item">
+        <span class="wb-muted">文档片段</span>
+        <b>{{ status.chunks ?? status.count ?? '—' }}</b>
       </div>
-
-      <!-- Main Content Grid -->
-      <div class="content-grid">
-        <!-- Upload Section -->
-        <div class="upload-section">
-          <div class="section-card">
-            <div class="card-header">
-              <h3>
-                <el-icon :size="20"><Upload /></el-icon>
-                上传知识文件
-              </h3>
-            </div>
-
-            <el-upload
-              ref="uploadRef"
-              drag
-              :auto-upload="false"
-              :multiple="true"
-              accept=".pdf,.docx,.doc,.pptx,.ppt,.txt,.md"
-              :on-change="handleFileChange"
-              :file-list="fileList"
-              class="upload-area"
-            >
-              <div class="upload-content">
-                <div class="upload-icon">
-                  <el-icon :size="48"><UploadFilled /></el-icon>
-                </div>
-                <div class="upload-text">拖拽文件到此处或点击上传</div>
-                <div class="upload-formats">
-                  <span class="format-tag">PDF</span>
-                  <span class="format-tag">Word</span>
-                  <span class="format-tag">PPT</span>
-                  <span class="format-tag">TXT</span>
-                  <span class="format-tag">Markdown</span>
-                </div>
-                <div class="upload-hint">
-                  支持多份参考资料，系统会自动解析并添加到知识库
-                </div>
-              </div>
-            </el-upload>
-
-            <div class="upload-actions">
-              <el-button @click="fileList = []" :disabled="fileList.length === 0 || uploading">
-                清空列表
-              </el-button>
-              <el-button
-                type="primary"
-                :loading="uploading"
-                @click="uploadFiles"
-                :disabled="fileList.length === 0"
-              >
-                <el-icon><Upload /></el-icon>
-                解析并添加到知识库
-              </el-button>
-            </div>
-
-            <!-- 上传进度条 -->
-            <div class="upload-progress" v-if="uploading || uploadProgress > 0">
-              <el-progress
-                :percentage="uploadProgress"
-                :stroke-width="10"
-                :color="uploadProgress >= 100 ? '#43e97b' : '#00c8ff'"
-                :format="() => `${uploadProgress}%`"
-              />
-              <div class="progress-status" v-if="uploadStatus">
-                <el-icon v-if="uploading" class="rotating"><Loading /></el-icon>
-                <el-icon v-else-if="uploadProgress >= 100" style="color: #43e97b"><SuccessFilled /></el-icon>
-                <span>{{ uploadStatus }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Documents List Section -->
-        <div class="documents-section">
-          <div class="section-card">
-            <div class="card-header">
-              <h3>
-                <el-icon :size="20"><Collection /></el-icon>
-                知识库文档
-              </h3>
-              <el-button
-                text
-                type="danger"
-                @click="clearKnowledgeBase"
-                :disabled="documents.length === 0"
-              >
-                <el-icon><Delete /></el-icon>
-                清空知识库
-              </el-button>
-            </div>
-
-            <div class="documents-list" v-if="documents.length > 0">
-              <div
-                v-for="doc in documents"
-                :key="doc.id"
-                class="document-item"
-              >
-                <div class="doc-icon">
-                  <el-icon :size="20"><Document /></el-icon>
-                </div>
-                <div class="doc-info">
-                  <span class="doc-name">{{ doc.metadata?.filename || doc.name || doc.id }}</span>
-                  <div class="doc-meta">
-                    <span class="meta-item">
-                      <el-icon :size="12"><Grid /></el-icon>
-                      {{ doc.count || 0 }} 个知识块
-                    </span>
-                    <span class="meta-item" v-if="doc.metadata?.file_type">
-                      <el-icon :size="12"><Files /></el-icon>
-                      {{ doc.metadata.file_type }}
-                    </span>
-                  </div>
-                </div>
-                <el-button
-                  :icon="Delete"
-                  text
-                  type="danger"
-                  class="delete-btn"
-                  @click="deleteDocument(doc.id)"
-                />
-              </div>
-            </div>
-
-            <div v-else-if="loadingDocs" class="empty-state">
-              <el-icon :size="40" class="rotating"><Loading /></el-icon>
-              <p>加载文档列表中...</p>
-            </div>
-
-            <div v-else class="empty-state">
-              <div class="empty-icon">
-                <el-icon :size="56"><Folder /></el-icon>
-              </div>
-              <p>知识库为空</p>
-              <span>请上传文档以构建您的知识库</span>
-            </div>
-          </div>
-        </div>
+      <div v-for="(v, k) in statusFlags" :key="k" class="status__item">
+        <span class="wb-muted">{{ k }}</span>
+        <b>{{ v === true ? '可用' : v === false ? '不可用' : v }}</b>
       </div>
-
-      <!-- Query Section -->
-      <div class="query-section">
-        <div class="section-card">
-          <div class="card-header">
-            <h3>
-              <el-icon :size="20"><Search /></el-icon>
-              检索测试
-            </h3>
-          </div>
-
-          <p class="section-desc">测试知识库的检索效果，验证知识融合是否正确</p>
-
-          <div class="query-tips">
-            <p><strong>使用方法：</strong>在下方输入框中输入您想查询的问题或关键词，点击检索按钮。系统会从已上传的知识库文档中查找最相关的内容片段并按相关度排序返回。</p>
-            <p>提示：查询内容越具体，检索结果越精准。例如输入"勾股定理的证明方法"比"数学"效果更好。</p>
-          </div>
-
-          <div class="query-input">
-            <el-input
-              v-model="queryText"
-              placeholder="输入查询内容，例如：Python变量定义"
-              size="large"
-            >
-              <template #append>
-                <el-button
-                  :icon="Search"
-                  @click="executeQuery"
-                  :loading="querying"
-                  :disabled="!queryText.trim()"
-                >
-                  检索
-                </el-button>
-              </template>
-            </el-input>
-          </div>
-
-          <!-- Query Results -->
-          <div class="query-results" v-if="queryResults.length > 0">
-            <h4>检索结果 <span class="result-count">共 {{ queryResults.length }} 条</span></h4>
-            <div
-              v-for="(result, index) in queryResults"
-              :key="index"
-              class="result-item"
-              :class="{ 'low-relevance': result.score < 0.5 }"
-            >
-              <div class="result-header">
-                <span class="result-index">{{ index + 1 }}</span>
-                <el-tag v-if="result.score >= 0.8" type="success" size="small">高匹配</el-tag>
-                <el-tag v-else-if="result.score >= 0.5" type="warning" size="small">中匹配</el-tag>
-                <el-tag v-else type="info" size="small">低匹配</el-tag>
-                <el-progress
-                  :percentage="Math.round(result.score * 100)"
-                  :stroke-width="4"
-                  :color="getScoreColor(result.score)"
-                  class="result-score"
-                />
-                <span class="score-value">{{ Math.round(result.score * 100) }}%</span>
-              </div>
-              <div class="result-content">{{ result.content }}</div>
-              <div class="result-meta">
-                <el-icon :size="12"><Document /></el-icon>
-                来源: {{ result.source || result.metadata?.filename || result.metadata?.source || '未知' }}
-              </div>
-            </div>
-          </div>
-
-          <!-- Empty state -->
-          <div class="query-empty" v-else-if="queryResults.length === 0 && queryText.trim() && !querying">
-            <p>未找到相关内容。请尝试：</p>
-            <ul>
-              <li>使用不同的关键词重新检索</li>
-              <li>确认知识库中已上传包含相关内容的文档</li>
-              <li>使用更具体或更简洁的查询语句</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      <!-- Education Examples Section -->
-      <div class="examples-section">
-        <div class="section-card">
-          <div class="card-header">
-            <h3>
-              <el-icon :size="20"><Star /></el-icon>
-              教育知识示例
-            </h3>
-          </div>
-
-          <p class="section-desc">预设的教育领域知识库内容示例</p>
-
-          <div class="examples-grid">
-            <div
-              v-for="example in educationExamples"
-              :key="example.title"
-              class="example-item"
-              @click="queryText = example.query; executeQuery()"
-            >
-              <div class="example-icon" :style="{ background: example.gradient }">
-                <el-icon :size="20"><component :is="example.icon" /></el-icon>
-              </div>
-              <div class="example-content">
-                <span class="example-title">{{ example.title }}</span>
-                <span class="example-query">{{ example.query }}</span>
-              </div>
-              <el-icon :size="16" class="example-arrow"><ArrowRight /></el-icon>
-            </div>
-          </div>
-        </div>
-      </div>
+      <p v-if="statusError" class="status__error">{{ statusError }}</p>
     </div>
+
+    <el-tabs v-model="tab">
+      <!-- 检索测试 -->
+      <el-tab-pane label="检索测试" name="search">
+        <div class="wb-card wb-card-pad wb-stack">
+          <p class="wb-card-hint">
+            生成时用的就是这条检索。查不到说明知识库里没有相关内容 ——
+            系统会明确说"没有"，而不是让模型编一段。
+          </p>
+          <el-input
+            v-model="query"
+            type="textarea"
+            :rows="2"
+            placeholder="输入一个教学问题，例如：初中物理浮力常见的学生误区有哪些"
+          />
+          <div class="wb-row">
+            <el-button type="primary" :loading="searching" :disabled="!query.trim()" @click="onSearch">
+              检索
+            </el-button>
+            <el-checkbox v-model="rerank">启用重排序（更准，稍慢）</el-checkbox>
+            <el-input-number v-model="topK" :min="1" :max="20" size="small" aria-label="返回条数" />
+          </div>
+
+          <StateBlock :error="searchError" :retryable="false">
+            <div v-if="searchResult" class="wb-stack-sm">
+              <div v-if="searchResult.refused" class="note note--warn">
+                知识库判定：没有找到相关内容。生成时不会把任何片段塞进上下文。
+              </div>
+              <EmptyState
+                v-else-if="!hits.length"
+                title="没有命中"
+                description="换个说法试试，或者到「我的资料」里上传相关文档。"
+                icon="Search"
+              />
+              <ul v-else class="hits">
+                <li v-for="(h, i) in hits" :key="i" class="hit">
+                  <div class="hit__head">
+                    <b>{{ h.source || '资料' }}</b>
+                    <span v-if="h.heading_path" class="wb-muted">{{ h.heading_path }}</span>
+                    <span v-if="h.score != null" class="hit__score">{{ Number(h.score).toFixed(3) }}</span>
+                  </div>
+                  <p class="hit__text">{{ h.content || h.text || '' }}</p>
+                </li>
+              </ul>
+            </div>
+          </StateBlock>
+        </div>
+      </el-tab-pane>
+
+      <!-- 我的资料 -->
+      <el-tab-pane label="我的资料" name="files">
+        <div class="wb-card wb-card-pad wb-stack">
+          <div class="wb-row">
+            <el-upload
+              :show-file-list="false"
+              :http-request="onUpload"
+              accept=".pdf,.doc,.docx,.txt,.md,.pptx"
+            >
+              <el-button type="primary" :icon="Upload">上传资料</el-button>
+            </el-upload>
+            <el-checkbox v-model="addToKnowledge">上传后直接入库</el-checkbox>
+            <span class="wb-muted" style="font-size: var(--fs-xs)">
+              支持 PDF / Word / PPT / 文本；扫描版 PDF 提取不出文字，会当场提示。
+            </span>
+          </div>
+
+          <StateBlock
+            :loading="loadingFiles"
+            hint="正在读取资料列表…"
+            :error="fileError"
+            :empty="!files.length"
+            empty-title="还没有上传资料"
+            empty-description="上传课件、教材或习题，生成时会把它们作为依据之一。"
+            @retry="loadFiles"
+          >
+            <ul class="files">
+              <li v-for="file in files" :key="file.file_id" class="file">
+                <span class="file__name wb-truncate">{{ file.filename }}</span>
+                <span class="file__size">{{ formatSize(file.size) }}</span>
+                <span class="file__ops">
+                  <el-button size="small" text @click="onProcess(file)">检查可否提取</el-button>
+                  <el-button size="small" text @click="onAddToKnowledge(file)">入库</el-button>
+                </span>
+              </li>
+            </ul>
+          </StateBlock>
+        </div>
+
+        <!-- 索引里的文档 -->
+        <div class="wb-card wb-card-pad wb-stack lp">
+          <div class="wb-row wb-row-between">
+            <b>已入库的文档</b>
+            <el-button size="small" :icon="Refresh" :loading="loadingDocs" @click="loadDocs">
+              刷新
+            </el-button>
+          </div>
+          <StateBlock
+            :loading="loadingDocs"
+            hint="正在读取已入库文档…"
+            :error="docError"
+            :empty="!docs.length"
+            empty-title="还没有文档"
+            empty-description="上传资料并选择入库，或者直接重建内置索引。"
+            @retry="loadDocs"
+          >
+            <ul class="files">
+              <li v-for="d in docs" :key="d.document_id || d.id" class="file">
+                <span class="file__name wb-truncate">{{ d.document_id || d.id || d.name }}</span>
+                <span class="file__size">{{ d.chunks ?? d.count ?? '' }}</span>
+                <span class="file__ops">
+                  <el-button
+                    size="small"
+                    text
+                    type="danger"
+                    @click="onDeleteDoc(d)"
+                  >
+                    删除
+                  </el-button>
+                </span>
+              </li>
+            </ul>
+          </StateBlock>
+        </div>
+      </el-tab-pane>
+
+      <!-- 索引与维护 -->
+      <el-tab-pane label="索引与维护" name="index">
+        <div class="wb-card wb-card-pad wb-stack">
+          <div>
+            <b>重建内置知识库索引</b>
+            <p class="wb-card-hint">
+              只重建仓库里 <code>knowledge_base/</code> 下的内置文档，
+              <b>不会影响你上传的资料</b>。内置文档有增删或改动时用一次。
+            </p>
+          </div>
+          <el-button :loading="reindexing" @click="onReindex">开始重建</el-button>
+          <pre v-if="reindexResult" class="dump">{{ reindexResult }}</pre>
+        </div>
+
+        <div class="wb-card wb-card-pad wb-stack lp">
+          <div>
+            <b class="danger-text">清空轻量知识库</b>
+            <p class="wb-card-hint">
+              只清 <code>/knowledge/*</code> 这一套早期分块存储，
+              <b>不会影响</b>内置索引与上面那份文档列表。清之前先确认你不再需要它们。
+            </p>
+          </div>
+          <div class="wb-row">
+            <span class="wb-muted">当前片段数：{{ lightweightCount }}</span>
+            <el-button type="danger" plain :loading="clearing" @click="onClear">
+              清空轻量知识库
+            </el-button>
+          </div>
+        </div>
+      </el-tab-pane>
+    </el-tabs>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
-import { useAppStore } from '@/store/app'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { ArrowDown, MagicStick, Refresh, Search, Upload } from '@element-plus/icons-vue'
+import PageHeader from '@/components/common/PageHeader.vue'
+import StateBlock from '@/components/common/StateBlock.vue'
+import StatusTag from '@/components/common/StatusTag.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 import {
-  Document, UploadFilled, Upload, Delete, Grid,
-  Connection, Folder, Search, Collection, Star,
-  Files, ArrowRight, VideoPlay, Connection as ConnIcon,
-  Loading, SuccessFilled
-} from '@element-plus/icons-vue'
+  fetchRagStatus, searchKnowledge, listRagDocuments, deleteRagDocument, reindexSeed
+} from '@/api/rag'
+import { listUploadedFiles, uploadFile, processUpload, addFileToKnowledge } from '@/api/upload'
+import { fetchKnowledgeStats, clearKnowledge } from '@/api/knowledge'
+import { confirmDanger, notifyError, notifySuccess } from '@/utils/notify'
 
-const store = useAppStore()
+/**
+ * 知识库管理。
+ *
+ * 两套存储并存（内置 RAG 索引 + 早期轻量分块），界面上必须分开：
+ * 混在一起会让教师以为"删了没生效"或者"清一次全没了"。
+ */
+const router = useRouter()
+const tab = ref('search')
 
-// State
-const fileList = ref([])
-const uploading = ref(false)
-const uploadProgress = ref(0)
-const uploadStatus = ref('')
-const documents = ref([])
-const stats = ref({})
-const queryText = ref('')
-const queryResults = ref([])
-const querying = ref(false)
+/** 次级入口：跳到 /generate/*，路由与后端接口都保留，只是不再占一级导航 */
+function onQuickMake(type) {
+  router.push(`/generate/${type}`)
+}
+
+const status = ref({})
+const loadingStatus = ref(false)
+const statusError = ref('')
+
+const query = ref('')
+const topK = ref(5)
+const rerank = ref(true)
+const searching = ref(false)
+const searchError = ref('')
+const searchResult = ref(null)
+
+const files = ref([])
+const loadingFiles = ref(false)
+const fileError = ref('')
+const addToKnowledge = ref(true)
+
+const docs = ref([])
 const loadingDocs = ref(false)
+const docError = ref('')
 
-const KB_UI_KEY = 'a04_knowledge_ui_v1'
+const reindexing = ref(false)
+const reindexResult = ref('')
+const clearing = ref(false)
+const lightweightCount = ref(0)
 
-function restoreKnowledgeCache() {
-  try {
-    const raw = sessionStorage.getItem(KB_UI_KEY)
-    if (!raw) return
-    const d = JSON.parse(raw)
-    if (d.stats && typeof d.stats === 'object') stats.value = d.stats
-    if (Array.isArray(d.documents)) documents.value = d.documents
-    if (typeof d.queryText === 'string') queryText.value = d.queryText
-    if (Array.isArray(d.queryResults)) queryResults.value = d.queryResults
-  } catch { /* ignore */ }
+const statusOk = computed(() => !statusError.value && Object.keys(status.value).length > 0)
+
+const LABELS = {
+  vector_ready: '向量检索',
+  bm25_ready: '关键词检索',
+  rerank_ready: '重排序',
+  has_index: '已有索引'
 }
 
-function saveKnowledgeCache() {
-  try {
-    sessionStorage.setItem(KB_UI_KEY, JSON.stringify({
-      stats: stats.value,
-      documents: documents.value,
-      queryText: queryText.value,
-      queryResults: queryResults.value
-    }))
-  } catch { /* ignore */ }
-}
-
-watch([stats, documents, queryText, queryResults], saveKnowledgeCache, { deep: true })
-
-// Education Examples
-const educationExamples = [
-  {
-    title: 'Python编程基础',
-    query: 'Python中的变量和数据类型有哪些？',
-    icon: VideoPlay,
-    gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-  },
-  {
-    title: '计算机网络',
-    query: 'TCP/IP协议栈的层次结构是什么？',
-    icon: Connection,
-    gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)'
-  },
-  {
-    title: '数据结构',
-    query: '二叉树的遍历方法有哪些？',
-    icon: Files,
-    gradient: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)'
-  },
-  {
-    title: '机器学习',
-    query: '监督学习和无监督学习的区别？',
-    icon: Star,
-    gradient: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)'
+/** 状态里那些布尔字段（各通道是否可用）挑出来展示 */
+const statusFlags = computed(() => {
+  const out = {}
+  for (const [k, v] of Object.entries(status.value)) {
+    if (typeof v === 'boolean') out[LABELS[k] || k] = v
   }
-]
+  return out
+})
 
-// Load data
-async function loadData() {
-  loadingDocs.value = true
+const hits = computed(() => {
+  const list = searchResult.value?.hits
+  return Array.isArray(list) ? list : []
+})
+
+async function loadStatus() {
+  loadingStatus.value = true
+  statusError.value = ''
   try {
-    const [statsData, docsData] = await Promise.all([
-      store.fetchKnowledgeStats(),
-      store.fetchKnowledgeDocuments(100)
-    ])
-    if (statsData) {
-      stats.value = statsData
-    }
-    documents.value = docsData || []
+    status.value = await fetchRagStatus()
   } catch (e) {
-    console.error('加载知识库数据失败:', e)
-    ElMessage.error('加载知识库数据失败，请检查后端服务是否启动')
+    statusError.value = e?.message || '状态读取失败'
+  } finally {
+    loadingStatus.value = false
+  }
+}
+
+async function onSearch() {
+  if (!query.value.trim() || searching.value) return
+  searching.value = true
+  searchError.value = ''
+  searchResult.value = null
+  try {
+    searchResult.value = await searchKnowledge({
+      query: query.value.trim(),
+      topK: topK.value,
+      rerank: rerank.value
+    })
+  } catch (e) {
+    searchError.value = e?.message || '检索失败'
+  } finally {
+    searching.value = false
+  }
+}
+
+async function loadFiles() {
+  loadingFiles.value = true
+  fileError.value = ''
+  try { files.value = await listUploadedFiles() } catch (e) { fileError.value = e?.message || '列表读取失败' } finally { loadingFiles.value = false }
+}
+
+async function loadDocs() {
+  loadingDocs.value = true
+  docError.value = ''
+  try {
+    const d = await listRagDocuments()
+    docs.value = Array.isArray(d.documents) ? d.documents : []
+  } catch (e) {
+    docError.value = e?.message || '文档列表读取失败'
   } finally {
     loadingDocs.value = false
   }
 }
 
-// Handle file change
-function handleFileChange(file, files) {
-  fileList.value = files
+async function loadStats() {
+  try {
+    const s = await fetchKnowledgeStats()
+    lightweightCount.value = s?.chunks ?? s?.count ?? s?.total ?? 0
+  } catch { lightweightCount.value = 0 }
 }
 
-// Upload files
-async function uploadFiles() {
-  if (fileList.value.length === 0) {
-    ElMessage.warning('请选择要上传的文件')
-    return
-  }
-
-  uploading.value = true
-  uploadProgress.value = 0
-  uploadStatus.value = ''
-  let successCount = 0
-  const totalFiles = fileList.value.length
-
+async function onUpload({ file }) {
   try {
-    for (let i = 0; i < totalFiles; i++) {
-      const file = fileList.value[i]
-      const fileName = file.name || file.raw?.name || '未知文件'
-      
-      // 阶段1: 上传中 (每个文件占总进度的一部分)
-      const fileBaseProgress = Math.round((i / totalFiles) * 100)
-      const fileStepProgress = Math.round(100 / totalFiles)
-      
-      uploadProgress.value = fileBaseProgress
-      uploadStatus.value = `正在上传并解析 (${i + 1}/${totalFiles}): ${fileName}`
-      
-      // 模拟上传阶段进度
-      const progressTimer = setInterval(() => {
-        if (uploadProgress.value < fileBaseProgress + fileStepProgress * 0.9) {
-          uploadProgress.value += 1
-        }
-      }, 300)
-
-      try {
-        const uploadRes = await store.uploadFile(file.raw, 'knowledge_base', true)
-        clearInterval(progressTimer)
-        
-        if (uploadRes.success === false) {
-          ElMessage.error(`文件 ${fileName} 处理失败: ${uploadRes.message || '未知错误'}`)
-          uploadProgress.value = fileBaseProgress + fileStepProgress
-          continue
-        }
-        successCount++
-        uploadProgress.value = fileBaseProgress + fileStepProgress
-        uploadStatus.value = `已完成 (${successCount}/${totalFiles}): ${fileName}`
-      } catch (fileErr) {
-        clearInterval(progressTimer)
-        const msg = fileErr.response?.data?.detail || fileErr.response?.data?.message || fileErr.message || '未知错误'
-        ElMessage.error(`文件 ${fileName} 上传失败: ${msg}`)
-        uploadProgress.value = fileBaseProgress + fileStepProgress
-      }
-    }
-
-    uploadProgress.value = 100
-    if (successCount > 0) {
-      uploadStatus.value = `全部完成！成功添加 ${successCount}/${totalFiles} 个文件`
-      ElMessage.success(`成功添加 ${successCount} 个文件到知识库`)
-    } else {
-      uploadStatus.value = '所有文件处理失败，请检查文件格式'
-    }
-    fileList.value = []
-    await loadData()
+    await uploadFile(file, { addToKnowledge: addToKnowledge.value })
+    notifySuccess('上传成功')
+    await loadFiles()
+    await loadStatus()
   } catch (e) {
-    const msg = e.response?.data?.detail || e.response?.data?.message || e.message || '未知错误'
-    ElMessage.error('上传失败: ' + msg)
-    uploadStatus.value = '上传出错: ' + msg
+    // 扫描版 PDF 提取不出文本 —— 后端会明确说明，这里原样转达
+    notifyError(e?.message || '上传失败')
+  }
+}
+
+async function onProcess(file) {
+  try {
+    const r = await processUpload(file.file_id)
+    notifySuccess(r?.text_length ? `可以提取正文，约 ${r.text_length} 字` : '这份资料提取不出文本')
+  } catch (e) {
+    notifyError(e?.message || '解析失败')
+  }
+}
+
+async function onAddToKnowledge(file) {
+  try {
+    await addFileToKnowledge(file.file_id)
+    notifySuccess('已入库')
+    await loadDocs()
+    await loadStatus()
+  } catch (e) {
+    notifyError(e?.message || '入库失败')
+  }
+}
+
+async function onDeleteDoc(d) {
+  const id = d.document_id || d.id
+  const ok = await confirmDanger({
+    title: '从索引里移除这篇文档？',
+    consequence: '它的所有片段都会被删除，之后的检索不会再命中它。<br>原始上传文件仍在「我的资料」里，可以重新入库。',
+    confirmText: '确认移除'
+  })
+  if (!ok) return
+  try {
+    await deleteRagDocument(id)
+    notifySuccess('已移除')
+    await loadDocs()
+  } catch (e) {
+    notifyError(e?.message || '删除失败')
+  }
+}
+
+async function onReindex() {
+  if (reindexing.value) return
+  reindexing.value = true
+  reindexResult.value = ''
+  try {
+    const r = await reindexSeed()
+    reindexResult.value = JSON.stringify(r, null, 2)
+    notifySuccess(`重建完成：${r.documents ?? 0} 篇 / ${r.chunks ?? 0} 片段`)
+    await loadStatus()
+  } catch (e) {
+    notifyError(e?.message || '重建失败')
   } finally {
-    uploading.value = false
-    // 3秒后清除进度条
-    setTimeout(() => {
-      if (!uploading.value) {
-        uploadProgress.value = 0
-        uploadStatus.value = ''
-      }
-    }, 3000)
+    reindexing.value = false
   }
 }
 
-// Delete document
-async function deleteDocument(docId) {
+async function onClear() {
+  const ok = await confirmDanger({
+    title: '清空轻量知识库？',
+    consequence: `将删除 ${lightweightCount.value} 个片段。<br>内置知识库索引与已上传的资料不受影响。`,
+    confirmText: '确认清空'
+  })
+  if (!ok) return
+  clearing.value = true
   try {
-    await ElMessageBox.confirm('确定要删除这个文档吗？', '确认删除', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
-    })
-
-    const res = await store.api.delete(`/knowledge/document/${encodeURIComponent(docId)}`)
-    if (res.data?.success) {
-      ElMessage.success('删除成功')
-    } else {
-      ElMessage.error('删除失败: ' + (res.data?.message || '未知错误'))
-    }
-    await loadData()
+    await clearKnowledge()
+    notifySuccess('已清空')
+    await loadStats()
   } catch (e) {
-    if (e !== 'cancel') {
-      ElMessage.error('删除失败: ' + (e.response?.data?.message || e.message || ''))
-    }
-  }
-}
-
-// Clear knowledge base
-async function clearKnowledgeBase() {
-  try {
-    await ElMessageBox.confirm(
-      '确定要清空整个知识库吗？此操作不可恢复！',
-      '危险操作',
-      {
-        confirmButtonText: '确定清空',
-        cancelButtonText: '取消',
-        type: 'error'
-      }
-    )
-
-    await store.api.delete('/knowledge/clear')
-    ElMessage.success('知识库已清空')
-    await loadData()
-  } catch (e) {
-    if (e !== 'cancel') {
-      ElMessage.error('清空失败')
-    }
-  }
-}
-
-// Execute query
-async function executeQuery() {
-  if (!queryText.value.trim()) {
-    ElMessage.warning('请输入查询内容')
-    return
-  }
-
-  querying.value = true
-
-  try {
-    const res = await store.queryKnowledge(queryText.value)
-    queryResults.value = res.results || []
-  } catch (e) {
-    ElMessage.error('检索失败')
+    notifyError(e?.message || '清空失败')
   } finally {
-    querying.value = false
+    clearing.value = false
   }
 }
 
-// Get score color
-function getScoreColor(score) {
-  if (score > 0.8) return '#00ff88'
-  if (score > 0.6) return '#00c8ff'
-  if (score > 0.4) return '#ffcc00'
-  return '#ff6b6b'
+function formatSize(n) {
+  const v = Number(n || 0)
+  if (v < 1024) return `${v} B`
+  if (v < 1024 * 1024) return `${(v / 1024).toFixed(1)} KB`
+  return `${(v / 1024 / 1024).toFixed(1)} MB`
 }
 
 onMounted(() => {
-  restoreKnowledgeCache()
-  loadData()
-})
-
-onBeforeUnmount(() => {
-  saveKnowledgeCache()
+  loadStatus()
+  loadFiles()
+  loadDocs()
+  loadStats()
 })
 </script>
 
-<style lang="scss" scoped>
-.knowledge-view {
-  height: calc(100vh - 112px);
-  overflow-y: auto;
-  padding: 24px;
-
-  &::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background: rgba(0, 200, 255, 0.3);
-    border-radius: 3px;
-  }
-}
-
-.knowledge-container {
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
-// Page Header
-.page-header {
-  margin-bottom: 28px;
-
-  .header-info {
-    h1 {
-      font-size: 28px;
-      font-weight: 700;
-      margin-bottom: 8px;
-      background: linear-gradient(135deg, var(--primary), var(--accent));
-      background-clip: text;
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      color: transparent;
-    }
-
-    .subtitle {
-      font-size: 14px;
-      color: var(--text-secondary);
-    }
-  }
-}
-
-// Stats Grid
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
-  margin-bottom: 24px;
-
-  @media (max-width: 768px) {
-    grid-template-columns: 1fr;
-  }
-}
-
-.stat-card {
+<style scoped>
+.status {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 20px 24px;
-  background: rgba(10, 14, 39, 0.6);
-  border: 1px solid rgba(0, 200, 255, 0.1);
-  border-radius: 16px;
-  transition: all 0.3s ease;
-
-  &:hover {
-    border-color: rgba(0, 200, 255, 0.3);
-    transform: translateY(-2px);
-  }
-
-  .stat-icon {
-    width: 56px;
-    height: 56px;
-    border-radius: 14px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-
-    &.documents {
-      background: linear-gradient(135deg, #667eea, #764ba2);
-    }
-
-    &.chunks {
-      background: linear-gradient(135deg, #4facfe, #00f2fe);
-    }
-
-    &.status {
-      background: linear-gradient(135deg, #f093fb, #f5576c);
-
-      &.active {
-        background: linear-gradient(135deg, #43e97b, #38f9d7);
-        animation: status-glow 2s ease-in-out infinite;
-      }
-    }
-  }
-
-  @keyframes status-glow {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(67, 233, 123, 0.4); }
-    50% { box-shadow: 0 0 20px 4px rgba(67, 233, 123, 0.2); }
-  }
-
-  .stat-content {
-    display: flex;
-    flex-direction: column;
-
-    .stat-value {
-      font-size: 28px;
-      font-weight: 800;
-      background: linear-gradient(135deg, var(--primary), var(--accent));
-      background-clip: text;
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      color: transparent;
-    }
-
-    .stat-label {
-      font-size: 13px;
-      color: var(--text-muted);
-    }
-  }
+  gap: var(--sp-5);
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-4);
 }
 
-// Content Grid
-.content-grid {
+.status__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--fs-sm);
+}
+
+.status__error {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--wb-risk-text);
+}
+
+.hits { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
+
+.hit {
+  border-left: 2px solid var(--brand-border);
+  padding-left: var(--sp-3);
+}
+
+.hit__head { display: flex; align-items: baseline; gap: var(--sp-2); flex-wrap: wrap; font-size: var(--fs-sm); }
+.hit__score { font-family: var(--font-mono); font-size: 11px; color: var(--wb-text-3); }
+.hit__text { margin: 4px 0 0; font-size: var(--fs-sm); color: var(--wb-text-2); line-height: 1.7; }
+
+.files { list-style: none; margin: 0; padding: 0; }
+
+.file {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-  margin-bottom: 24px;
-
-  @media (max-width: 1024px) {
-    grid-template-columns: 1fr;
-  }
+  grid-template-columns: minmax(0, 1fr) 84px auto;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 6px 0;
+  border-top: 1px solid var(--wb-border);
+  font-size: var(--fs-sm);
 }
 
-.section-card {
-  background: rgba(10, 14, 39, 0.6);
-  border: 1px solid rgba(0, 200, 255, 0.1);
-  border-radius: 16px;
-  padding: 20px;
-  transition: all 0.3s ease;
+.file__size { font-size: var(--fs-xs); color: var(--wb-text-3); }
+.file__ops { display: flex; justify-content: flex-end; }
 
-  &:hover {
-    border-color: rgba(0, 200, 255, 0.2);
-  }
-
-  .card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 16px;
-
-    h3 {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 16px;
-      font-weight: 600;
-      color: var(--text-primary);
-    }
-  }
+.note {
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
 }
 
-// Upload Section
-.upload-section {
-  .upload-area {
-    width: 100%;
+.note--warn { background: var(--wb-warn-bg); color: var(--wb-warn-text); }
 
-    :deep(.el-upload-dragger) {
-      width: 100%;
-      height: 200px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: rgba(10, 14, 39, 0.4);
-      border: 2px dashed rgba(0, 200, 255, 0.2);
-      border-radius: 12px;
+.lp { margin-top: var(--sp-4); }
 
-      &:hover {
-        border-color: var(--primary);
-      }
-    }
-  }
-
-  .upload-content {
-    text-align: center;
-
-    .upload-icon {
-      color: var(--primary);
-      margin-bottom: 12px;
-      opacity: 0.7;
-    }
-
-    .upload-text {
-      font-size: 15px;
-      margin-bottom: 12px;
-    }
-
-    .upload-formats {
-      display: flex;
-      gap: 8px;
-      justify-content: center;
-      margin-bottom: 8px;
-
-      .format-tag {
-        padding: 3px 10px;
-        font-size: 11px;
-        background: rgba(0, 200, 255, 0.1);
-        border: 1px solid rgba(0, 200, 255, 0.2);
-        border-radius: 6px;
-        color: var(--primary);
-      }
-    }
-
-    .upload-hint {
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-  }
-
-  .upload-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 12px;
-    margin-top: 16px;
-  }
-
-  .upload-progress {
-    margin-top: 16px;
-    padding: 12px 16px;
-    background: rgba(10, 14, 39, 0.4);
-    border-radius: 10px;
-    border: 1px solid rgba(0, 200, 255, 0.15);
-
-    :deep(.el-progress-bar__outer) {
-      background: rgba(0, 200, 255, 0.1);
-    }
-
-    .progress-status {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-top: 8px;
-      font-size: 13px;
-      color: var(--text-secondary);
-    }
-  }
+.dump {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  background: var(--wb-code-bg);
+  border-radius: var(--radius-sm);
+  padding: var(--sp-2);
+  color: var(--wb-text-2);
 }
 
-.rotating {
-  animation: spin 1.2s linear infinite;
-}
+.danger-text { color: var(--wb-risk-text); }
 
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-// Documents Section
-.documents-section {
-  .documents-list {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    max-height: 280px;
-    overflow-y: auto;
-  }
-
-  .document-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
-    background: rgba(10, 14, 39, 0.4);
-    border-radius: 10px;
-    transition: all 0.2s ease;
-
-    &:hover {
-      background: rgba(0, 200, 255, 0.05);
-
-      .delete-btn {
-        opacity: 1;
-      }
-    }
-
-    .doc-icon {
-      width: 40px;
-      height: 40px;
-      background: rgba(0, 200, 255, 0.1);
-      border-radius: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--primary);
-    }
-
-    .doc-info {
-      flex: 1;
-      min-width: 0;
-
-      .doc-name {
-        display: block;
-        font-size: 14px;
-        font-weight: 500;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        margin-bottom: 4px;
-      }
-
-      .doc-meta {
-        display: flex;
-        gap: 12px;
-
-        .meta-item {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          font-size: 12px;
-          color: var(--text-muted);
-        }
-      }
-    }
-
-    .delete-btn {
-      opacity: 0;
-      transition: opacity 0.2s;
-    }
-  }
-
-  .empty-state {
-    text-align: center;
-    padding: 40px 20px;
-
-    .empty-icon {
-      color: var(--text-muted);
-      opacity: 0.3;
-      margin-bottom: 12px;
-    }
-
-    p {
-      font-size: 15px;
-      color: var(--text-secondary);
-      margin-bottom: 4px;
-    }
-
-    span {
-      font-size: 13px;
-      color: var(--text-muted);
-    }
-  }
-}
-
-// Query Section
-.query-section {
-  margin-bottom: 24px;
-
-  .section-desc {
-    font-size: 13px;
-    color: var(--text-muted);
-    margin-bottom: 16px;
-  }
-
-  .query-tips {
-    background: rgba(0, 200, 255, 0.05);
-    border: 1px solid rgba(0, 200, 255, 0.15);
-    border-radius: 8px;
-    padding: 12px 16px;
-    margin-bottom: 16px;
-    p {
-      font-size: 13px;
-      line-height: 1.6;
-      color: var(--text-muted);
-      margin: 0 0 6px;
-      &:last-child { margin-bottom: 0; }
-      strong { color: var(--text-secondary); }
-    }
-  }
-
-  .query-empty {
-    text-align: center;
-    padding: 24px;
-    color: var(--text-muted);
-    p { font-size: 14px; margin-bottom: 12px; }
-    ul {
-      list-style: none;
-      padding: 0;
-      li {
-        font-size: 13px;
-        padding: 4px 0;
-        &::before { content: '•  '; color: var(--primary); }
-      }
-    }
-  }
-
-  .query-input {
-    margin-bottom: 20px;
-
-    :deep(.el-input__wrapper) {
-      background: rgba(10, 14, 39, 0.6);
-      border-radius: 10px 0 0 10px;
-    }
-  }
-
-  .query-results {
-    h4 {
-      font-size: 14px;
-      color: var(--text-secondary);
-      margin-bottom: 16px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-
-      .result-count {
-        font-size: 12px;
-        color: var(--text-muted);
-        font-weight: normal;
-      }
-    }
-  }
-
-  .result-item {
-    padding: 16px;
-    background: rgba(10, 14, 39, 0.4);
-    border-radius: 12px;
-    margin-bottom: 12px;
-
-    &.low-relevance {
-      opacity: 0.6;
-      border-left: 3px solid rgba(255, 107, 107, 0.4);
-    }
-
-    .result-header {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 10px;
-
-      .result-index {
-        width: 20px;
-        height: 20px;
-        background: rgba(0, 200, 255, 0.2);
-        border-radius: 6px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 11px;
-        font-weight: 600;
-        color: var(--primary);
-      }
-
-      .result-score {
-        flex: 1;
-      }
-
-      .score-value {
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--text-secondary);
-        min-width: 40px;
-        text-align: right;
-      }
-    }
-
-    .result-content {
-      font-size: 14px;
-      line-height: 1.7;
-      margin-bottom: 8px;
-      max-height: 80px;
-      overflow: hidden;
-    }
-
-    .result-meta {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 11px;
-      color: var(--text-muted);
-    }
-  }
-}
-
-// Examples Section
-.examples-section {
-  .examples-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 16px;
-
-    @media (max-width: 768px) {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  .example-item {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    padding: 16px;
-    background: rgba(10, 14, 39, 0.4);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 12px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-
-    &:hover {
-      background: rgba(0, 200, 255, 0.05);
-      border-color: rgba(0, 200, 255, 0.2);
-      transform: translateX(4px);
-
-      .example-arrow {
-        opacity: 1;
-        transform: translateX(0);
-      }
-    }
-
-    .example-icon {
-      width: 44px;
-      height: 44px;
-      border-radius: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      flex-shrink: 0;
-    }
-
-    .example-content {
-      flex: 1;
-      min-width: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-
-      .example-title {
-        font-size: 14px;
-        font-weight: 600;
-      }
-
-      .example-query {
-        font-size: 12px;
-        color: var(--text-muted);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-    }
-
-    .example-arrow {
-      color: var(--primary);
-      opacity: 0;
-      transform: translateX(-8px);
-      transition: all 0.2s ease;
-    }
-  }
+code {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  background: var(--wb-code-bg);
+  padding: 1px 4px;
+  border-radius: 4px;
 }
 </style>
