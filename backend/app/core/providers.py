@@ -32,7 +32,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 
 @dataclass(frozen=True)
@@ -54,6 +54,15 @@ class ProviderSpec:
     supports_json_mode: bool = False
     supports_stream: bool = True
     supports_embedding: bool = False
+    # ---- 采样参数能力（temperature）--------------------------------------
+    # 能力信息集中在这里，业务文件一律通过 `core.sampling` 查询，
+    # 不允许在各处散落 `if "xxx" in model_name` 这类判断。
+    supports_temperature: bool = True
+    temperature_range: Tuple[float, float] = (0.0, 2.0)
+    # 已知**不接受** temperature 的模型名片段（小写匹配）。
+    # 这是维护项：厂商发布新版本后需在此登记。未知模型按"支持"保守处理，
+    # 不编造它的能力。
+    temperature_unsupported_patterns: Tuple[str, ...] = ()
     # 是否允许用户自定义 base_url（本地/自建网关需要）
     allows_custom_base_url: bool = False
     docs_url: str = ""
@@ -160,6 +169,11 @@ _PROVIDERS: Dict[str, ProviderSpec] = {
         extra_headers={"anthropic-version": "2023-06-01"},
         docs_url="https://platform.claude.com/docs/en/api/messages-examples",
         notes="原生 /messages 协议，非 OpenAI 格式；Opus 4.7+ 不再支持 temperature/top_p。",
+        # Claude 的取值区间是 0~1（不是 OpenAI 兼容层的 0~2）
+        temperature_range=(0.0, 1.0),
+        # 与上面 notes 一致：Opus 4.7 起不接受 temperature/top_p。
+        # 后续新版本需在此登记；未登记的模型按"支持"处理。
+        temperature_unsupported_patterns=("opus-4-7",),
     ),
     "local": ProviderSpec(
         key="local",
@@ -186,6 +200,32 @@ _PROVIDERS: Dict[str, ProviderSpec] = {
         ),
     ),
 }
+
+# ---------------------------------------------------------------------------
+# 采样能力清单（集中维护，禁止在业务文件里散落模型名判断）
+# ---------------------------------------------------------------------------
+
+# 本项目**实际会使用和演示**的模型。只有登记在这里的模型才会被判定为
+# "明确支持 temperature"；不在此列的一律按"能力未知"处理（兼容模式照常发送）。
+#
+# 为什么不按厂商整包声明"支持"：厂商的模型迭代极快，而"这个模型到底收不收
+# temperature"只能逐款确认。整包声明等于**编造**尚未验证的模型能力 ——
+# 本项目已经因为硬编码猜测模型名吃过两次亏（见文件头）。
+KNOWN_TEMPERATURE_MODELS: frozenset = frozenset({
+    ("dashscope", "qwen-plus"),
+    ("dashscope", "qwen-max"),
+    ("dashscope", "qwen-turbo"),
+    ("dashscope", "qwen-vl-plus"),
+    ("openai", "gpt-4o"),
+    ("openai", "gpt-4o-mini"),
+    ("deepseek", "deepseek-v4-flash"),
+    ("deepseek", "deepseek-v4-pro"),
+    ("zhipu", "glm-4-flash"),
+    ("zhipu", "glm-4v"),
+    ("moonshot", "moonshot-v1-8k"),
+    ("gemini", "gemini-3-flash"),
+    ("anthropic", "claude-sonnet-4-5"),
+})
 
 # 前端/文档展示顺序
 PROVIDER_ORDER: List[str] = [
