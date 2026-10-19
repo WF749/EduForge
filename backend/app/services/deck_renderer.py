@@ -108,6 +108,55 @@ def _bullets(tf, items, size, color, bullet="• "):
         _para(tf, f"{bullet}{it}", size, color, first=(i == 0), sa=10)
 
 
+# ---------------------------------------------------------------------------
+# 文本预算：先算这段字在给定框里放不放得下，再决定字号 / 截断
+# ---------------------------------------------------------------------------
+# 为什么必须有：python-pptx 不会自动收缩文字，字号给大了就直接画出框外，
+# 而且 PowerPoint 打开时**不会报错**，只会叠在别的文字上。
+# 实测事故：课堂练习页 3 道题需要 774px，只给了 422px，解析与题干叠成一团。
+_PX_PER_IN = 96.0
+
+
+def _need_h(text: str, size: float, w_in: float) -> float:
+    """估算这段文字排下来需要多高（px）。中文按 1 字宽 ≈ 字号估算。"""
+    w_px = max(1.0, w_in * _PX_PER_IN)
+    per_line = max(1, int(w_px / (size * 1.34)))
+    lines = max(1, (len(str(text or "")) + per_line - 1) // per_line)
+    return lines * size * 2.15
+
+
+def _fit(text: str, w_in: float, h_in: float,
+         sizes=(26, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15)) -> int:
+    """挑一个能放下的字号；都放不下就返回最小号（再由 _clip 截断）。"""
+    h_px = max(1.0, h_in * _PX_PER_IN)
+    for s in sizes:
+        if _need_h(text, s, w_in) <= h_px:
+            return s
+    return sizes[-1]
+
+
+def _clip(text: str, w_in: float, h_in: float, size: int) -> str:
+    """最小字号仍放不下时截断加省略号。
+
+    宁可少显示几个字，也不能压在别的元素上 —— 溢出比截断难看得多。
+    """
+    w_px = max(1.0, w_in * _PX_PER_IN)
+    h_px = max(1.0, h_in * _PX_PER_IN)
+    per_line = max(1, int(w_px / (size * 1.34)))
+    max_lines = max(1, int(h_px / (size * 2.15)))
+    limit = per_line * max_lines
+    t = str(text or "")
+    if len(t) <= limit:
+        return t
+    return t[: max(1, limit - 1)].rstrip("，。；、 ") + "…"
+
+
+def _fit_clip(text: str, w_in: float, h_in: float, sizes=None) -> tuple:
+    """常用组合：返回 (字号, 截断后文字)。"""
+    size = _fit(text, w_in, h_in, sizes) if sizes else _fit(text, w_in, h_in)
+    return size, _clip(text, w_in, h_in, size)
+
+
 def _header(sl, th, title, page=None):
     """顶部色条 + 标题 + 页码：位置全程固定，翻页时视线不用重新找。"""
     _rect(sl, 0, 0, W_IN, 1.05, fill=th["band"])
@@ -194,14 +243,18 @@ def _cover(prs, th, deck, s, page=None):
         meta.get("period") or meta.get("topic_no"),
     ] if x)
     if info:
-        tf2 = _tb(sl, 0.9, 4.2, 8.6, 0.8)
-        _para(tf2, info, th["body"] - 4, th["band_text"], first=True, sa=0)
+        info_size, info_txt = _fit_clip(info, 8.4, 0.72,
+                                       sizes=(24, 22, 20, 18, 16, 15))
+        tf2 = _tb(sl, 0.9, 4.15, 8.6, 0.85)
+        _para(tf2, info_txt, info_size, th["band_text"], first=True, sa=0)
     # 溯源：教材依据写在封面底部（有教材就贴章节，没有就写"按知识点体系"）
     prov = deck.get("provenance") or {}
     src = prov.get("textbook") or ""
     if src:
-        tf3 = _tb(sl, 0.9, 5.2, 8.6, 1.0)
-        _para(tf3, src[:80], th["small"], th["band_text"], first=True, sa=0)
+        src_size, src_txt = _fit_clip(src, 8.4, 1.0,
+                                      sizes=(19, 18, 17, 16, 15, 14))
+        tf3 = _tb(sl, 0.9, 5.15, 8.6, 1.05)
+        _para(tf3, src_txt, src_size, th["band_text"], first=True, sa=0)
     _rect(sl, 0.9, 3.85, 1.5, 0.08, fill=th["accent"])
     return sl
 
@@ -212,17 +265,24 @@ def _objectives(prs, th, deck, s, page):
     items = s.get("items") or []
     # 一列通栏卡片：此前做成"左卡片 + 右侧重复列表"，同一批目标在页面上出现两遍，
     # 教师看到会以为漏了内容。目标页只该把每一条说清楚。
-    y = 1.5
+    # 卡片高度按内容自适应：固定 1.12 英寸时，一条长目标会顶出卡片
+    n = max(1, min(len(items), 4))
+    gap = 0.16
+    per_h = (H_IN - 1.5 - 0.6 - gap * (n - 1)) / n
+    per_h = max(0.95, min(1.55, per_h))
+    y = 1.45
     for it in items[:4]:
         txt = it.get("text") if isinstance(it, dict) else it
         tag = (it.get("tag") if isinstance(it, dict) else None) or ""
-        _rect(sl, 0.75, y, 11.8, 1.12, fill=th["soft"], line=th["card_line"])
+        label = f"{tag}. {txt}" if tag else txt
+        size, shown = _fit_clip(label, 11.0, per_h - 0.18,
+                                sizes=(27, 26, 25, 24, 22, 20, 18, 16))
+        _rect(sl, 0.75, y, 11.8, per_h, fill=th["soft"], line=th["card_line"])
         if tag:
-            _rect(sl, 0.75, y, 0.14, 1.12, fill=th["tag"])
-        tf = _tb(sl, 1.15, y + 0.06, 11.2, 1.0, MSO_ANCHOR.MIDDLE)
-        _para(tf, f"{tag}. {txt}" if tag else txt, th["body"] + 1, th["ink"],
-              first=True, sa=0)
-        y += 1.3
+            _rect(sl, 0.75, y, 0.14, per_h, fill=th["tag"])
+        tf = _tb(sl, 1.15, y + 0.08, 11.0, per_h - 0.16, MSO_ANCHOR.MIDDLE)
+        _para(tf, shown, size, th["ink"], first=True, sa=0)
+        y += per_h + gap
     _footer(sl, th, s.get("footer") or "学习目标")
     return sl
 
@@ -254,11 +314,20 @@ def _concept(prs, th, deck, s, page):
     sl = prs.slides.add_slide(prs.slide_layouts[6])
     _header(sl, th, s.get("title") or "", page)
     # 结论框 = 这一页的视觉锚点
-    _rect(sl, 0.75, 1.5, 11.8, 1.5, fill=th["band"], line=None)
-    tf = _tb(sl, 1.05, 1.62, 11.2, 1.25, MSO_ANCHOR.MIDDLE)
-    _para(tf, s.get("big") or "", th["body"] + 2, th["band_text"], bold=True, first=True, sa=0)
-    tf2 = _tb(sl, 0.95, 3.25, 11.4, 3.0)
-    _bullets(tf2, s.get("points") or [], th["body"] - 2, th["ink"])
+    big = s.get("big") or ""
+    b_size, b_txt = _fit_clip(big, 11.2, 1.5, sizes=(26, 24, 22, 21, 20, 19, 18))
+    b_h = max(1.1, min(1.7, _need_h(b_txt, b_size, 11.2) / _PX_PER_IN + 0.28))
+    _rect(sl, 0.75, 1.45, 11.8, b_h, fill=th["band"], line=None)
+    tf = _tb(sl, 1.05, 1.52, 11.2, b_h - 0.14, MSO_ANCHOR.MIDDLE)
+    _para(tf, b_txt, b_size, th["band_text"], bold=True, first=True, sa=0)
+    # 要点区吃掉剩余高度，字号自适应
+    pts = (s.get("points") or [])[:5]
+    pts_top = 1.45 + b_h + 0.22
+    pts_h = max(1.0, H_IN - 0.6 - pts_top)
+    p_size, _ = _fit_clip("\n".join(str(x) for x in pts), 11.4, pts_h,
+                          sizes=(26, 24, 22, 21, 20, 19, 18, 17, 16))
+    tf2 = _tb(sl, 0.95, pts_top, 11.4, pts_h)
+    _bullets(tf2, pts, p_size, th["ink"])
     _footer(sl, th, s.get("title") or "")
     return sl
 
@@ -266,19 +335,40 @@ def _concept(prs, th, deck, s, page):
 def _example(prs, th, deck, s, page):
     sl = prs.slides.add_slide(prs.slide_layouts[6])
     _header(sl, th, s.get("title") or "例题", page)
-    _rect(sl, 0.75, 1.5, 11.8, 1.1, fill=th["soft"], line=th["card_line"])
-    tf = _tb(sl, 1.0, 1.6, 11.3, 0.9, MSO_ANCHOR.MIDDLE)
-    _para(tf, s.get("problem") or "", th["body"] - 1, th["ink"], first=True, sa=0)
-    # 解题步骤
-    tf2 = _tb(sl, 0.95, 2.85, 11.4, 2.6)
-    _para(tf2, "解题步骤", th["small"] + 2, th["tag"], bold=True, first=True, sa=8)
-    for i, st in enumerate((s.get("steps") or [])[:4]):
-        _para(tf2, f"{i + 1}. {st}", th["body"] - 2, th["ink"], sa=8)
-    # 答案
-    if s.get("answer"):
-        _rect(sl, 0.75, 5.55, 11.8, 0.95, fill=th["accent"])
-        tf3 = _tb(sl, 1.0, 5.65, 11.3, 0.75, MSO_ANCHOR.MIDDLE)
-        _para(tf3, f"答案：{s['answer']}", th["body"] - 1, "FFFFFF", bold=True, first=True, sa=0)
+    # 题干框高度按文字量自适应（原来固定 1.1 英寸，长题干就压到步骤上）
+    problem = s.get("problem") or ""
+    prob_size, prob_txt = _fit_clip(problem, 11.3, 1.35,
+                                    sizes=(24, 23, 22, 21, 20, 19, 18))
+    prob_h = max(0.95, min(1.6, _need_h(prob_txt, prob_size, 11.3) / _PX_PER_IN + 0.18))
+    _rect(sl, 0.75, 1.45, 11.8, prob_h, fill=th["soft"], line=th["card_line"])
+    tf = _tb(sl, 1.0, 1.52, 11.3, prob_h - 0.12, MSO_ANCHOR.MIDDLE)
+    _para(tf, prob_txt, prob_size, th["ink"], first=True, sa=0)
+
+    steps = (s.get("steps") or [])[:4]
+    ans_h = (0.95 if s.get("answer") else 0.0)
+    # 答案框也要按文字量长高：原来固定 0.95 英寸，长答案直接画出框外
+    ans_text = f"答案：{s.get('answer')}" if s.get("answer") else ""
+    ans_size = 21
+    if ans_text:
+        ans_size, ans_clip = _fit_clip(ans_text, 11.0, 1.5,
+                                       sizes=(22, 21, 20, 19, 18, 17, 16))
+        ans_h = max(0.85, min(1.7, _need_h(ans_clip, ans_size, 11.0) / _PX_PER_IN + 0.2))
+    # 步骤区吃掉中间剩余高度
+    steps_top = 1.45 + prob_h + 0.18
+    steps_h = max(0.8, (H_IN - 0.55 - ans_h - 0.25) - steps_top)
+    tf2 = _tb(sl, 0.95, steps_top, 11.4, steps_h)
+    _para(tf2, "解题步骤", th["small"] + 2, th["tag"], bold=True, first=True, sa=6)
+    st_size, _ = _fit_clip("\n".join(steps), 11.2, max(0.5, steps_h - 0.4),
+                           sizes=(24, 22, 20, 19, 18, 17, 16))
+    for i, st in enumerate(steps):
+        _para(tf2, _clip(f"{i + 1}. {st}", 11.2, st_size * 0.5 / _PX_PER_IN * 2, st_size),
+              st_size, th["ink"], sa=5)
+
+    if ans_text:
+        ay = H_IN - 0.55 - ans_h
+        _rect(sl, 0.75, ay, 11.8, ans_h, fill=th["accent"])
+        tf3 = _tb(sl, 1.0, ay + 0.06, 11.0, ans_h - 0.12, MSO_ANCHOR.MIDDLE)
+        _para(tf3, ans_clip, ans_size, "FFFFFF", bold=True, first=True, sa=0)
     _footer(sl, th, s.get("title") or "")
     return sl
 
@@ -302,17 +392,39 @@ def _activity(prs, th, deck, s, page):
 
 
 def _exercise(prs, th, deck, s, page):
+    """巩固练习：每题独占一块，字号按块高自适应。
+
+    此前是把 3 道题塞进一个固定 4.4 英寸的文本框 —— 3 题 + 解析实测需要
+    774px，只给了 422px，结果解析与题干叠在一起（截图里那团乱码）。
+    现在按题数均分，每题自己算字号，超了截断。
+    """
     sl = prs.slides.add_slide(prs.slide_layouts[6])
     _header(sl, th, s.get("title") or "课堂练习", page)
-    items = s.get("items") or []
-    tf = _tb(sl, 0.75, 1.55, 11.8, 4.4)
-    for i, it in enumerate(items[:3]):
-        q = it.get("q") if isinstance(it, dict) else it
-        _para(tf, f"第{i + 1}题  {q}", th["body"] - 2, th["ink"],
-              bold=True, first=(i == 0), sa=4)
+    items = (s.get("items") or [])[:3]
+    if not items:
+        _footer(sl, th, "课堂练习")
+        return sl
+
+    gap = 0.16
+    avail = 5.0 - gap * (len(items) - 1)
+    per_h = avail / len(items)
+    y = 1.35
+    for i, it in enumerate(items):
+        q = (it.get("q") if isinstance(it, dict) else it) or ""
         a = (it.get("a") if isinstance(it, dict) else "") or ""
+        # 题干与答案按 55/45 分配同一块的高度
+        q_h = per_h * (0.55 if a else 1.0)
+        a_h = per_h - q_h
+        q_size, q_txt = _fit_clip(f"第{i + 1}题  {q}", 11.5, q_h,
+                                  sizes=(24, 22, 20, 19, 18, 17, 16, 15))
+        tf = _tb(sl, 0.75, y, 11.8, q_h)
+        _para(tf, q_txt, q_size, th["ink"], bold=True, first=True, sa=0)
         if a:
-            _para(tf, f"    答案/要点：{a}", th["body"] - 2, th["sub"], sa=14)
+            a_size, a_txt = _fit_clip(f"答案：{a}", 11.3, a_h,
+                                      sizes=(19, 18, 17, 16, 15, 14))
+            tf2 = _tb(sl, 1.15, y + q_h + 0.04, 11.2, a_h)
+            _para(tf2, a_txt, a_size, th["sub"], first=True, sa=0)
+        y += per_h + gap
     _footer(sl, th, "先独立完成，再对照答案")
     return sl
 
@@ -355,14 +467,20 @@ def _table(prs, th, deck, s, page):
 def _summary(prs, th, deck, s, page):
     sl = prs.slides.add_slide(prs.slide_layouts[6])
     _header(sl, th, s.get("title") or "课堂小结", page)
-    items = s.get("items") or []
-    y = 1.6
-    for it in items[:4]:
-        _rect(sl, 0.75, y, 11.8, 0.95, fill=th["soft"], line=th["card_line"])
-        _rect(sl, 0.75, y, 0.13, 0.95, fill=th["tag"])
-        tf = _tb(sl, 1.05, y + 0.06, 11.3, 0.85, MSO_ANCHOR.MIDDLE)
-        _para(tf, it, th["body"] - 2, th["ink"], first=True, sa=0)
-        y += 1.12
+    items = (s.get("items") or [])[:4]
+    # 卡片高度按条数均分：写死 0.95 时，3 条只占半页，下半页一片白
+    n = max(1, len(items))
+    gap = 0.16
+    per_h = max(0.9, min(1.35, (H_IN - 1.5 - 0.6 - gap * (n - 1)) / n))
+    y = 1.45
+    for it in items:
+        size, shown = _fit_clip(str(it), 11.1, per_h - 0.16,
+                                sizes=(26, 24, 22, 21, 20, 19, 18))
+        _rect(sl, 0.75, y, 11.8, per_h, fill=th["soft"], line=th["card_line"])
+        _rect(sl, 0.75, y, 0.13, per_h, fill=th["tag"])
+        tf = _tb(sl, 1.05, y + 0.06, 11.1, per_h - 0.12, MSO_ANCHOR.MIDDLE)
+        _para(tf, shown, size, th["ink"], first=True, sa=0)
+        y += per_h + gap
     _footer(sl, th, "课堂小结")
     return sl
 
@@ -392,7 +510,9 @@ def _end(prs, th, deck, s, page):
     sl = prs.slides.add_slide(prs.slide_layouts[6])
     _rect(sl, 0, 0, W_IN, H_IN, fill=th["band"])
     tf = _tb(sl, 1.2, 2.6, 11.0, 2.0, MSO_ANCHOR.MIDDLE)
-    _para(tf, s.get("title") or "谢谢观看", th["cover"], th["band_text"],
+    _end_size, _end_txt = _fit_clip(s.get("title") or "谢谢观看", 10.6, 1.2,
+                                    sizes=(46, 42, 38, 34, 30, 26))
+    _para(tf, _end_txt, _end_size, th["band_text"],
           bold=True, align=PP_ALIGN.CENTER, first=True, sa=0)
     if s.get("subtitle"):
         _para(tf, s["subtitle"], th["body"], th["band_text"], align=PP_ALIGN.CENTER, sa=10)

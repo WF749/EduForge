@@ -146,6 +146,60 @@ def main() -> int:
           "内容难度：中等难度的定义" not in joined)
     check("兜底内容退回用课题本身", "浮力" in joined)
 
+
+    # ---- 11. 渲染后不得有文字溢出（本次事故的直接防线） ----
+    print("\n== 11. 渲染溢出检测 ==")
+    from app.services.deck_renderer import render_deck
+    from pptx import Presentation
+    import tempfile
+
+    def _scan_overflow(path):
+        """估算每个文本框需要的高度 vs 实际高度。"""
+        pr = Presentation(path)
+        bad = []
+        for i, sl in enumerate(pr.slides):
+            for sh in sl.shapes:
+                if not sh.has_text_frame:
+                    continue
+                txt = sh.text_frame.text
+                if len(txt) < 20:
+                    continue
+                size = next((r.font.size.pt for pa in sh.text_frame.paragraphs
+                             for r in pa.runs if r.font.size), None)
+                if not size:
+                    continue
+                w_px, h_px = sh.width / 9525, sh.height / 9525
+                per_line = max(1, int(w_px / (size * 1.34)))
+                lines = sum(max(1, (len(pa.text) + per_line - 1) // per_line)
+                            for pa in sh.text_frame.paragraphs)
+                if lines * size * 2.15 > h_px * 1.05:
+                    bad.append((i + 1, round(lines * size * 2.15), round(h_px)))
+        return bad
+
+    for band, gidx, label in [("初中", 6, "浮力"), ("小学", 0, "富饶的西沙群岛"),
+                              ("高中", 11, "氧化还原反应")]:
+        d = load_golden()[gidx]
+        with tempfile.TemporaryDirectory() as tmp:
+            out = os.path.join(tmp, "t.pptx")
+            render_deck(d, out)
+            bad = _scan_overflow(out)
+            check(f"{label}（{band}）无文字溢出", len(bad) == 0,
+                  f"{len(bad)} 处 {bad[:2]}")
+
+    # 极端内容：超长题干 + 超长答案，靠截断兜住
+    stress = json.loads(json.dumps(load_golden()[6], ensure_ascii=False))
+    for sl in stress["slides"]:
+        if sl.get("type") == "exercise":
+            sl["items"] = [{"q": "很长的题干" * 30, "a": "很长的解析" * 40} for _ in range(3)]
+        if sl.get("type") == "example":
+            sl["answer"] = "很长的答案" * 40
+            sl["problem"] = "很长的题目" * 20
+    with tempfile.TemporaryDirectory() as tmp:
+        out = os.path.join(tmp, "stress.pptx")
+        render_deck(stress, out)
+        bad = _scan_overflow(out)
+        check("超长内容也不溢出（靠截断兜住）", len(bad) == 0, f"{len(bad)} 处 {bad[:2]}")
+
     print("\n" + "=" * 64)
     print(f"通过 {len(PASS)} 项，失败 {len(FAIL)} 项")
     if FAIL:
