@@ -1,0 +1,492 @@
+{
+  "version": 1,
+  "note": "只存目录结构用于定位，不存教材正文（版权归出版社，正文不入库）",
+  "books": [
+    {
+      "band": "junior",
+      "subject": "物理",
+      "grade": "八年级",
+      "volume": "上册",
+      "version": "人教版",
+      "title": "义务教育教科书·物理八年级上册",
+      "file": "初中/物理/义务教育教科书·物理八年级上册.pdf",
+      "units": [
+        {
+          "no": 1,
+          "title": "机械运动",
+          "page": 9,
+          "sections": [
+            {
+              "no": 1,
+              "title": "长度和时间的测量",
+              "page": 10
+            },
+            {
+              "no": 2,
+              "title": "运动的描述",
+              "page": 16
+            },
+            {
+              "no": 3,
+              "title": "运动的快慢",
+              "page": 19
+            },
+            {
+              "no": 4,
+              "title": "测量平均速度",
+              "page": 23
+            }
+          ]
+        },
+        {
+          "no": 2,
+          "title": "声现象",
+          "page": 26,
+          "sections": [
+            {
+              "no": 1,
+              "title": "声音的产生与传播",
+              "page": 27
+            },
+            {
+              "no": 2,
+              "title": "声音的特性",
+              "page": 32
+            },
+            {
+              "no": 3,
+              "title": "声的利用",
+              "page": 38
+            },
+            {
+              "no": 4,
+              "title": "噪声的危害和控制",
+              "page": 42
+            }
+          ]
+        },
+        {
+          "no": 3,
+          "title": "物态变化",
+          "page": 46,
+          "sections": [
+            {
+              "no": 1,
+              "title": "温度",
+              "page": 47
+            },
+            {
+              "no": 2,
+              "title": "熔化和凝固",
+              "page": 53
+            },
+            {
+              "no": 3,
+              "title": "汽化和液化",
+              "page": 58
+            },
+            {
+              "no": 4,
+              "title": "升华和凝华",
+              "page": 64
+            }
+          ]
+        },
+        {
+          "no": 4,
+          "title": "光现象",
+          "page": 68,
+          "sections": [
+            {
+              "no": 1,
+              "title": "光的直线传播",
+              "page": 69
+            },
+            {
+              "no": 2,
+              "title": "光的反射",
+              "page": 73
+            },
+            {
+              "no": 3,
+              "title": "平面镜成像",
+              "page": 77
+            },
+            {
+              "no": 4,
+              "title": "光的折射",
+              "page": 81
+            },
+            {
+              "no": 5,
+              "title": "光的色散",
+              "page": 85
+            }
+          ]
+        },
+        {
+          "no": 5,
+          "title": "透镜及其应用",
+          "page": 89,
+          "sections": [
+            {
+              "no": 1,
+              "title": "透镜",
+              "page": 90
+            },
+            {
+              "no": 2,
+              "title": "生活中的透镜",
+              "page": 94
+            },
+            {
+              "no": 3,
+              "title": "凸透镜成像的规律",
+              "page": 97
+            },
+            {
+              "no": 4,
+              "title": "眼睛和眼镜",
+              "page": 100
+            },
+            {
+              "no": 5,
+              "title": "显微镜和望远镜",
+              "page": 103
+            }
+          ]
+        },
+        {
+          "no": 6,
+          "title": "质量与密度",
+          "page": 107,
+          "sections": [
+            {
+              "no": 1,
+              "title": "质量",
+              "page": 108
+            },
+            {
+              "no": 2,
+              "title": "密度",
+              "page": 113
+            },
+            {
+              "no": 3,
+              "title": "测量物质的密度",
+              "page": 117
+            },
+            {
+              "no": 4,
+              "title": "密度与社会生活",
+              "page": 120
+            },
+            {
+              "no": 1,
+              "title": "μm = 0.000 001 m = 10-6 m",
+              "page": 1
+            },
+            {
+              "no": 1,
+              "title": "nm = 0.000 000 001 m = 10-9 m 299 792",
+              "page": 458
+            }
+          ]
+        },
+        {
+          "no": 1,
+          "title": "机械运动",
+          "page": 11,
+          "sections": []
+        }
+      ],
+      "section_count": 28
+    },
+    {
+      "band": "primary",
+      "subject": "数学",
+      "grade": "三年级",
+      "volume": "下册",
+      "version": "人教版",
+      "title": "义务教育教科书·数学三年级下册",
+      "file": "小学/数学/义务教育教科书·数学三年级下册.pdf",
+      "units": [
+        {
+          "no": 1,
+          "title": "位置与方向（一）",
+          "page": 2,
+          "sections": []
+        },
+        {
+          "no": 2,
+          "title": "除数是一位数的除法",
+          "page": 11,
+          "sections": []
+        },
+        {
+          "no": 3,
+          "title": "复式统计表",
+          "page": 34,
+          "sections": []
+        },
+        {
+          "no": 4,
+          "title": "两位数乘两位数",
+          "page": 38,
+          "sections": []
+        },
+        {
+          "no": 5,
+          "title": "面积",
+          "page": 54,
+          "sections": []
+        },
+        {
+          "no": 6,
+          "title": "年、月、日",
+          "page": 70,
+          "sections": []
+        }
+      ],
+      "section_count": 0
+    },
+    {
+      "band": "primary",
+      "subject": "数学",
+      "grade": "六年级",
+      "volume": "下册",
+      "version": "人教版",
+      "title": "义务教育教科书·数学六年级下册",
+      "file": "小学/数学/义务教育教科书·数学六年级下册.pdf",
+      "units": [
+        {
+          "no": 1,
+          "title": "负数",
+          "page": 2,
+          "sections": []
+        },
+        {
+          "no": 2,
+          "title": "百分数（二）",
+          "page": 8,
+          "sections": []
+        },
+        {
+          "no": 3,
+          "title": "圆柱与圆锥",
+          "page": 16,
+          "sections": []
+        }
+      ],
+      "section_count": 0
+    },
+    {
+      "band": "primary",
+      "subject": "数学",
+      "grade": "四年级",
+      "volume": "下册",
+      "version": "人教版",
+      "title": "义务教育教科书·数学四年级下册",
+      "file": "小学/数学/义务教育教科书·数学四年级下册.pdf",
+      "units": [
+        {
+          "no": 1,
+          "title": "四则运算",
+          "page": 2,
+          "sections": []
+        },
+        {
+          "no": 2,
+          "title": "观察物体（二）",
+          "page": 13,
+          "sections": []
+        },
+        {
+          "no": 3,
+          "title": "运算律",
+          "page": 17,
+          "sections": []
+        },
+        {
+          "no": 4,
+          "title": "小数的意义和性质",
+          "page": 32,
+          "sections": []
+        },
+        {
+          "no": 5,
+          "title": "三角形",
+          "page": 57,
+          "sections": []
+        }
+      ],
+      "section_count": 0
+    },
+    {
+      "band": "senior",
+      "subject": "数学",
+      "grade": "",
+      "volume": "必修第二册",
+      "version": "",
+      "title": "普通高中教科书·数学（A版）必修第二册",
+      "file": "高中/数学/普通高中教科书·数学（A版）必修第二册.pdf",
+      "units": [
+        {
+          "no": 6,
+          "title": "平面向量及其应用",
+          "page": 1,
+          "sections": [
+            {
+              "no": 1,
+              "title": "平面向量的概念",
+              "page": 2
+            },
+            {
+              "no": 2,
+              "title": "平面向量的运算",
+              "page": 7
+            },
+            {
+              "no": 3,
+              "title": "平面向量基本定理及坐标表示",
+              "page": 25
+            },
+            {
+              "no": 4,
+              "title": "平面向量的应用",
+              "page": 38
+            }
+          ]
+        },
+        {
+          "no": 7,
+          "title": "复数",
+          "page": 67,
+          "sections": [
+            {
+              "no": 1,
+              "title": "复数的概念",
+              "page": 68
+            },
+            {
+              "no": 2,
+              "title": "复数的四则运算",
+              "page": 75
+            },
+            {
+              "no": 3,
+              "title": "复数的三角表示",
+              "page": 83
+            }
+          ]
+        },
+        {
+          "no": 8,
+          "title": "立体几何初步",
+          "page": 96,
+          "sections": [
+            {
+              "no": 1,
+              "title": "基本立体图形",
+              "page": 97
+            },
+            {
+              "no": 2,
+              "title": "立体图形的直观图",
+              "page": 107
+            },
+            {
+              "no": 3,
+              "title": "简单几何体的表面积与体积",
+              "page": 114
+            },
+            {
+              "no": 4,
+              "title": "空间点、直线、平面之间的位置关系",
+              "page": 124
+            },
+            {
+              "no": 5,
+              "title": "空间直线、平面的平行",
+              "page": 133
+            },
+            {
+              "no": 6,
+              "title": "空间直线、平面的垂直",
+              "page": 146
+            }
+          ]
+        },
+        {
+          "no": 9,
+          "title": "统计",
+          "page": 172,
+          "sections": [
+            {
+              "no": 1,
+              "title": "随机抽样",
+              "page": 173
+            },
+            {
+              "no": 2,
+              "title": "用样本估计总体",
+              "page": 193
+            },
+            {
+              "no": 3,
+              "title": "统计案例 公司员工的肥胖情况调查分析",
+              "page": 220
+            }
+          ]
+        },
+        {
+          "no": 10,
+          "title": "概率",
+          "page": 227,
+          "sections": [
+            {
+              "no": 1,
+              "title": "随机事件与概率",
+              "page": 228
+            },
+            {
+              "no": 2,
+              "title": "事件的相互独立性",
+              "page": 249
+            },
+            {
+              "no": 3,
+              "title": "频率与概率",
+              "page": 254
+            }
+          ]
+        },
+        {
+          "no": 6,
+          "title": "平面向量及其应用",
+          "page": 3,
+          "sections": []
+        },
+        {
+          "no": 6,
+          "title": "平面向量及其应用",
+          "page": 5,
+          "sections": []
+        },
+        {
+          "no": 6,
+          "title": "平面向量及其应用",
+          "page": 7,
+          "sections": []
+        },
+        {
+          "no": 6,
+          "title": "平面向量及其应用",
+          "page": 9,
+          "sections": []
+        }
+      ],
+      "section_count": 19
+    }
+  ]
+}
