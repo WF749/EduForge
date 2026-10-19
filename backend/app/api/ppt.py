@@ -301,6 +301,135 @@ async def generate_ppt(
         "context_meta": ctx_meta,
     }
 
+_BAND_BY_GRADE = [
+    (("一年级", "二年级", "三年级", "四年级", "五年级", "六年级"), "小学"),
+    (("七年级", "八年级", "九年级", "初一", "初二", "初三"), "初中"),
+    (("高一", "高二", "高三"), "高中"),
+]
+
+
+def _infer_band(audience: str, subject: str) -> str:
+    a = str(audience or "")
+    for keys, band in _BAND_BY_GRADE:
+        if any(k in a for k in keys):
+            return band
+    return "初中"
+
+
+def _try_deck_mode(task, task_id: str, topic: str, duration: int, audience: str,
+                   subject: str, theme_color: str, style_preference: str,
+                   key_points: list, template: str) -> bool:
+    """契约模式：按 12 种教学功能页生成，校验通过才交付。
+
+    @returns True 表示已由本函数完成整个任务（调用方直接 return）；
+             False 表示放弃，交给原有流程继续。
+             任何异常都必须吞掉并返回 False。
+    """
+    import os
+    import re as _re
+
+    if os.getenv("EDUFORGE_PPT_DECK_MODE", "on").strip().lower() not in ("on", "1", "true", "yes"):
+        return False
+
+    deck = None
+    try:
+        from ..services import deck_generator as DG
+        from ..services import deck_renderer as DR
+        from ..services.lesson_deck import validate_deck
+
+        band = _infer_band(audience, subject)
+        period = f"{max(1, int(duration or 45)) // 45 or 1} 课时"
+
+        # 1) 先查内置黄金样例：零成本、质量可控
+        deck = DG.generate_from_golden(subject, topic)
+        # 2) 再交给 LLM 按契约生成（内部自带校验 + 定向重做）
+        if deck is None:
+            deck = DG.generate(
+                subject, topic,
+                grade=str(audience or ""),
+                band=band,
+                period=period,
+                key_points="；".join(str(k) for k in (key_points or [])[:8])[:400],
+            )
+        if not deck or not (deck.get("slides") or []):
+            return False
+
+        report = validate_deck(deck)
+        # 契约模式的意义就在于"能上课"：不通过就别占着这条路，交给原流程
+        if not report.get("ok"):
+            print(f"[PPT任务] 契约模式未通过校验（{report.get('total')} 分），降级到原有流程")
+            return False
+
+        # 3) 渲染
+        safe_name = _re.sub(r'[<>:"/\\|?*]', "_", topic[:36]) + "_" + task_id[:10]
+        task_dir = GENERATED_CW / safe_name
+        task_dir.mkdir(parents=True, exist_ok=True)
+        fname = _re.sub(r'[<>:"/\\|?*]', "_", topic[:40] or "courseware") + ".pptx"
+        pptx_path = task_dir / fname
+        DR.render_deck(deck, str(pptx_path))
+        if not pptx_path.exists():
+            return False
+    except Exception as e:
+        print(f"[PPT任务] 契约模式不可用，降级到原有流程: {e}")
+        return False
+
+    # 4) 落成与原链路同构的结果，保证 /preview /download /status 都不受影响
+    try:
+        slides = deck.get("slides") or []
+        outline = []
+        for i, s in enumerate(slides):
+            items = (s.get("items") or s.get("points") or s.get("steps") or [])
+            flat = []
+            for it in items[:6]:
+                flat.append(it.get("text") if isinstance(it, dict) else
+                            (f"{it.get('q')} —— 答案：{it.get('a')}" if isinstance(it, dict) else str(it)))
+            outline.append({
+                "page_num": i + 1,
+                "page_type": s.get("type"),
+                "core_topic": s.get("title") or s.get("big") or "",
+                "content_outline": [str(x)[:120] for x in flat if x],
+            })
+
+        ppt_content = {
+            "outline": outline,
+            "detailed_content": slides,
+            "deck": deck,                      # 契约原文，供溯源
+            "metadata": {
+                "topic": topic, "duration": duration, "audience": audience, "subject": subject,
+                "theme_color": theme_color, "style_preference": style_preference,
+                "key_points": key_points, "template": template,
+                "deck_mode": True,
+                "provenance": deck.get("provenance") or {},
+            },
+            "task_id": task_id,
+        }
+        with open(os.path.join(str(task_dir), "ppt_data.json"), "w", encoding="utf-8") as f:
+            json.dump(ppt_content, f, ensure_ascii=False, indent=2)
+
+        task.progress = 100
+        task.status = "completed"
+        task.result = {
+            "task_id": task_id,
+            "pptx_path": str(pptx_path),
+            "task_dir": str(task_dir),
+            "topic": topic, "duration": duration, "audience": audience, "subject": subject,
+            "theme_color": theme_color, "style_preference": style_preference,
+            "key_points": key_points, "reference_docs": [], "template": template,
+            "files": {"pptx": os.path.basename(str(pptx_path))},
+            "ppt_content": ppt_content,
+            "deck_mode": True,
+        }
+        task.result["compliance"] = run_compliance_gate(
+            "ppt", ppt_content,
+            {"level": audience, "subject": subject, "topic": topic,
+             "duration": duration, "page_count": len(slides)},
+        )
+        return True
+    except Exception as e:
+        print(f"[PPT任务] 契约模式结果落盘失败，降级到原有流程: {e}")
+        return False
+
+
 def _generate_ppt_task(task_id: str, topic: str, duration: int, audience: str, subject: str, theme_color: str, style_preference: str, key_points: list, reference_docs: list, template: str):
     """PPT生成后台任务。
 
@@ -312,11 +441,21 @@ def _generate_ppt_task(task_id: str, topic: str, duration: int, audience: str, s
     task = generation_tasks.get(task_id)
     if not task:
         return
-    
+
+    # ------------------------------------------------------------------
+    # 0. 契约模式（新链路）：按"能上课"标准生成 —— 12 种教学功能页 + 校验
+    #    + 教师备注 + 教材溯源。
+    #    刻意放在最前面且**任何失败都静默降级**到下面的原有流程：
+    #    宁可少一条新链路，也绝不让教师等了半天什么都拿不到。
+    # ------------------------------------------------------------------
+    if _try_deck_mode(task, task_id, topic, duration, audience, subject,
+                      theme_color, style_preference, key_points or [], template):
+        return
+
     try:
         task.status = "generating"
         task.progress = 0
-        
+
         # 1. 分析需求和生成大纲
         task.progress = 10
         ctx = ppt_content_generator.prepare_teaching_context(
