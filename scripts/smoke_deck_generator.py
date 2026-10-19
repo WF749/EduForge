@@ -129,6 +129,71 @@ def main() -> int:
     check("浮力无教材时明确禁止编造",
           ("没有" in pv["textbook"] and "不要编造" in pv["textbook"]) or pv["has_textbook"])
 
+
+    # ---- 8. 接入层：契约模式的降级（关键：不能弄坏原有流程） ----
+    print("\n== 8. 接入层降级 ==")
+    from app.api.ppt import _try_deck_mode, _infer_band
+
+    check("学段推断：八年级→初中", _infer_band("八年级", "物理") == "初中")
+    check("学段推断：三年级→小学", _infer_band("三年级", "数学") == "小学")
+    check("学段推断：高一→高中", _infer_band("高一", "数学") == "高中")
+
+    class _T:
+        progress = 0
+        status = ""
+        result = None
+
+    # 8.1 命中黄金样例 → 走契约模式
+    t1 = _T()
+    ok1 = _try_deck_mode(t1, "smoke01", "浮力", 45, "八年级", "物理", "蓝色系", "标准", [], "")
+    check("命中黄金样例 → 交付", ok1 is True)
+    if ok1:
+        r1 = t1.result
+        check("结果含 pptx 文件名", bool(r1.get("files", {}).get("pptx")))
+        check("结果含 task_dir", bool(r1.get("task_dir")))
+        check("标记 deck_mode", r1.get("deck_mode") is True)
+        check("带合规结果（不阻断）", isinstance(r1.get("compliance"), dict))
+        check("带溯源 provenance",
+              "provenance" in (r1["ppt_content"]["metadata"] or {}))
+
+    # 8.2 生成的稿子不合格 → 必须降级（不能硬交付）
+    orig_generate = DG.generate
+    orig_golden = DG.generate_from_golden
+    DG.generate_from_golden = lambda s, tp: None
+    DG.generate = lambda *a, **k: {"meta": {"subject": "物理", "topic": "浮力"},
+                                   "slides": [{"type": "cover"}, {"type": "end"}]}
+    t2 = _T()
+    try:
+        check("不合格稿 → 降级（不交付）",
+              _try_deck_mode(t2, "smoke02", "浮力", 45, "八年级", "物理", "蓝色系", "标准", [], "") is False)
+    finally:
+        DG.generate = orig_generate
+        DG.generate_from_golden = orig_golden
+
+    # 8.3 生成器抛异常 → 必须降级，不能把异常抛给调用方
+    orig2 = DG.generate
+    DG.generate_from_golden = lambda s, tp: None
+    def _boom(*a, **k):
+        raise RuntimeError("模型挂了")
+    DG.generate = _boom
+    t3 = _T()
+    try:
+        check("生成器异常 → 静默降级",
+              _try_deck_mode(t3, "smoke03", "浮力", 45, "八年级", "物理", "蓝色系", "标准", [], "") is False)
+    finally:
+        DG.generate = orig2
+        DG.generate_from_golden = orig_golden
+
+    # 8.4 开关可关
+    import os as _os
+    _os.environ["EDUFORGE_PPT_DECK_MODE"] = "off"
+    t4 = _T()
+    try:
+        check("开关关闭 → 不走契约模式",
+              _try_deck_mode(t4, "smoke04", "浮力", 45, "八年级", "物理", "蓝色系", "标准", [], "") is False)
+    finally:
+        _os.environ.pop("EDUFORGE_PPT_DECK_MODE", None)
+
     print("\n" + "=" * 64)
     print(f"通过 {len(PASS)} 项，失败 {len(FAIL)} 项")
     if FAIL:
