@@ -269,15 +269,32 @@ def load_golden() -> List[Dict[str, Any]]:
     return []
 
 
+# 已知学科。用于判断"用户填的是不是一门具体学科"——
+# 界面默认值「综合课程」并不在这份表里，若拿它去做严格过滤，
+# 会把本该命中的黄金样例挡掉（实测：学科=空 能命中浮力，学科=综合课程 反而命中不了）。
+KNOWN_SUBJECTS = ("语文", "数学", "英语", "物理", "化学", "生物",
+                  "道德与法治", "历史", "地理", "科学", "信息技术", "思想政治")
+
+
 def find_golden(subject: str, topic: str) -> Optional[Dict[str, Any]]:
-    """按学科 + 课题找黄金样例，供 few-shot 或直接复用。"""
+    """按学科 + 课题找黄金样例，供 few-shot 或直接复用。
+
+    学科不是具体学科（空 / 「综合课程」/ 自定义值）时**只按课题匹配** ——
+    教师没选学科不该导致检索失败，那等于用默认值惩罚用户。
+    """
+    subj = str(subject or "").strip()
+    strict = subj in KNOWN_SUBJECTS
     best, best_score = None, 0
     for d in load_golden():
         s = str(d.get("subject") or "").strip()
         t = str(d.get("title") or d.get("topic") or "").strip()
-        if subject and s != subject:
-            continue
-        sc = 100 if t == topic else (60 if topic and topic in t else 0)
+        if strict:
+            sc = 0
+            if s == subj:
+                sc = 100 if t == topic else (60 if topic and topic in t else 0)
+        else:
+            # 学科不确定：只按课题匹配
+            sc = 90 if t == topic else (50 if topic and topic in t else 0)
         if sc > best_score:
             best, best_score = d, sc
     return best

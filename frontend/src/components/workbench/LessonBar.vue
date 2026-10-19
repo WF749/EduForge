@@ -18,6 +18,14 @@
       <span v-else class="bar__meta bar__meta--lead">
         还没开始 —— 在下面的对话里说一句就行，例如「生成一份浮力教案」
       </span>
+      <!--
+        学科矛盾提示**必须放在摘要行**：此前放在展开面板里，而面板默认收起，
+        等于没有提示 —— 用户用默认的「综合课程」生成了半天，出来的却是别的学科。
+      -->
+      <span v-if="subjectWarning" class="bar__flag" role="alert" :title="subjectWarning.message">
+        ⚠ 主题像{{ subjectWarning.subject }}，当前学科是「{{ store.subject }}」
+        <el-button size="small" type="primary" link @click="adoptSubject">改为{{ subjectWarning.subject }}</el-button>
+      </span>
 
       <div class="bar__actions">
         <el-button
@@ -323,5 +331,18 @@ watch(showTopicError, (empty, was) => {
   line-height: 1.5;
 }
 .bar__warn-text { color: var(--wb-warn-text); flex: 1 1 320px; }
+
+.bar__flag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 2px var(--sp-2);
+  border-radius: var(--radius-sm);
+  background: var(--wb-warn-bg);
+  border: 1px solid var(--wb-border-strong);
+  color: var(--wb-warn-text);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
 
 </style>
