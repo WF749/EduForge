@@ -10,6 +10,7 @@ from .prompts.lesson_plan_prompts import LessonPlanPrompts
 from .university_major_config import UniversityMajorConfig
 from .llm_service import llm_service
 from .topic_expansion import enrich_for_lesson_plan
+from . import text_render
 
 try:
     from .rag_service import rag_service as _rag_service
@@ -41,121 +42,27 @@ class LessonPlanGenerator:
     # 一个 dict 该怎么读，必须由渲染层决定，不能拿语言内部的 repr 当文档内容。
     # ------------------------------------------------------------------
 
+    # ↓ 实现统一收敛到 services/text_render.py —— 那条链路有"解析失败也要降级"
+    # 的兜底。此前这里 literal_eval 失败会原样返回，repr 就进了 Word。
     @staticmethod
     def _plain_scalar(value) -> str:
-        """标量 → 文本。空值给空串，布尔给人话，整数不做 float 化。"""
-        if value is None:
-            return ""
-        if isinstance(value, bool):
-            return "是" if value else "否"
-        if isinstance(value, float) and value.is_integer():
-            return str(int(value))
-        if isinstance(value, (int, float, str)):
-            return str(value).strip()
-        return ""
-
-    # 「- xxx」「1. xxx」「• xxx」这类行首标记，判断字面量前要先剥掉
-    _LIST_MARKER = re.compile(r"^\s*(?:[-*•◦▪]|\d+[.、])\s*")
+        return text_render.plain_scalar(value)
 
     @classmethod
     def _heal_literals(cls, value, depth: int = 0):
-        """把"长得像 Python 字面量"的字符串还原成结构。
-
-        为什么需要：模型有时把一条作业写成**字符串**
-        `"{'题目': '…', '评分标准': '…'}"` —— 提示词里给的是 Python 风格示例，
-        它就把 repr 照抄了。这串东西一路传到渲染层，`str()` 之后原样印进 Word，
-        用户看到的是「1. {'题目': '体积为200 cm³…'}」（线上真的这样产出过）。
-
-        判定得了就还原，判定不了**原样保留** —— 渲染层不负责猜内容，
-        但"这串文本是不是一个结构"是能判定的。绝不为了好看丢掉内容。
-        """
-        if depth > 6:
-            return value
-        if isinstance(value, dict):
-            return {k: cls._heal_literals(v, depth + 1) for k, v in value.items()}
-        if isinstance(value, (list, tuple)):
-            return [cls._heal_literals(v, depth + 1) for v in value]
-        if not isinstance(value, str):
-            return value
-
-        body = cls._LIST_MARKER.sub("", value).strip()
-        if len(body) < 4 or len(body) > 20000:
-            return value
-        if not ((body.startswith("{") and body.endswith("}"))
-                or (body.startswith("[") and body.endswith("]"))):
-            return value
-        try:
-            import ast
-            parsed = ast.literal_eval(body)
-        except (ValueError, SyntaxError, MemoryError, RecursionError):
-            return value
-        if isinstance(parsed, (dict, list)):
-            return cls._heal_literals(parsed, depth + 1)
-        return value
+        return text_render.heal_literals(value, depth)
 
     @classmethod
     def _flatten(cls, value, level: int = 0):
-        """任意形状 → [(层级, 文本)]。
-
-        dict → 「键：值」，值还是复合结构就下沉一层；
-        list → 逐项摊平（**不**输出方括号与引号）；
-        标量 → 原样。
-        """
-        rows = []
-        if isinstance(value, dict):
-            for key, sub in value.items():
-                name = cls._plain_scalar(key) or str(key).strip()
-                if isinstance(sub, (dict, list, tuple)):
-                    kids = cls._flatten(sub, level + 1)
-                    if len(kids) == 1 and kids[0][0] == level + 1:
-                        rows.append((level, f"{name}：{kids[0][1]}"))
-                    elif kids:
-                        rows.append((level, f"{name}："))
-                        rows.extend(kids)
-                    else:
-                        rows.append((level, name))
-                else:
-                    text = cls._plain_scalar(sub)
-                    rows.append((level, f"{name}：{text}" if text else name))
-        elif isinstance(value, (list, tuple)):
-            for sub in value:
-                rows.extend(cls._flatten(sub, level))
-        else:
-            text = cls._plain_scalar(value)
-            if text:
-                rows.append((level, text))
-        return rows
+        return text_render.flatten(value, level)
 
     @classmethod
     def _plain_block(cls, value, max_rows: int = 60) -> str:
-        """摊成多行文本（写进表格单元格）。
-
-        层级用缩进 + 项目符号表达 —— **不用** `- ` 这种伪列表：
-        那在 Word 里就是个普通破折号，既没有悬挂缩进也不会随样式变，
-        多行缩进只能靠空格硬凑（原实现里真的出现过 "-    单位：…"）。
-        """
-        rows = cls._flatten(value)[:max_rows]
-        if not rows:
-            return ""
-        lines = []
-        for lv, text in rows:
-            lines.append(text if lv == 0 else f"{'    ' * (lv - 1)}• {text}")
-        return "\n".join(lines)
+        return text_render.plain_block(value, max_rows)
 
     @classmethod
     def _numbered_block(cls, value, max_rows: int = 60) -> str:
-        """像 _plain_block，但顶层条目带序号（教学目标这类"几条"的内容）"""
-        rows = cls._flatten(value)[:max_rows]
-        if not rows:
-            return ""
-        lines, n = [], 0
-        for lv, text in rows:
-            if lv == 0:
-                n += 1
-                lines.append(f"{n}. {text}")
-            else:
-                lines.append(f"{'    ' * (lv - 1)}• {text}")
-        return "\n".join(lines)
+        return text_render.numbered_block(value, max_rows)
     
     def analyze_requirements(self, level: str, subject: str, grade: str, topic: str, 
                            duration: int, requirements: str = "") -> Dict[str, Any]:
@@ -280,7 +187,7 @@ class LessonPlanGenerator:
             prompt += self.prompts.get_level_subject_addon(level, subject)
             if knowledge_ctx:
                 prompt += f"\n\n{knowledge_ctx}\n请参考以上知识库资料来丰富教案内容。"
-            response = llm_service.chat(prompt)
+            response = llm_service.chat(prompt, purpose="lesson_plan_content")
             
             # 4. 解析生成的内容
             lesson_plan = self._parse_lesson_plan(response)
@@ -346,7 +253,7 @@ class LessonPlanGenerator:
             )
             
             # 2. 调用LLM进行修改
-            response = llm_service.chat(prompt)
+            response = llm_service.chat(prompt, purpose="lesson_plan_content")
             
             # 3. 解析修改结果
             modification_result = self._parse_modification_result(response)
@@ -976,7 +883,7 @@ class LessonPlanGenerator:
             )
             
             # 2. 调用LLM生成教案
-            response = llm_service.chat(prompt)
+            response = llm_service.chat(prompt, purpose="lesson_plan_content")
             
             # 3. 解析生成的内容
             lesson_plan = self._parse_lesson_plan(response)
