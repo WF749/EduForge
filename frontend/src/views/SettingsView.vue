@@ -1,808 +1,544 @@
 <template>
-  <div class="settings-view page-container">
-    <div class="settings-content">
-      <h1>系统设置</h1>
+  <div class="wb-page">
+    <PageHeader
+      title="设置"
+      description="模型服务、检索参数与界面外观。改完点保存，不需要重启服务。"
+    >
+      <template #actions>
+        <el-button :icon="Refresh" :loading="loading" @click="loadAll">重新载入</el-button>
+      </template>
+    </PageHeader>
 
-      <!-- LLM 配置 -->
-      <div class="settings-section glass-card">
-        <h3>
-          <el-icon><Cpu /></el-icon>
-          AI 大模型配置
-        </h3>
-        <p class="section-desc">
-          厂商清单、接口地址与默认模型均由后端「厂商注册表」下发（{{ providerCount }} 家），
-          模型列表用你自己的 Key 向厂商实时查询 —— 不在前端硬编码任何模型名。
+    <div class="layout">
+      <!-- 模型服务 -->
+      <section class="wb-card wb-card-pad">
+        <div class="wb-section-title">模型服务</div>
+        <p class="wb-card-hint">
+          密钥只回显掩码，不会从后端明文返回。输入框<b>留空表示不修改</b> ——
+          所以只改模型不会把已配好的 Key 清掉。
         </p>
 
-        <el-alert
-          v-if="loadError"
-          type="error"
-          :closable="false"
-          show-icon
-          title="无法连接后端服务"
-          :description="loadError"
-          class="mb16"
-        />
-
-        <!-- 厂商选择 -->
-        <div class="provider-cards">
-          <div
-            v-for="p in providers"
-            :key="p.key"
-            class="provider-card"
-            :class="{ active: currentProvider === p.key }"
-            @click="selectProvider(p.key)"
+        <StateBlock
+            :loading="loading"
+            hint="正在读取模型配置…"
+            :error="error"
+            :rows="6"
+            @retry="loadAll"
           >
-            <div class="provider-head">
-              <span class="provider-name">{{ p.label }}</span>
-              <el-tag v-if="savedKeys[p.key]" type="success" size="small" round>已配置</el-tag>
-              <el-tag v-else type="info" size="small" round>未配置</el-tag>
-            </div>
-            <div class="provider-default">默认：{{ p.default_model }}</div>
-          </div>
-        </div>
-
-        <!-- 当前厂商详情 -->
-        <div v-if="currentSpec" class="provider-config">
-          <div class="spec-head">
-            <div class="spec-title">
-              <strong>{{ currentSpec.label }}</strong>
-              <span class="spec-protocol">{{ currentSpec.protocol === 'anthropic' ? '原生协议' : 'OpenAI 兼容' }}</span>
-            </div>
-            <div class="spec-caps">
-              <el-tag v-for="c in capabilityTags" :key="c" size="small" effect="plain">{{ c }}</el-tag>
-            </div>
-          </div>
-
-          <p v-if="currentSpec.notes" class="spec-notes">
-            <el-icon><InfoFilled /></el-icon>
-            {{ currentSpec.notes }}
-          </p>
-
-          <el-form label-position="top">
-            <!-- API Key -->
-            <el-form-item v-if="currentSpec.protocol !== 'local' && currentSpec.protocol !== 'demo'" label="API Key">
-              <el-input
-                v-model="form.apiKey"
-                type="password"
-                show-password
-                :placeholder="savedKeys[currentProvider] ? `已保存（${keyMasked}），留空则不修改` : 'sk-...'"
-                clearable
-              >
-                <template #append>
-                  <el-button :disabled="!currentSpec.docs_url" @click="openUrl(currentSpec.docs_url)">
-                    官方文档
-                  </el-button>
-                </template>
-              </el-input>
-              <span class="form-hint">
-                密钥只保存在本机后端并加密存储，不会回显到页面，也不会写入浏览器缓存。
-              </span>
+          <el-form label-position="top" @submit.prevent>
+            <el-form-item label="当前厂商">
+              <el-select v-model="form.provider" style="width: 240px" @change="onProviderChange">
+                <el-option v-for="p in providers" :key="p.key" :label="p.label" :value="p.key">
+                  <span>{{ p.label }}</span>
+                  <span class="wb-muted" style="float: right; font-size: 11px">{{ p.protocol }}</span>
+                </el-option>
+              </el-select>
+              <p v-if="activeSpec?.notes" class="wb-muted hint-line">{{ activeSpec.notes }}</p>
             </el-form-item>
 
-            <!-- 接口地址 -->
-            <el-form-item v-if="currentSpec.protocol !== 'demo'" label="接口地址 (Base URL)">
-              <el-input v-model="form.baseUrl" :placeholder="currentSpec.base_url || 'http://127.0.0.1:11434/v1'" clearable />
-              <span class="form-hint">
-                默认由注册表提供；<template v-if="currentSpec.allows_custom_base_url">可改为自建网关或中转地址。</template>
-                <el-button link type="primary" size="small" @click="resetBaseUrl">恢复默认</el-button>
-              </span>
-            </el-form-item>
-
-            <!-- 模型 -->
-            <el-form-item v-if="currentSpec.protocol !== 'demo'" label="模型">
-              <div class="model-row">
+            <el-form-item label="模型">
+              <div class="wb-row" style="gap: var(--sp-2)">
                 <el-select
                   v-model="form.model"
                   filterable
                   allow-create
-                  default-first-option
-                  :reserve-keyword="false"
-                  placeholder="输入模型名，或点击右侧拉取"
-                  class="model-select"
+                  placeholder="留空用厂商默认模型"
+                  style="width: 280px"
                 >
-                  <el-option
-                    v-for="m in modelList"
-                    :key="m"
-                    :label="m"
-                    :value="m"
-                  />
+                  <el-option v-for="m in models" :key="m.name" :label="m.name" :value="m.name" />
                 </el-select>
-                <el-button :loading="loadingModels" @click="fetchModels">
-                  <el-icon><Refresh /></el-icon>
-                  拉取模型列表
-                </el-button>
+                <el-button :loading="loadingModels" @click="loadModels">拉取实时列表</el-button>
               </div>
-              <span class="form-hint">
-                <template v-if="modelSource === 'live'">
-                  已实时拉取 {{ modelList.length }} 个模型（厂商权威列表）。
-                </template>
-                <template v-else-if="modelSource === 'error'">
-                  {{ modelError }} —— 可直接手动输入模型名。
-                </template>
-                <template v-else>
-                  支持手动输入任意模型名；建议先填 Key 再点「拉取模型列表」。
-                </template>
-              </span>
+              <p class="wb-muted hint-line">
+                模型名以厂商实时返回为准；本项目不维护硬编码清单，避免出现"实际存在却判成不存在"。
+              </p>
             </el-form-item>
 
-            <el-form-item label="温度 (Temperature)">
-              <el-slider v-model="form.temperature" :min="0" :max="1" :step="0.1" show-input />
-              <span class="form-hint">越低越确定，越高越有创造性。教案 / 课件生成建议 0.3–0.7。</span>
+            <el-form-item label="API Key">
+              <el-input
+                v-model="form.apiKey"
+                type="password"
+                show-password
+                autocomplete="off"
+                placeholder="留空表示不修改"
+                style="max-width: 420px"
+              />
+              <p v-if="keyMasked" class="wb-muted hint-line">已保存：{{ keyMasked }}</p>
             </el-form-item>
+
+            <el-form-item v-if="activeSpec?.allows_custom_base_url" label="接口地址">
+              <el-input v-model="form.baseUrl" placeholder="留空用默认地址" style="max-width: 420px" />
+            </el-form-item>
+
           </el-form>
 
-          <div class="form-actions">
-            <el-button
-              :loading="testing"
-              :disabled="currentSpec.protocol === 'demo'"
-              @click="testConnection"
-            >
-              <el-icon><Connection /></el-icon>
-              测试连接
+          <!--
+            开发者选项：默认折叠。
+            普通教师不需要知道 temperature —— 系统按任务与阶段自动选择，
+            这里只留给调试/评估用。刻意**不**把它改叫"创造力""教学质量"之类，
+            那会让教师以为调它就能调内容质量。
+          -->
+          <el-collapse v-model="openDev" class="dev">
+            <el-collapse-item name="dev" title="开发者选项（调参与调试）">
+              <el-form label-position="top" @submit.prevent>
+                <el-form-item>
+                  <template #label>
+                    采样模式
+                    <el-tooltip content="自动：按任务用途与执行阶段选择；手动：固定用下面填写的值" placement="top">
+                      <el-icon class="wb-muted"><QuestionFilled /></el-icon>
+                    </el-tooltip>
+                  </template>
+                  <el-radio-group v-model="form.samplingMode">
+                    <el-radio value="auto">自动（推荐）</el-radio>
+                    <el-radio value="manual">手动</el-radio>
+                  </el-radio-group>
+                  <p class="wb-muted hint-line">
+                    自动模式下，教案正文、知识问答、代码生成等不同用途会用不同的值；
+                    下面填写的手动值在自动模式下<b>不生效</b>。
+                  </p>
+                </el-form-item>
+
+                <el-form-item v-if="form.samplingMode === 'manual'">
+                  <template #label>
+                    温度
+                    <el-tooltip content="采样温度：越低越确定、越高越发散。仅手动模式下发送" placement="top">
+                      <el-icon class="wb-muted"><QuestionFilled /></el-icon>
+                    </el-tooltip>
+                  </template>
+                  <el-input-number
+                    v-model="form.temperature"
+                    :min="samplingRange.min"
+                    :max="samplingRange.max"
+                    :step="0.1"
+                    :precision="2"
+                    :disabled="!samplingRange.supports"
+                  />
+                  <p class="wb-muted hint-line">
+                    当前值 {{ form.temperature }}；可填范围 {{ samplingRange.min }} – {{ samplingRange.max }}
+                    （随所选厂商/模型而定）。
+                  </p>
+                  <div class="wb-row wb-row--tight">
+                    <StatusTag
+                      :status="capabilityTag.status"
+                      :label="capabilityTag.label"
+                    />
+                  </div>
+                  <!-- 四种状态都要说清楚：支持 / 禁止 / 未知 / 兼容模式 -->
+                  <p v-if="capabilityTag.key === 'supported'" class="hint-line hint-line--ok">
+                    该模型已验证支持该参数，手动值会照常发送。
+                  </p>
+                  <p v-else-if="capabilityTag.key === 'unsupported'" class="hint-line hint-line--warn">
+                    该模型不接受该参数，手动值<b>不会被发送</b>。
+                  </p>
+                  <p v-else class="hint-line hint-line--warn">
+                    该模型不在已验证清单内，能力未知：仍会按兼容模式发送，
+                    但<b>无法确认参数是否生效</b>。可在下面手动指定。
+                  </p>
+                </el-form-item>
+
+                <el-form-item>
+                  <template #label>
+                    该模型的温度能力
+                    <el-tooltip content="本地模型（Ollama/vLLM）和自建网关的模型名查不到内置清单，可在这里手动钉死" placement="top">
+                      <el-icon class="wb-muted"><QuestionFilled /></el-icon>
+                    </el-tooltip>
+                  </template>
+                  <el-radio-group v-model="form.temperatureOverride">
+                    <el-radio value="auto">自动判断（推荐）</el-radio>
+                    <el-radio value="supported">支持 temperature</el-radio>
+                    <el-radio value="unsupported">不支持 temperature</el-radio>
+                  </el-radio-group>
+                  <p class="wb-muted hint-line">
+                    内置清单只收录本项目实际演示过的模型；
+                    <b>本地 / 自建 / 演示</b>模式下模型名是自定义的，清单必然查不到 ——
+                    如果你确认过它收不收这个参数，在这里钉死即可，免得一直停在「能力未知」。
+                  </p>
+                  <p v-if="form.temperatureOverride !== 'auto'" class="hint-line hint-line--warn">
+                    已手动指定为「{{ form.temperatureOverride === 'supported' ? '支持' : '不支持' }}」，
+                    该结论会覆盖自动判断。
+                  </p>
+                </el-form-item>
+              </el-form>
+            </el-collapse-item>
+          </el-collapse>
+
+          <div class="wb-row">
+            <el-button type="primary" :loading="saving" @click="onSave">保存</el-button>
+            <el-button :loading="testing" @click="onTest">测试连接</el-button>
+            <el-button v-if="hasKey" type="danger" plain @click="onDeleteKey">
+              删除该厂商的 Key
             </el-button>
-            <el-button type="primary" :loading="saving" @click="saveConfig">
-              <el-icon><Check /></el-icon>
-              保存配置
-            </el-button>
-            <el-button
-              type="danger"
-              :disabled="!savedKeys[currentProvider]"
-              @click="deleteConfig"
-            >
-              <el-icon><Delete /></el-icon>
-              清除密钥
-            </el-button>
           </div>
 
-          <!-- 结果反馈 -->
-          <el-alert
-            v-if="testResult"
-            :type="testResult.success ? 'success' : 'error'"
-            :closable="true"
-            show-icon
-            class="mt16"
-            @close="testResult = null"
-          >
-            <template #title>
-              {{ testResult.success ? '连接正常' : `连接失败${testResult.code ? '（' + testResult.code + '）' : ''}` }}
-            </template>
-            <div class="result-body">
-              <div>{{ testResult.message }}</div>
-              <div v-if="testResult.hint" class="result-hint">建议：{{ testResult.hint }}</div>
-              <div v-if="testResult.detail" class="result-detail">厂商返回：{{ testResult.detail }}</div>
-            </div>
-          </el-alert>
-        </div>
-      </div>
+          <p v-if="testResult" class="note" :class="testResult.success ? 'note--ok' : 'note--warn'">
+            {{ testResult.message }}
+            <span v-if="testResult.hint"><br>{{ testResult.hint }}</span>
+          </p>
+        </StateBlock>
+      </section>
 
-      <!-- 运行状态（可观测性） -->
-      <div class="settings-section glass-card">
-        <h3>
-          <el-icon><DataLine /></el-icon>
-          运行状态
-        </h3>
-        <p class="section-desc">全链路量化指标：Agent / 模型 / 工具的调用次数、成功率、P95 延迟、Token 与成本。</p>
+      <!-- 检索与上传 -->
+      <section class="wb-card wb-card-pad">
+        <div class="wb-section-title">检索与上传</div>
+        <p class="wb-card-hint">影响知识库切分与检索返回的条数，改完即时生效。</p>
 
-        <div class="metric-grid">
-          <div class="metric-card">
-            <span class="metric-label">LLM 调用</span>
-            <span class="metric-value">{{ m.llm.count }}</span>
-            <span class="metric-sub">成功率 {{ pct(m.llm.success_rate) }} · P95 {{ ms(m.llm.p95_ms) }}</span>
+        <el-form label-position="top" @submit.prevent>
+          <div class="wb-row" style="gap: var(--sp-3)">
+            <el-form-item label="切分大小（字）" class="wb-grow">
+              <el-input-number v-model="kn.chunkSize" :min="100" :max="1000" :step="50" />
+            </el-form-item>
+            <el-form-item label="返回条数" class="wb-grow">
+              <el-input-number v-model="kn.topK" :min="1" :max="20" />
+            </el-form-item>
           </div>
-          <div class="metric-card">
-            <span class="metric-label">工具调用</span>
-            <span class="metric-value">{{ m.tool.count }}</span>
-            <span class="metric-sub">成功率 {{ pct(m.tool.success_rate) }} · P95 {{ ms(m.tool.p95_ms) }}</span>
-          </div>
-          <div class="metric-card">
-            <span class="metric-label">Agent 任务</span>
-            <span class="metric-value">{{ m.agent.count }}</span>
-            <span class="metric-sub">成功率 {{ pct(m.agent.success_rate) }} · P95 {{ ms(m.agent.p95_ms) }}</span>
-          </div>
-          <div class="metric-card">
-            <span class="metric-label">Token / 成本</span>
-            <span class="metric-value">{{ m.total_tokens }}</span>
-            <span class="metric-sub">约 ¥{{ m.total_cost_cny.toFixed(4) }}</span>
-          </div>
-        </div>
-
-        <div class="metric-actions">
-          <el-button size="small" @click="loadMetrics">
-            <el-icon><Refresh /></el-icon> 刷新
-          </el-button>
-          <span class="metric-note">重试 {{ m.retries }} 次 · 累计事件 {{ m.total_events }} 条</span>
-        </div>
-      </div>
-
-      <!-- 知识库配置 -->
-      <div class="settings-section glass-card">
-        <h3>
-          <el-icon><Collection /></el-icon>
-          知识库配置
-        </h3>
-        <p class="section-desc">检索质量取决于嵌入模型是否匹配语料语言。</p>
-
-        <el-form label-position="top">
-          <el-form-item label="嵌入模型">
-            <el-tag type="success" size="large">bge-small-zh-v1.5 · 本地中文模型</el-tag>
-            <span class="form-hint">
-              当前索引固定使用该模型；切换模型需要重建全部索引，因此暂不提供无效的前端切换项。
-            </span>
+          <el-form-item label="Embedding 模型">
+            <el-input v-model="kn.embeddingModel" placeholder="留空用默认" style="max-width: 420px" />
           </el-form-item>
-
-          <div class="two-col">
-            <el-form-item label="文本块大小">
-              <el-input-number v-model="form.chunkSize" :min="100" :max="1000" :step="50" />
-              <span class="form-hint-inline">单块字符数</span>
-            </el-form-item>
-            <el-form-item label="检索返回数量">
-              <el-input-number v-model="form.topK" :min="1" :max="20" />
-              <span class="form-hint-inline">返回相关片段数</span>
-            </el-form-item>
+          <div class="wb-row">
+            <el-button :loading="savingKn" @click="onSaveKnowledge">保存检索设置</el-button>
           </div>
         </el-form>
-      </div>
 
-      <!-- 关于 -->
-      <div class="settings-section glass-card">
-        <h3>
-          <el-icon><InfoFilled /></el-icon>
-          关于项目
-        </h3>
+        <el-divider />
 
-        <div class="about-info">
-          <div class="about-row">
-            <span class="about-label">项目名称</span>
-            <span class="about-value">EduForge · 教铸</span>
+        <el-form label-position="top" @submit.prevent>
+          <el-form-item label="单文件上限（MB）" class="wb-grow">
+            <el-input-number v-model="fileCfg.maxFileSizeMb" :min="1" :max="200" />
+          </el-form-item>
+          <el-form-item label="允许的类型">
+            <el-input v-model="fileCfg.allowedTypes" placeholder="pdf,docx,txt" style="max-width: 420px" />
+          </el-form-item>
+          <div class="wb-row">
+            <el-button :loading="savingFile" @click="onSaveFile">保存上传设置</el-button>
           </div>
-          <div class="about-row">
-            <span class="about-label">定位</span>
-            <span class="about-value">面向真实备课场景的多模态 Agent 工作台</span>
-          </div>
-          <div class="about-row">
-            <span class="about-label">开源协议</span>
-            <span class="about-value">Apache-2.0</span>
-          </div>
-          <div class="about-row">
-            <span class="about-label">版本</span>
-            <span class="about-value">v2.0.0</span>
-          </div>
-        </div>
+        </el-form>
+      </section>
 
-        <div class="opensource-section">
-          <h4><el-icon><Link /></el-icon> 开源组件引用声明</h4>
-          <p class="opensource-desc">本项目基于以下开源组件构建，遵循其对应的开源协议：</p>
-          <div class="opensource-grid">
-            <div v-for="lib in openSourceLibs" :key="lib.name" class="opensource-item">
-              <div class="lib-header">
-                <span class="lib-name">{{ lib.name }}</span>
-                <el-tag size="small" :type="lib.licenseType">{{ lib.license }}</el-tag>
-              </div>
-              <span class="lib-usage">{{ lib.usage }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
+      <!-- 外观 -->
+      <section class="wb-card wb-card-pad">
+        <div class="wb-section-title">外观</div>
+        <p class="wb-card-hint">跟随系统会随电脑的深浅色设置自动切换，不用手动改。</p>
+
+        <el-form label-position="top" @submit.prevent>
+          <el-form-item label="主题">
+            <el-radio-group :model-value="theme.mode" @change="onTheme">
+              <el-radio value="light">浅色</el-radio>
+              <el-radio value="dark">深色</el-radio>
+              <el-radio value="system">跟随系统</el-radio>
+            </el-radio-group>
+            <p class="wb-muted hint-line">
+              当前生效：{{ theme.isDark ? '深色' : '浅色' }}
+              <span v-if="theme.mode === 'system'">（系统现在是{{ theme.systemDark ? '深色' : '浅色' }}）</span>
+            </p>
+          </el-form-item>
+        </el-form>
+      </section>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import axios from 'axios'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { QuestionFilled, Refresh } from '@element-plus/icons-vue'
+import PageHeader from '@/components/common/PageHeader.vue'
+import StateBlock from '@/components/common/StateBlock.vue'
+import StatusTag from '@/components/common/StatusTag.vue'
+import { llmApi } from '@/api/llm'
+import { fetchProviders } from '@/api/system'
 import { resolveApiBaseURL } from '@/api/baseUrl'
-import { installDataFlowInterceptor } from '@/api/dataFlow'
+import { trackedFetch } from '@/api/dataFlow'
+import { useThemeStore } from '@/store/theme'
 import { useAppStore } from '@/store/app'
-import {
-  Cpu, Connection, Check, Delete, InfoFilled, Link, Refresh, DataLine, Collection
-} from '@element-plus/icons-vue'
+import { confirmDanger, notifyError, notifySuccess, notifyWarn } from '@/utils/notify'
 
-const api = axios.create({ baseURL: resolveApiBaseURL(), timeout: 60000 })
+/**
+ * 设置页。
+ *
+ * 最关键的一条语义：**留空 = 不修改**。
+ * 后端不回显明文密钥，所以加载时输入框必然是空的；若整体覆盖 apiKeys，
+ * 教师只改个模型再点保存，就会把所有 Key 清空 —— 那个故障的表现是
+ * 「保存成功、对话立刻失效」，很难联想回来。
+ */
+const theme = useThemeStore()
 const appStore = useAppStore()
 
-installDataFlowInterceptor(api)
-
-const providers = ref([])
-const currentProvider = ref('dashscope')
-const savedKeys = reactive({})      // { provider: masked }
-const savedModels = reactive({})
-const loadError = ref('')
-
-const form = reactive({
-  apiKey: '',
-  baseUrl: '',
-  model: '',
-  temperature: 0.7,
-  chunkSize: 500,
-  topK: 5
-})
-
-// 后端已保存的 base_url / 模型（按厂商维度）；密钥只存掩码
-const savedBaseUrls = reactive({})
-
-const modelList = ref([])
-const modelSource = ref('')          // '' | 'live' | 'error'
-const modelError = ref('')
-const loadingModels = ref(false)
-const testing = ref(false)
+const loading = ref(false)
+const error = ref('')
 const saving = ref(false)
+const testing = ref(false)
+const loadingModels = ref(false)
+const providers = ref([])
+const models = ref([])
+
+const form = reactive({ provider: 'demo', model: '', apiKey: '', baseUrl: '', temperature: 0.7, samplingMode: 'auto', temperatureOverride: 'auto' })
+const keyMasked = ref('')
+const cfgSampling = ref(null)
+const hasKey = ref(false)
 const testResult = ref(null)
 
-const m = reactive({
-  llm: { count: 0, success_rate: 0, p95_ms: 0 },
-  tool: { count: 0, success_rate: 0, p95_ms: 0 },
-  agent: { count: 0, success_rate: 0, p95_ms: 0 },
-  request: { count: 0, success_rate: 0, p95_ms: 0 },
-  total_tokens: 0,
-  total_cost_cny: 0,
-  retries: 0,
-  total_events: 0
-})
+const kn = reactive({ chunkSize: 500, topK: 5, embeddingModel: '' })
+const openDev = ref([])
 
-const providerCount = computed(() => providers.value.length)
-const currentSpec = computed(() => providers.value.find(p => p.key === currentProvider.value) || null)
-const keyMasked = computed(() => savedKeys[currentProvider.value] || '')
-
-const capabilityTags = computed(() => {
-  const c = currentSpec.value?.capabilities || {}
-  const map = { vision: '视觉理解', tools: '工具调用', json_mode: 'JSON 输出', stream: '流式', embedding: '向量' }
-  return Object.keys(map).filter(k => c[k]).map(k => map[k])
-})
-
-/** 统一的错误信息提取：后端返回结构化 {code,message,hint,detail} */
-function extractError(e, fallback) {
-  const d = e?.response?.data
-  if (d && typeof d === 'object') {
-    return {
-      success: false,
-      code: d.code || '',
-      message: d.message || d.detail || fallback,
-      hint: d.hint || '',
-      detail: d.detail || ''
-    }
+/**
+ * 手动输入的可编辑范围随厂商/模型而定，不统一假设所有模型一样。
+ *
+ * 能力分三态，界面必须如实呈现：
+ *   supported  → 正常可编辑；
+ *   unsupported→ 禁用并说明"不接受该参数，不会发送"；
+ *   unknown    → 仍可编辑（兼容模式照常发送），但标记"能力未知"，
+ *                绝不把"没验证过"显示成"已确认支持"。
+ */
+const samplingRange = computed(() => {
+  const s = cfgSampling.value || {}
+  // 本地改了覆盖值要**立刻**反映在界面上，不能等保存刷新后才对 ——
+  // 否则教师选了「不支持」却仍看到"已验证支持"，比不显示更糟。
+  const state = form.temperatureOverride !== 'auto'
+    ? form.temperatureOverride
+    : (s.state || 'unknown')
+  return {
+    state,
+    supports: form.temperatureOverride === 'unsupported'
+      ? false
+      : s.supports_temperature !== false,
+    unknown: state === 'unknown',
+    min: Number.isFinite(s.min) ? s.min : 0,
+    max: Number.isFinite(s.max) ? s.max : 2,
   }
-  return { success: false, code: '', message: e?.message || fallback, hint: '', detail: '' }
-}
+})
+
+/** 四种可呈现的结论：支持 / 禁止 / 未知 / 手动指定 */
+const capabilityTag = computed(() => {
+  const overridden = form.temperatureOverride !== 'auto'
+  const base = {
+    supported: { status: 'done', label: '已验证支持' },
+    unsupported: { status: 'risk', label: '不接受该参数' },
+    unknown: { status: 'warn', label: '能力未知 · 兼容模式' },
+  }[samplingRange.value.state] || { status: 'warn', label: '能力未知 · 兼容模式' }
+  return {
+    ...base,
+    key: samplingRange.value.state,
+    label: overridden ? `${base.label}（手动指定）` : base.label,
+  }
+})
+
+const savingKn = ref(false)
+const fileCfg = reactive({ maxFileSizeMb: 20, allowedTypes: 'pdf,docx,doc,txt,md,pptx' })
+const savingFile = ref(false)
+
+const activeSpec = computed(() => providers.value.find(p => p.key === form.provider) || null)
 
 async function loadProviders() {
-  const res = await api.get('/providers')
-  providers.value = res.data.providers || []
-}
-
-async function loadSavedConfig() {
-  const res = await api.get('/llm/config')
-  const list = res.data.providers || []
-  for (const p of list) {
-    if (p.key_masked) savedKeys[p.provider] = p.key_masked
-    else delete savedKeys[p.provider]
-    if (p.model) savedModels[p.provider] = p.model
-    if (p.base_url) savedBaseUrls[p.provider] = p.base_url
-  }
-  if (res.data.provider) currentProvider.value = res.data.provider
-  if (typeof res.data.temperature === 'number') form.temperature = res.data.temperature
-  if (typeof res.data.chunkSize === 'number') form.chunkSize = res.data.chunkSize
-  if (typeof res.data.topK === 'number') form.topK = res.data.topK
-  syncFormToProvider()
-}
-
-/** 切换厂商时，把表单切到该厂商的已保存值（不回显明文密钥） */
-function syncFormToProvider() {
-  const p = currentProvider.value
-  form.apiKey = ''
-  const spec = currentSpec.value
-  form.baseUrl = savedBaseUrls[p] || spec?.base_url || ''
-  form.model = savedModels[p] || spec?.default_model || ''
-  modelList.value = []
-  modelSource.value = ''
-  modelError.value = ''
-  testResult.value = null
-}
-
-function selectProvider(id) {
-  if (id === currentProvider.value) return
-  currentProvider.value = id
-  syncFormToProvider()
-}
-
-function resetBaseUrl() {
-  form.baseUrl = currentSpec.value?.base_url || ''
-}
-
-async function fetchModels() {
-  const spec = currentSpec.value
-  if (!spec || spec.protocol === 'demo') return
-  loadingModels.value = true
-  modelError.value = ''
   try {
-    const params = { provider: currentProvider.value }
-    // 输入框里临时填的 Key 优先，用于"还没保存就想看有哪些模型"
-    if (form.apiKey && form.apiKey.trim()) params.api_key = form.apiKey.trim()
-    const res = await api.get('/models/live', { params })
-    const d = res.data
-    if (d.success) {
-      modelList.value = (d.models || []).map(x => x.name || x).filter(Boolean)
-      modelSource.value = 'live'
-      if (!form.model && modelList.value.length) form.model = modelList.value[0]
-      ElMessage.success(`已拉取 ${modelList.value.length} 个模型`)
-    } else {
-      modelSource.value = 'error'
-      modelError.value = d.message || d.reason || '拉取失败'
-    }
+    const d = await fetchProviders()
+    providers.value = Array.isArray(d.providers) ? d.providers : []
+  } catch { providers.value = [] }
+}
+
+async function loadConfig() {
+  const cfg = await llmApi.getConfig()
+  const list = Array.isArray(cfg.providers) ? cfg.providers : []
+  form.provider = cfg.provider || 'demo'
+  // 旧配置没有 samplingMode → 后端已按 auto 下发；这里保持一致，
+  // 绝不能因为"有 temperature 数值"就推断成手动模式。
+  form.samplingMode = cfg.samplingMode === 'manual' ? 'manual' : 'auto'
+  const ov = String(cfg.temperatureOverride || 'auto').toLowerCase()
+  form.temperatureOverride = ['supported', 'unsupported'].includes(ov) ? ov : 'auto'
+  form.temperature = Number(cfg.temperature ?? 0.7)
+  kn.chunkSize = Number(cfg.chunkSize ?? 500)
+  kn.topK = Number(cfg.topK ?? 5)
+
+  const active = list.find(p => p.provider === form.provider)
+  keyMasked.value = active?.key_masked || ''
+  hasKey.value = !!active?.has_api_key
+  form.model = active?.model || ''
+  cfgSampling.value = cfg.sampling || null
+  form.baseUrl = active?.base_url || ''
+  form.apiKey = ''
+}
+
+async function loadAll() {
+  loading.value = true
+  error.value = ''
+  try {
+    await loadProviders()
+    await loadConfig()
   } catch (e) {
-    modelSource.value = 'error'
-    modelError.value = extractError(e, '拉取模型列表失败').message
+    error.value = e?.message || '配置读取失败'
+  } finally {
+    loading.value = false
+  }
+}
+
+async function loadModels() {
+  loadingModels.value = true
+  try {
+    const d = await llmApi.getModels(form.provider, form.apiKey || undefined, form.baseUrl || undefined)
+    const list = Array.isArray(d.models) ? d.models : []
+    models.value = list
+    if (!list.length) notifyWarn(d.message || '拉不到模型列表，可以手动填写模型名')
+  } catch (e) {
+    notifyError(e?.message || '模型列表读取失败')
   } finally {
     loadingModels.value = false
   }
 }
 
-async function testConnection() {
-  const spec = currentSpec.value
-  if (!spec) return
-  testing.value = true
+function onProviderChange() {
+  const p = providers.value.find(x => x.key === form.provider)
+  form.baseUrl = p?.base_url || ''
+  models.value = []
   testResult.value = null
-  try {
-    const payload = {
-      provider: currentProvider.value,
-      // 留空则后端自动使用已保存的 Key
-      api_key: form.apiKey ? form.apiKey.trim() : '',
-      model: form.model || '',
-      base_url: form.baseUrl || ''
-    }
-    const res = await api.post('/llm/test-connection', payload)
-    const d = res.data
-    testResult.value = {
-      success: !!d.success,
-      code: d.code || '',
-      message: d.message || '',
-      hint: d.hint || '',
-      detail: d.detail || ''
-    }
-  } catch (e) {
-    testResult.value = extractError(e, '连接测试失败')
-  } finally {
-    testing.value = false
-  }
+  // 换厂商后掩码要重新读，先清掉，避免显示上一家的
+  keyMasked.value = ''
+  hasKey.value = false
 }
 
-async function saveConfig() {
+function onTheme(v) {
+  theme.setMode(v)
+}
+
+async function onSave() {
+  if (saving.value) return
   saving.value = true
   try {
-    const payload = {
-      provider: currentProvider.value,
-      apiKeys: { [currentProvider.value]: form.apiKey ? form.apiKey.trim() : '' },
-      models: { [currentProvider.value]: form.model || '' },
+    await llmApi.saveFullConfig({
+      provider: form.provider,
+      apiKeys: { [form.provider]: form.apiKey || '' },
+      models: { [form.provider]: form.model || '' },
+      // 手动值照常保存（作为手动模式的初始值），但自动模式下后端不会用它
       temperature: form.temperature,
-      chunkSize: form.chunkSize,
-      topK: form.topK
+      samplingMode: form.samplingMode,
+      temperatureOverride: form.temperatureOverride
+    })
+    if (form.baseUrl) {
+      await llmApi.saveConfig({ provider: form.provider, base_url: form.baseUrl })
     }
-    // 自定义 base_url 单独存，避免污染其他厂商
-    if (currentSpec.value?.protocol !== 'demo') {
-      const keyName = currentProvider.value === 'local' ? 'localUrl' : `${currentProvider.value}Base`
-      payload.apiKeys[keyName] = form.baseUrl || ''
-    }
-
-    const res = await api.post('/llm/save-full-config', payload)
-    if (!res.data?.success) {
-      throw new Error(res.data?.message || '保存失败')
-    }
-    // 保存成功后立即回读，拿到掩码与生效状态
-    await loadSavedConfig()
-    await appStore.fetchConfig()
+    notifySuccess('已保存')
     form.apiKey = ''
-    ElMessage.success(
-      res.data.has_api_key
-        ? `已保存 · 当前模型 ${res.data.model || form.model}`
-        : '已保存（该厂商尚未配置密钥）'
-    )
+    await loadConfig()
+    await appStore.fetchConfig()
   } catch (e) {
-    const err = extractError(e, '保存失败')
-    ElMessage.error(`${err.message}${err.hint ? ' · ' + err.hint : ''}`)
+    notifyError(e?.message || '保存失败')
   } finally {
     saving.value = false
   }
 }
 
-async function deleteConfig() {
+async function onTest() {
+  if (testing.value) return
+  testing.value = true
+  testResult.value = null
   try {
-    await ElMessageBox.confirm(
-      `将清除 ${currentSpec.value?.label} 已保存的 API Key，此操作不可撤销。`,
-      '确认清除',
-      { type: 'warning', confirmButtonText: '清除', cancelButtonText: '取消' }
-    )
-    await api.post('/llm/save-full-config', {
-      provider: currentProvider.value,
-      apiKeys: { [currentProvider.value]: null },  // null = 显式删除
-      models: { [currentProvider.value]: form.model || '' }
+    const r = await llmApi.testConnection({
+      provider: form.provider,
+      api_key: form.apiKey || '',
+      model: form.model || '',
+      base_url: form.baseUrl || ''
     })
-    form.apiKey = ''
-    await loadSavedConfig()
-    ElMessage.success('密钥已清除')
+    testResult.value = { success: !!r.success, message: r.message || '', hint: r.hint || '' }
   } catch (e) {
-    if (e !== 'cancel' && e !== 'Cancel') {
-      ElMessage.error(extractError(e, '清除失败').message)
-    }
+    testResult.value = { success: false, message: e?.message || '连接测试失败' }
+  } finally {
+    testing.value = false
   }
 }
 
-async function loadMetrics() {
+async function onDeleteKey() {
+  const ok = await confirmDanger({
+    title: `删除 ${form.provider} 的 API Key？`,
+    consequence: '删除后该厂商回到未配置状态，生成类功能将退回演示模式。',
+    confirmText: '确认删除'
+  })
+  if (!ok) return
   try {
-    const res = await api.get('/metrics')
-    const s = res.data?.summary || {}
-    const empty = { count: 0, success_rate: 0, p95_ms: 0, avg_ms: 0 }
-    // 后端 summary 的分组字段直接是 llm / tool / agent / request
-    for (const k of ['llm', 'tool', 'agent', 'request']) {
-      m[k] = { ...empty, ...(s[k] || {}) }
-    }
-    m.total_tokens = s.total_tokens || 0
-    m.total_cost_cny = s.total_cost_cny || 0
-    m.retries = s.retries || 0
-    m.total_events = s.total_events || 0
-  } catch {
-    /* 指标面板失败不应影响设置页主流程 */
-  }
-}
-
-const pct = v => `${((v ?? 0) * 100).toFixed(0)}%`
-const ms = v => `${Math.round(v ?? 0)}ms`
-
-function openUrl(url) {
-  if (url) window.open(url, '_blank')
-}
-
-const openSourceLibs = [
-  { name: 'Vue 3', license: 'MIT', licenseType: 'success', usage: '前端框架' },
-  { name: 'FastAPI', license: 'MIT', licenseType: 'success', usage: '后端 API 框架' },
-  { name: 'Element Plus', license: 'MIT', licenseType: 'success', usage: 'UI 组件库' },
-  { name: 'Pinia', license: 'MIT', licenseType: 'success', usage: '状态管理' },
-  { name: 'Vite', license: 'MIT', licenseType: 'success', usage: '构建工具' },
-  { name: 'ChromaDB', license: 'Apache-2.0', licenseType: 'warning', usage: '向量数据库' },
-  { name: 'sentence-transformers', license: 'Apache-2.0', licenseType: 'warning', usage: '文本向量化' },
-  { name: 'python-docx', license: 'MIT', licenseType: 'success', usage: 'Word 生成' },
-  { name: 'python-pptx', license: 'MIT', licenseType: 'success', usage: 'PPT 生成' },
-  { name: 'pdfplumber', license: 'MIT', licenseType: 'success', usage: 'PDF 解析' },
-  { name: 'Three.js', license: 'MIT', licenseType: 'success', usage: '3D 可视化' },
-  { name: 'httpx', license: 'BSD-3', licenseType: 'success', usage: 'HTTP 客户端' }
-]
-
-onMounted(async () => {
-  try {
-    await loadProviders()
-    await loadSavedConfig()
+    await llmApi.deleteConfig(form.provider)
+    notifySuccess('已删除')
+    await loadConfig()
+    await appStore.fetchConfig()
   } catch (e) {
-    loadError.value = extractError(e, '请确认后端已启动').message
+    notifyError(e?.message || '删除失败')
   }
-  loadMetrics()
-})
+}
+
+async function onSaveKnowledge() {
+  if (savingKn.value) return
+  savingKn.value = true
+  try {
+    const qs = new URLSearchParams({
+      chunkSize: String(kn.chunkSize),
+      topK: String(kn.topK),
+      embeddingModel: kn.embeddingModel || ''
+    })
+    await trackedFetch(`${resolveApiBaseURL()}/config/knowledge?${qs.toString()}`, { method: 'POST' })
+    notifySuccess('已保存')
+  } catch (e) {
+    notifyError(e?.message || '保存失败')
+  } finally {
+    savingKn.value = false
+  }
+}
+
+async function onSaveFile() {
+  if (savingFile.value) return
+  savingFile.value = true
+  try {
+    const qs = new URLSearchParams({
+      maxFileSize: String(fileCfg.maxFileSizeMb * 1024 * 1024),
+      allowedTypes: fileCfg.allowedTypes
+    })
+    await trackedFetch(`${resolveApiBaseURL()}/config/file?${qs.toString()}`, { method: 'POST' })
+    notifySuccess('已保存')
+  } catch (e) {
+    notifyError(e?.message || '保存失败')
+  } finally {
+    savingFile.value = false
+  }
+}
+
+onMounted(loadAll)
 </script>
 
-<style lang="scss" scoped>
-.settings-view {
-  padding: 24px;
-  overflow-y: auto;
-  height: calc(100vh - 112px);
-  background: var(--bg-dark);
-}
-
-.settings-content {
-  max-width: 960px;
-  margin: 0 auto;
-
-  h1 {
-    font-size: 28px;
-    margin-bottom: 32px;
-    background: linear-gradient(135deg, var(--primary), var(--accent));
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-    color: transparent;
-  }
-}
-
-.settings-section {
-  padding: 24px;
-  margin-bottom: 24px;
-  background: rgba(26, 31, 78, 0.95);
-  border: 1px solid rgba(0, 200, 255, 0.3);
-  border-radius: 16px;
-
-  h3 {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 18px;
-    margin-bottom: 8px;
-    color: #fff;
-  }
-
-  .section-desc {
-    font-size: 14px;
-    color: #b0b8c4;
-    margin-bottom: 20px;
-  }
-
-  :deep(.el-form-item__label) {
-    color: #c8d0dc;
-    font-weight: 500;
-  }
-
-  :deep(.el-input__wrapper) {
-    background: rgba(10, 14, 39, 0.9) !important;
-  }
-
-  :deep(.el-input__inner) {
-    color: #fff !important;
-  }
-}
-
-.mb16 { margin-bottom: 16px; }
-.mt16 { margin-top: 16px; }
-
-/* 厂商卡片 */
-.provider-cards {
+<style scoped>
+.layout {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin-bottom: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: var(--sp-4);
+  align-items: start;
 }
 
-.provider-card {
-  padding: 14px;
-  background: rgba(10, 14, 39, 0.5);
-  border: 2px solid transparent;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.25s ease;
-
-  &:hover { background: rgba(0, 200, 255, 0.1); border-color: rgba(0, 200, 255, 0.35); }
-
-  &.active {
-    background: rgba(0, 200, 255, 0.15);
-    border-color: var(--primary);
-    box-shadow: 0 0 18px rgba(0, 200, 255, 0.2);
-  }
-
-  .provider-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    margin-bottom: 6px;
-  }
-
-  .provider-name { font-size: 14px; font-weight: 600; }
-  .provider-default { font-size: 11px; color: var(--text-muted); }
+.hint-line {
+  font-size: var(--fs-xs);
+  margin: 4px 0 0;
 }
 
-/* 当前厂商详情 */
-.provider-config {
-  padding: 20px;
-  background: rgba(10, 14, 39, 0.3);
-  border-radius: 12px;
+.note {
+  margin: var(--sp-3) 0 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+  line-height: 1.7;
 }
 
-.spec-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 8px;
+.note--ok { background: var(--success-bg); color: var(--wb-ok-text); }
+.note--warn { background: var(--wb-warn-bg); color: var(--wb-warn-text); }
+
+/* 开发者选项：默认折叠，展开后也不抢主设置的视觉重心 */
+.dev {
+  margin-top: var(--sp-2);
+  border-top: 1px dashed var(--wb-border);
 }
 
-.spec-protocol {
-  margin-left: 8px;
-  font-size: 12px;
-  color: var(--text-muted);
+.dev :deep(.el-collapse-item__header) {
+  font-size: var(--fs-sm);
+  color: var(--wb-text-3);
 }
 
-.spec-caps { display: flex; gap: 6px; flex-wrap: wrap; }
+.hint-line--warn { color: var(--wb-warn-text); }
+.hint-line--ok { color: var(--wb-ok-text); }
 
-.spec-notes {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  font-size: 12px;
-  color: #ffd591;
-  background: rgba(250, 173, 20, 0.08);
-  border-left: 3px solid #faad14;
-  padding: 8px 10px;
-  border-radius: 6px;
-  margin-bottom: 16px;
-}
+.wb-row--tight { gap: var(--sp-1); }
 
-.model-row { display: flex; gap: 8px; width: 100%; }
-.model-select { flex: 1; }
-
-.form-hint {
-  display: block;
-  margin-top: 6px;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.form-hint-inline { margin-left: 12px; font-size: 12px; color: var(--text-muted); }
-
-.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-
-.form-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 20px;
-  padding-top: 18px;
-  border-top: 1px solid var(--border-color);
-}
-
-.result-body { font-size: 13px; line-height: 1.7; }
-.result-hint { color: var(--primary); }
-.result-detail { color: var(--text-muted); }
-
-/* 指标面板 */
-.metric-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-}
-
-.metric-card {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 14px;
-  background: rgba(10, 14, 39, 0.5);
-  border-radius: 10px;
-
-  .metric-label { font-size: 12px; color: var(--text-muted); }
-  .metric-value { font-size: 22px; font-weight: 700; color: var(--primary); }
-  .metric-sub { font-size: 11px; color: var(--text-secondary); }
-}
-
-.metric-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 14px;
-}
-
-.metric-note { font-size: 12px; color: var(--text-muted); }
-
-/* 关于 */
-.about-info { margin-bottom: 24px; }
-
-.about-row {
-  display: flex;
-  padding: 12px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-
-  &:last-child { border-bottom: none; }
-  .about-label { width: 100px; color: var(--text-secondary); }
-  .about-value { flex: 1; }
-}
-
-.opensource-section {
-  h4 { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-secondary); margin-bottom: 8px; }
-  .opensource-desc { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
-}
-
-.opensource-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-
-.opensource-item {
-  padding: 12px;
-  background: rgba(10, 14, 39, 0.5);
-  border-radius: 8px;
-
-  .lib-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-  .lib-name { font-size: 13px; font-weight: 600; }
-  .lib-usage { font-size: 11px; color: var(--text-muted); }
-}
-
-@media (max-width: 900px) {
-  .provider-cards { grid-template-columns: repeat(2, 1fr); }
-  .metric-grid { grid-template-columns: repeat(2, 1fr); }
-  .opensource-grid { grid-template-columns: repeat(2, 1fr); }
-  .two-col { grid-template-columns: 1fr; }
+@media (max-width: 768px) {
+  .layout { grid-template-columns: 1fr; }
 }
 </style>

@@ -71,7 +71,13 @@ def _load_default_config_from_env() -> Dict[str, Any]:
         "provider": os.getenv("DEFAULT_LLM_PROVIDER", "demo"),
         "apiKeys": {},
         "models": {},
+        # 采样模式默认自动：普通教师不该被要求理解 temperature。
+        # 这里的 0.7 **只是手动模式的初始值**，自动模式下不参与解析。
+        "samplingMode": "auto",
         "temperature": 0.7,
+        # 能力手动覆盖：默认"自动判断"。local / demo / 自建网关的模型名查不到清单时
+        # 才需要部署方手动钉死。
+        "temperatureOverride": "auto",
     }
     if os.getenv("DASHSCOPE_API_KEY"):
         cfg["apiKeys"]["dashscope"] = os.getenv("DASHSCOPE_API_KEY")
@@ -135,6 +141,22 @@ def save_lesson_task_store(store: Dict[str, Any]) -> None:
         _write_json(LESSON_TASK_STORE, store)
 
 
+def _temperature_of(cfg: Dict[str, Any]) -> Optional[float]:
+    """读取温度配置。
+
+    ⚠️ 不能用 `cfg.get("temperature") or 0.7`：那样会把**合法的 0**
+    （"完全确定性输出"是手动模式下可能想要的效果）悄悄换成 0.7。
+    缺失时返回 None，由 `core.sampling` 决定回退策略。
+    """
+    raw = cfg.get("temperature")
+    if raw is None:
+        return None
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
+
+
 def get_active_llm_settings() -> Dict[str, Any]:
     cfg = load_runtime_config()
     provider = cfg.get("provider") or "demo"
@@ -146,7 +168,10 @@ def get_active_llm_settings() -> Dict[str, Any]:
         "api_key": (keys.get(provider) or "").strip(),
         "base_url": (_base_url_for(provider, keys) or "").strip() or None,
         "model": (models.get(provider) or _default_model(provider) or "").strip(),
-        "temperature": float(cfg.get("temperature") or 0.7),
+        # 旧配置没有 samplingMode → 由 core.sampling 一律按自动模式处理
+        "samplingMode": cfg.get("samplingMode"),
+        "temperature": _temperature_of(cfg),
+        "temperatureOverride": cfg.get("temperatureOverride"),
     }
 
 
@@ -188,6 +213,8 @@ def get_provider_runtime(provider: str) -> Dict[str, Any]:
         "api_key": key or None,
         "base_url": _base_url_for(provider, keys),
         "model": models.get(provider) or _default_model(provider),
-        "temperature": float(cfg.get("temperature") or 0.7),
+        "samplingMode": cfg.get("samplingMode"),
+        "temperature": _temperature_of(cfg),
+        "temperatureOverride": cfg.get("temperatureOverride"),
         "is_active": active == provider,
     }

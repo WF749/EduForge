@@ -9,14 +9,16 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 import httpx
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
 from . import knowledge_store, llm_client, persist, web_search
 from .api.system import live_models
 from .core.errors import ErrorCode
 from .core.llm_gateway import llm_chat
+from .core.sampling import model_supports_temperature, model_temperature_state
 from .core.logging_setup import get_logger
-from .core.providers import get_provider, resolve_base_url
+from .core.providers import get_provider, resolve_base_url, resolve_model
 from .document_extract import extract_text, resolve_uploaded_references
 from .services.dialogue_manager import dialogue_manager
 from .services.lesson_tutor import build_lesson_context, build_lesson_system_prompt
@@ -74,10 +76,35 @@ def _providers_payload(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 "base_url": (keys.get(f"{pid}Base") or keys.get("localUrl") or ""),
             }
         )
+    # 采样模式缺失 = 旧配置 → 前端按自动模式呈现（后端 core.sampling 也是如此判定）
+    sampling_mode = str(cfg.get("samplingMode") or "auto").strip().lower()
+    if sampling_mode not in ("auto", "manual"):
+        sampling_mode = "auto"
+
+    override = str(cfg.get("temperatureOverride") or "auto").strip().lower()
+    if override not in ("auto", "supported", "unsupported"):
+        override = "auto"
+
+    # 手动输入框的可编辑范围随当前厂商/模型而定，不统一假设所有模型一样
+    spec = get_provider(active)
+    model_name = resolve_model(active, (cfg.get("models") or {}).get(active) or None)
+
     return {
         "providers": plist,
         "provider": active,
-        "temperature": cfg.get("temperature", 0.7),
+        "samplingMode": sampling_mode,
+        # 手动模式的初始值；自动模式下不参与解析（不能覆盖策略）
+        "temperature": cfg.get("temperature"),
+        # 开发者选项里的能力覆盖：auto / supported / unsupported
+        "temperatureOverride": override,
+        "sampling": {
+            # 三态：supported / unsupported / unknown。
+            # unknown 表示"没验证过"，界面上要如实标注，不能假装确认过。
+            "state": model_temperature_state(active, model_name, override),
+            "supports_temperature": model_supports_temperature(active, model_name, override),
+            "min": float((getattr(spec, "temperature_range", (0.0, 2.0)) or (0.0, 2.0))[0]),
+            "max": float((getattr(spec, "temperature_range", (0.0, 2.0)) or (0.0, 2.0))[1]),
+        },
         "chunkSize": cfg.get("chunkSize", 500),
         "topK": cfg.get("topK", 5),
     }
@@ -87,7 +114,7 @@ def _providers_payload(cfg: Dict[str, Any]) -> Dict[str, Any]:
 def llm_get_config():
     cfg = persist.load_runtime_config()
     if not cfg:
-        cfg = {"provider": "demo", "apiKeys": {}, "models": {}, "temperature": 0.7}
+        cfg = {"provider": "demo", "apiKeys": {}, "models": {}, "samplingMode": "auto", "temperature": 0.7}
     return JSONResponse(_providers_payload(cfg))
 
 
@@ -193,6 +220,15 @@ async def llm_save_full(body: Dict[str, Any]):
     for k in ("temperature", "embeddingModel", "chunkSize", "topK", "maxFileSize", "allowedTypes"):
         if k in body and body[k] is not None:
             cfg[k] = body[k]
+
+    # 采样模式：只接受两个明确值，其它一律按自动处理（老配置缺字段也是自动）
+    sm = body.get("samplingMode")
+    if isinstance(sm, str) and sm.strip().lower() in ("auto", "manual"):
+        cfg["samplingMode"] = sm.strip().lower()
+
+    ov = body.get("temperatureOverride")
+    if isinstance(ov, str) and ov.strip().lower() in ("auto", "supported", "unsupported"):
+        cfg["temperatureOverride"] = ov.strip().lower()
 
     persist.save_runtime_config(cfg)
 
@@ -425,7 +461,7 @@ async def lesson_chat_ask(body: Dict[str, Any]):
     knowledge = ""
     if body.get("use_knowledge", True):
         try:
-            hits = knowledge_store.query_kb(message, top_k=_configured_int("topK", 5, 1, 20))
+            hits = await run_in_threadpool(knowledge_store.query_kb, message, top_k=_configured_int("topK", 5, 1, 20))
             knowledge = "\n\n".join(
                 str(h.get("content") or "").strip() for h in hits if h.get("content")
             )
@@ -436,6 +472,8 @@ async def lesson_chat_ask(body: Dict[str, Any]):
 
     payload = dict(body)
     payload["message"] = message
+    # 用途标识：带课程语境的教学问答（基于资料的解释）
+    payload["purpose"] = "lesson_qa"
     payload["system"] = build_lesson_system_prompt(body.get("lesson"), knowledge)
     # 不带 attachments 走资料链路：工作台的参考资料是随"这节课"走的，
     # 在生成时由各生成接口读取，问答里再读一遍会出现两套入口。
@@ -467,10 +505,11 @@ async def lesson_chat_context(body: Dict[str, Any]):
 @router.post("/chat/stream")
 async def chat_stream(body: Dict[str, Any]):
     b = dict(body)
+    b["purpose"] = body.get("purpose") or "chat"
     question = b.get("message", "")
     b["message"] = _message_with_uploads(question, b)
     if b.get("use_knowledge"):
-        hits = knowledge_store.query_kb(question, top_k=_configured_int("topK", 5, 1, 20))
+        hits = await run_in_threadpool(knowledge_store.query_kb, question, top_k=_configured_int("topK", 5, 1, 20))
         ctx = "\n".join(h.get("content", "") for h in hits)
         if ctx:
             b["message"] = f"[知识库参考]\n{ctx}\n\n{b['message']}"
@@ -480,10 +519,11 @@ async def chat_stream(body: Dict[str, Any]):
 @router.post("/chat/vision")
 async def chat_vision(body: Dict[str, Any]):
     b = dict(body)
+    b["purpose"] = body.get("purpose") or "chat"
     question = b.get("message", "")
     b["message"] = _message_with_uploads(question, b)
     if b.get("use_knowledge"):
-        hits = knowledge_store.query_kb(question, top_k=_configured_int("topK", 5, 1, 20))
+        hits = await run_in_threadpool(knowledge_store.query_kb, question, top_k=_configured_int("topK", 5, 1, 20))
         ctx = "\n".join(h.get("content", "") for h in hits)
         if ctx:
             b["message"] = f"[知识库参考]\n{ctx}\n\n{b['message']}"
@@ -493,10 +533,11 @@ async def chat_vision(body: Dict[str, Any]):
 @router.post("/chat/deep-thinking")
 async def chat_deep(body: Dict[str, Any]):
     b = dict(body)
+    b["purpose"] = body.get("purpose") or "explanation"
     question = b.get("message") or ""
     b["message"] = _message_with_uploads(question, b)
     if b.get("use_knowledge"):
-        hits = knowledge_store.query_kb(question, top_k=_configured_int("topK", 5, 1, 20))
+        hits = await run_in_threadpool(knowledge_store.query_kb, question, top_k=_configured_int("topK", 5, 1, 20))
         ctx = "\n".join(h.get("content", "") for h in hits)
         if ctx:
             b["message"] = f"[知识库参考]\n{ctx}\n\n{b['message']}"
@@ -507,6 +548,7 @@ async def chat_deep(body: Dict[str, Any]):
 @router.post("/chat/search")
 async def chat_search(body: Dict[str, Any]):
     q = (body.get("query") or body.get("message") or "").strip()
+    body["purpose"] = body.get("purpose") or "knowledge_qa"
     try:
         snippets = await web_search.search_snippets_async(q)
     except Exception as e:
@@ -519,7 +561,7 @@ async def chat_search(body: Dict[str, Any]):
     )
     b = dict(body)
     if b.get("use_knowledge"):
-        hits = knowledge_store.query_kb(q, top_k=_configured_int("topK", 5, 1, 20))
+        hits = await run_in_threadpool(knowledge_store.query_kb, q, top_k=_configured_int("topK", 5, 1, 20))
         ctx = "\n".join(h.get("content", "") for h in hits)
         if ctx:
             inner = f"[知识库参考]\n{ctx}\n\n" + inner
@@ -530,6 +572,7 @@ async def chat_search(body: Dict[str, Any]):
 @router.post("/chat/deep-search")
 async def chat_deep_search(body: Dict[str, Any]):
     q = (body.get("query") or body.get("message") or "").strip()
+    body["purpose"] = body.get("purpose") or "knowledge_qa"
     try:
         snippets = await web_search.search_snippets_async(q)
     except Exception as e:
@@ -541,7 +584,7 @@ async def chat_deep_search(body: Dict[str, Any]):
         else f"[联网检索：当前网络环境无法访问外部资源]\n{q}"
     )
     if body.get("use_knowledge"):
-        hits = knowledge_store.query_kb(q, top_k=_configured_int("topK", 5, 1, 20))
+        hits = await run_in_threadpool(knowledge_store.query_kb, q, top_k=_configured_int("topK", 5, 1, 20))
         ctx = "\n".join(h.get("content", "") for h in hits)
         if ctx:
             ref = f"[知识库参考]\n{ctx}\n\n" + ref
@@ -565,7 +608,8 @@ async def summarize_req(body: Dict[str, Any]):
                 "content": "从以下对话中提取教学需求，只输出 JSON，键含 topic,target_audience,duration,difficulty,key_points(数组)：\n"
                 + text,
             }
-        ]
+        ],
+        purpose="structured_extract",
     )
     req = {
         "topic": "未命名课程",
@@ -646,6 +690,7 @@ async def chat_intent(body: Dict[str, Any]):
             }
         ],
         max_tokens=600,
+        purpose="intent_extract",
     )
     out: Dict[str, Any] = {
         "intent": "general",
@@ -844,7 +889,7 @@ def knowledge_docs(limit: int = Query(100)):
 async def knowledge_query(body: Dict[str, Any]):
     q = body.get("query") or ""
     top_k = int(body.get("top_k") or _configured_int("topK", 5, 1, 20))
-    results = knowledge_store.query_kb(q, top_k=top_k)
+    results = await run_in_threadpool(knowledge_store.query_kb, q, top_k=top_k)
     return {"success": True, "results": results}
 
 
