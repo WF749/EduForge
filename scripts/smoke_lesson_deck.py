@@ -121,6 +121,31 @@ def main() -> int:
     check("按学科+课题命中", (find_golden("物理", "浮力") or {}).get("title") == "浮力")
     check("学科不符不命中", find_golden("语文", "浮力") is None)
 
+
+    # ---- 9. 学科不确定时仍要能命中黄金样例 ----
+    print("\n== 9. 学科不确定不能导致检索失败 ==")
+    # 实测事故：学科=「综合课程」（界面默认值）时命中不了，学科=空反而能命中。
+    # 用默认值惩罚用户是错的。
+    for subj in ["综合课程", "", "未设学科", None, "物理"]:
+        check(f"学科={subj or '(空)'} 仍命中浮力",
+              (find_golden(subj, "浮力") or {}).get("title") == "浮力")
+    check("课题不符仍不命中", find_golden("综合课程", "不存在课题") is None)
+
+    # ---- 10. 兜底模板不得把表单字段当知识点 ----
+    print("\n== 10. 兜底模板不能产生「XX的定义与本质」垃圾 ==")
+    from app.ppt_tasks import _looks_like_meta_field, _build_detailed_content
+    for meta in ["内容难度：中等难度", "难度：中等", "时长：45分钟", "课时：2课时",
+                 "学科：物理", "课型：新授课", "受众：八年级"]:
+        check(f"识别「{meta}」为表单字段", _looks_like_meta_field(meta))
+    for good in ["浮力", "阿基米德原理", "细胞的结构", "一元二次方程"]:
+        check(f"不误判「{good}」", not _looks_like_meta_field(good))
+    # 用带字段的 outline 走一遍，确认生成的页不再含 "内容难度：中等难度的定义"
+    slides = _build_detailed_content("浮力", "内容难度：中等难度\n浮力产生的原因", "八年级")
+    joined = json.dumps(slides, ensure_ascii=False)
+    check("兜底内容不再出现「内容难度：中等难度的定义」",
+          "内容难度：中等难度的定义" not in joined)
+    check("兜底内容退回用课题本身", "浮力" in joined)
+
     print("\n" + "=" * 64)
     print(f"通过 {len(PASS)} 项，失败 {len(FAIL)} 项")
     if FAIL:

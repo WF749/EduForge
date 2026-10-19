@@ -33,6 +33,29 @@ def _theme_rgb(theme_name: str) -> Tuple[int, int, int]:
     return (0, 112, 192)
 
 
+# 「内容难度：中等难度」「时长：45分钟」这类是**表单字段**，不是知识点。
+# 兜底模板若拿它去套「X 的定义与核心内涵」，页面上就会出现
+# 「内容难度：中等难度的定义与本质」—— 教师看到只会问"内容哪去了"。
+_META_FIELD_RE = re.compile(
+    r"^\s*(内容难度|难度|时长|课时|课型|学科|年级|学段|主题|教学目标|"
+    r"教学重点|教学难点|受众|对象|风格|模板)\s*[:：]"
+)
+
+
+def _looks_like_meta_field(text: str) -> bool:
+    """判断一段文字是不是"表单字段"而不是可讲的知识点。"""
+    t = str(text or "").strip()
+    if not t:
+        return True
+    if _META_FIELD_RE.match(t):
+        return True
+    # 「XXX：YYY」且前半很短、后半是选项值（中等/45/蓝色…），也判为字段
+    m = re.match(r"^([^：:]{2,6})\s*[:：]\s*(.{1,12})$", t)
+    if m and re.search(r"(难度|分钟|系|级|分钟|中等|较高|基础)", t):
+        return True
+    return False
+
+
 def _build_detailed_content(topic: str, outline: str, audience: str) -> List[Dict[str, Any]]:
     """Convert outline to slide definitions. 支持多行outline（含缩进子项）。"""
 
@@ -130,12 +153,19 @@ def _build_detailed_content(topic: str, outline: str, audience: str) -> List[Dic
         if bullets:
             bp = "\n".join(f"• {b}" for b in bullets[:8])
         else:
+            # 兜底模板只在**没有要点**时用。但传进来的 core_topic 有可能是
+            # 元数据字段而不是知识点 —— 实测生成过「内容难度：中等难度的定义与本质」
+            # 这种页面：把「内容难度：中等难度」当成了要讲的知识。
+            # 遇到这种就不套模板，退回用课题本身，至少内容是相关的。
+            safe_core = core_topic
+            if _looks_like_meta_field(core_topic):
+                safe_core = topic
             bp = (
-                f"• {core_topic}的定义与核心内涵\n"
-                f"• {core_topic}的关键特征与要素\n"
-                f"• {core_topic}的实际应用场景\n"
-                f"• 学习{core_topic}的注意事项"
-            )
+            f"• {safe_core}的定义与核心内涵\n"
+            f"• {safe_core}的关键特征与要素\n"
+            f"• {safe_core}的实际应用场景\n"
+            f"• 学习{safe_core}的注意事项"
+        )
         slides.append(
             {
                 "page_num": n,
