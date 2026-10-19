@@ -65,28 +65,32 @@ const shortText = computed(() => {
     flex: none;
   }
 
+  // 三档色调一律走语义 token。
+  // 不能用 #00ff88 / #ffb020 这类"暗色界面上才亮"的颜色：浅色主题下
+  // 亮绿字压在近白底上对比度只有 1.3:1，等于看不见 —— 而这个徽标常驻顶栏，
+  // 是"数据去了哪"唯一的常驻可见证据，看不清就失去了存在意义。
   // 未出校 / 未检测到敏感信息 —— 安全
   &.tone-ok {
-    background: rgba(0, 255, 136, 0.1);
-    border-color: rgba(0, 255, 136, 0.28);
-    color: #00ff88;
-    .dot { background: #00ff88; box-shadow: 0 0 6px rgba(0, 255, 136, 0.8); }
+    background: var(--success-bg);
+    border-color: rgba(16, 185, 129, 0.3);
+    color: var(--wb-ok-text);
+    .dot { background: var(--success); }
   }
 
   // 已发往云端（原样或脱敏后）—— 提醒，不是错误
   &.tone-warn {
-    background: rgba(255, 176, 32, 0.1);
-    border-color: rgba(255, 176, 32, 0.3);
-    color: #ffb020;
-    .dot { background: #ffb020; box-shadow: 0 0 6px rgba(255, 176, 32, 0.8); }
+    background: var(--warning-bg);
+    border-color: rgba(245, 158, 11, 0.34);
+    color: var(--wb-warn-text);
+    .dot { background: var(--warning); }
   }
 
   // 已拦截 —— 明确告知被拦下及原因
   &.tone-block {
-    background: rgba(255, 107, 107, 0.12);
-    border-color: rgba(255, 107, 107, 0.35);
-    color: #ff6b6b;
-    .dot { background: #ff6b6b; box-shadow: 0 0 6px rgba(255, 107, 107, 0.8); }
+    background: var(--danger-bg);
+    border-color: rgba(239, 68, 68, 0.34);
+    color: var(--wb-risk-text);
+    .dot { background: var(--danger); }
   }
 }
 

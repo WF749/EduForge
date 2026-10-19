@@ -1,7 +1,7 @@
 """DeepSeek LLM实现"""
 import requests
 from typing import List, Dict, Optional, Any, Generator
-from .base import LLMProviderBase
+from .base import LLMProviderBase, sampling_kwargs
 from .token_limit import resolve_max_tokens
 
 class DeepSeekProvider(LLMProviderBase):
@@ -86,7 +86,7 @@ class DeepSeekProvider(LLMProviderBase):
         data = {
             "model": model or "deepseek-chat",
             "messages": messages,
-            "temperature": temperature,
+            **sampling_kwargs(temperature),
             # 长内容（教案等）需足够大的输出上限，否则被截断会导致内容全空
             "max_tokens": resolve_max_tokens()
         }
@@ -152,7 +152,7 @@ class DeepSeekProvider(LLMProviderBase):
             data = {
                 "model": model or "deepseek-chat",
                 "messages": messages,
-                "temperature": temperature,
+                **sampling_kwargs(temperature),
                 "max_tokens": 2048,
                 "stream": True
             }

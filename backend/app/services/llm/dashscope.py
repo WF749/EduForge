@@ -1,6 +1,6 @@
 """阿里云百炼（通义千问）LLM实现"""
 from typing import List, Dict, Optional, Any, Generator
-from .base import LLMProviderBase
+from .base import LLMProviderBase, sampling_kwargs
 
 try:
     import dashscope
@@ -91,7 +91,7 @@ class DashScopeProvider(LLMProviderBase):
             response = dashscope.Generation.call(
                 model=model or 'qwen-max',
                 messages=messages,
-                temperature=temperature,
+                **sampling_kwargs(temperature),
                 max_tokens=_resolve_max_tokens()  # 教案等长内容生成需要更多token
             )
             
@@ -158,7 +158,7 @@ class DashScopeProvider(LLMProviderBase):
             response = dashscope.Generation.call(
                 model=model or 'qwen-max',
                 messages=messages,
-                temperature=temperature,
+                **sampling_kwargs(temperature),
                 max_tokens=2048,
                 stream=True
             )

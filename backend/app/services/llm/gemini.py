@@ -2,7 +2,7 @@
 import requests
 import json
 from typing import List, Dict, Optional, Any, Generator
-from .base import LLMProviderBase
+from .base import LLMProviderBase, sampling_kwargs
 
 class GeminiProvider(LLMProviderBase):
     """Google Gemini LLM提供商"""
@@ -79,7 +79,7 @@ class GeminiProvider(LLMProviderBase):
         data = {
             "contents": contents,
             "generationConfig": {
-                "temperature": temperature,
+                **sampling_kwargs(temperature),
                 "maxOutputTokens": 2048
             }
         }
@@ -167,7 +167,7 @@ class GeminiProvider(LLMProviderBase):
         data = {
             "contents": contents,
             "generationConfig": {
-                "temperature": temperature,
+                **sampling_kwargs(temperature),
                 "maxOutputTokens": 2048
             }
         }

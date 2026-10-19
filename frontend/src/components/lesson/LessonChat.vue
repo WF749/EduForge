@@ -42,6 +42,19 @@
         <button type="button" class="lc-empty-item" @click="send('导入环节太抽象，换成煮饺子的例子')">
           <b>要改</b><span>导入环节太抽象，换成煮饺子的例子</span>
         </button>
+
+        <!--
+          手动设置的入口必须长在这里。
+          它在"用户一定会看的那块屏幕区域"里 —— 顶部的课程信息条虽然也能编辑，
+          但那条长得像标题栏，新手不会去点它（实测反馈）。
+          所以引导放在对话流里，顶部只做"已填好之后的摘要"。
+        -->
+        <div class="lc-empty-setup">
+          <span>不想打字？也可以手动设置主题、学科和年级</span>
+          <button type="button" class="lc-empty-setup-btn" @click="emit('open-context')">
+            设置这节课信息
+          </button>
+        </div>
       </div>
 
       <div
@@ -125,7 +138,17 @@
       >
         {{ q.label }}
       </button>
-      <span v-if="!store.ready" class="lc-quick-warn">先在顶部填好教学主题</span>
+      <!-- 这句原来写的是"先在顶部填好教学主题"，与"直接说一句话就能开始"自相矛盾：
+           新手看到的是"你被拒绝了"，而实际能力是"你直接说我就懂"。
+           现在改成可点的补救入口，而不是一句抱怨。 -->
+      <button
+        v-if="!store.ready"
+        type="button"
+        class="lc-quick-warn"
+        @click="emit('open-context')"
+      >
+        还没设主题 · 点这里设置，或直接在下面说一句
+      </button>
     </div>
 
     <div class="lc-input">
@@ -207,7 +230,9 @@ const props = defineProps({
   busy: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['generate', 'revise', 'switch-kind'])
+// open-context：请父级展开顶部的课程信息条。
+// 有意做成事件而不是让对话直接改 store —— 展开与否是界面状态，不是备课数据。
+const emit = defineEmits(['generate', 'revise', 'switch-kind', 'open-context'])
 
 const store = useLessonStore()
 const messages = ref([])
@@ -589,7 +614,7 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
   height: 100%;
   padding: 16px 18px 18px;
   background:
-    radial-gradient(120% 90% at 12% 0%, rgba(0, 200, 255, 0.07), transparent 60%),
+    radial-gradient(120% 90% at 12% 0%, var(--brand-glow), transparent 60%),
     var(--wb-surface);
   border: 1px solid var(--wb-border-strong);
   border-radius: 16px;
@@ -669,6 +694,33 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
     font-size: 13px;
     color: var(--wb-text-3);
   }
+
+  .lc-empty-setup {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    flex-wrap: wrap;
+    margin-top: 6px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--wb-border);
+    font-size: 12.5px;
+    color: var(--wb-text-3);
+  }
+
+  .lc-empty-setup-btn {
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 5px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--brand-border);
+    background: var(--brand-soft);
+    color: var(--brand-text);
+    cursor: pointer;
+    transition: all 0.18s ease;
+
+    &:hover { background: var(--brand-soft-2); }
+  }
 }
 
 .lc-empty-item {
@@ -691,7 +743,7 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.04em;
-    color: rgba(0, 200, 255, 0.85);
+    color: var(--brand-text);
   }
 
   span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -699,7 +751,7 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
   &:hover {
     color: var(--wb-text);
     background: var(--wb-hover);
-    border-color: rgba(0, 200, 255, 0.3);
+    border-color: var(--brand-border);
     transform: translateX(2px);
   }
 }
@@ -724,7 +776,7 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
 
   .is-user & {
     background: linear-gradient(135deg, var(--wb-border-strong), rgba(0, 140, 255, 0.16));
-    border: 1px solid rgba(0, 200, 255, 0.34);
+    border: 1px solid var(--brand-border);
     color: var(--wb-text);
     border-bottom-right-radius: 4px;
   }
@@ -773,7 +825,7 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
   :deep(blockquote) {
     margin: 8px 0;
     padding: 2px 0 2px 12px;
-    border-left: 2px solid rgba(0, 200, 255, 0.4);
+    border-left: 2px solid var(--brand-border);
     color: var(--wb-text-2);
   }
   :deep(table) {
@@ -787,7 +839,7 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
     border: 1px solid var(--wb-border);
     text-align: left;
   }
-  :deep(th) { background: rgba(0, 200, 255, 0.09); color: var(--wb-text); font-weight: 600; }
+  :deep(th) { background: var(--wb-surface-2); color: var(--wb-text); font-weight: 600; }
   :deep(a) { color: #4fd1ff; text-decoration: underline; }
   :deep(hr) { border: none; border-top: 1px solid var(--wb-border); margin: 12px 0; }
   :deep(.copy-btn) {
@@ -822,7 +874,7 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
     width: 5px;
     height: 5px;
     border-radius: 50%;
-    background: rgba(0, 200, 255, 0.75);
+    background: var(--brand-500);
     animation: lc-bounce 1.1s ease-in-out infinite;
 
     &:nth-child(2) { animation-delay: 0.15s; }
@@ -839,7 +891,7 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
   display: block;
   margin-top: 7px;
   font-size: 12px;
-  color: rgba(0, 200, 255, 0.72);
+  color: var(--brand-text);
 }
 
 .lc-chips {
@@ -863,7 +915,7 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
     cursor: pointer;
     transition: color 0.18s ease;
 
-    &:hover { color: rgba(0, 200, 255, 0.9); }
+    &:hover { color: var(--brand-text); }
   }
 
   .lc-elapsed { font-size: 11.5px; color: var(--wb-text-3); }
@@ -880,8 +932,8 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
   transition: border-color 0.25s ease;
 
   &.lc-card-running {
-    border-left-color: #00c8ff;
-    box-shadow: 0 0 0 1px rgba(0, 200, 255, 0.16);
+    border-left-color: var(--brand-500);
+    box-shadow: 0 0 0 1px var(--brand-border);
   }
   &.lc-card-done { border-left-color: #00ff88; }
   &.lc-card-failed { border-left-color: #ff6b6b; }
@@ -933,10 +985,19 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
     color: var(--wb-text-3);
   }
 
+  /* 是按钮，不是一句抱怨：点一下就能直达设置 */
   .lc-quick-warn {
     margin-left: auto;
+    font-family: inherit;
     font-size: 11.5px;
-    color: rgba(255, 190, 100, 0.8);
+    padding: 3px 10px;
+    border-radius: 999px;
+    border: 1px dashed var(--wb-border-strong);
+    background: transparent;
+    color: var(--wb-warn-text);
+    cursor: pointer;
+
+    &:hover { border-style: solid; }
   }
 }
 
@@ -954,7 +1015,7 @@ watch(() => [store.taskId, props.activeKind], refreshVersion)
   &:hover:not(:disabled) {
     color: var(--wb-text);
     background: var(--wb-border-strong);
-    border-color: rgba(0, 200, 255, 0.36);
+    border-color: var(--brand-border);
   }
 
   &:disabled { opacity: 0.45; cursor: not-allowed; }

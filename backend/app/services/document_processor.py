@@ -466,7 +466,7 @@ class DocumentProcessor:
 {chr(10).join(frame_texts)}
 
 请直接输出摘要内容，不要其他说明。"""
-                            summary = llm_service.chat(summary_prompt)
+                            summary = llm_service.chat(summary_prompt, purpose="document_summary")
                             if summary and len(summary.strip()) > 10:
                                 text += f"\n视频内容摘要: {summary.strip()}\n"
                         except Exception:

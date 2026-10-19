@@ -1493,7 +1493,7 @@ onUnmounted(() => {
     }
 
     &.active {
-      background: rgba(0, 200, 255, 0.15);
+      background: var(--brand-soft-2);
       color: var(--primary);
     }
 
@@ -1547,7 +1547,7 @@ onUnmounted(() => {
   background: white;
 
   &.cover-slide {
-    background: linear-gradient(135deg, #3498db, #2980b9);
+    background: linear-gradient(135deg, var(--brand-500), var(--brand-600));
     color: white;
     text-align: center;
     display: flex;
@@ -1557,7 +1557,7 @@ onUnmounted(() => {
   }
 
   &.toc-slide {
-    background: #f8f9fa;
+    background: var(--wb-surface-2);
   }
 
   &.knowledge-slide {
@@ -1565,11 +1565,11 @@ onUnmounted(() => {
   }
 
   &.exercise-slide {
-    background: #f0f4f8;
+    background: var(--wb-surface-3);
   }
 
   &.summary-slide {
-    background: #f9f9f9;
+    background: var(--wb-surface-2);
   }
 
   .slide-type-badge {
@@ -1584,7 +1584,7 @@ onUnmounted(() => {
 
   .slide-title {
     font-size: 32px;
-    color: #333;
+    color: var(--wb-text);
     margin-bottom: 24px;
     font-weight: 600;
     line-height: 1.2;
@@ -1598,7 +1598,7 @@ onUnmounted(() => {
 
   .slide-content {
     font-size: 18px;
-    color: #666;
+    color: var(--wb-text-2);
     line-height: 1.8;
 
     &.cover-content {
@@ -1616,7 +1616,7 @@ onUnmounted(() => {
     }
 
     strong {
-      color: #333;
+      color: var(--wb-text);
       font-weight: 600;
     }
   }
@@ -1666,7 +1666,7 @@ onUnmounted(() => {
 
   .animation-item {
     padding: 12px;
-    background: rgba(10, 14, 39, 0.5);
+    background: var(--wb-mask);
     border-radius: 8px;
 
     .animation-point {
@@ -1689,7 +1689,7 @@ onUnmounted(() => {
 
   .game-card {
     padding: 16px;
-    background: rgba(10, 14, 39, 0.5);
+    background: var(--wb-mask);
     border-radius: 8px;
 
     .game-name {
@@ -1719,18 +1719,18 @@ onUnmounted(() => {
 
   .version-item {
     padding: 12px;
-    background: rgba(10, 14, 39, 0.5);
+    background: var(--wb-mask);
     border-radius: 8px;
     border-left: 3px solid transparent;
     transition: var(--transition);
 
     &:hover {
-      background: rgba(10, 14, 39, 0.7);
+      background: var(--wb-mask);
     }
 
     &.active {
       border-left-color: var(--primary);
-      background: rgba(0, 200, 255, 0.1);
+      background: var(--brand-soft);
     }
 
     .version-number {

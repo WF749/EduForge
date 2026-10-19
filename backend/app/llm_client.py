@@ -1,7 +1,8 @@
 """LLM calls: OpenAI-compatible clients + demo fallback."""
+import logging
 import os
 from pathlib import Path
-from typing import Any, AsyncIterator, Dict, List
+from typing import Any, AsyncIterator, Dict, List, Optional
 
 import httpx
 from dotenv import load_dotenv
@@ -19,6 +20,42 @@ _HTTP_TIMEOUT = httpx.Timeout(180.0, connect=30.0)
 # 抽成常量是为了让"界面能如实说出带上几轮" —— 写死在切片里的话，
 # 展示文案与实际行为迟早对不上，而这种不一致教师是发现不了的。
 HISTORY_TURNS = 20
+
+
+_log = logging.getLogger("llm.client")
+
+
+def _apply_sampling(
+    payload: Dict[str, Any],
+    body: Dict[str, Any],
+    settings: Dict[str, Any],
+    provider: Optional[str],
+    model: Optional[str],
+    *,
+    log=None,
+) -> None:
+    """把本次请求的 temperature 写进请求体。
+
+    与 `core.llm_gateway` 走**同一个** `core.sampling.resolve_temperature`：
+    同步与流式必须拿到一致的结果，否则同一个问题在两种模式下表现不同，
+    教师只会觉得"系统时好时坏"。
+
+    `body` 里可以带 `purpose` / `stage`；模型不支持时**不写这个字段**，
+    让厂商用自己的默认行为，而不是发一个会被 400 打回的参数。
+    """
+    from .core.sampling import describe, resolve_temperature
+
+    decision = resolve_temperature(
+        purpose=str(body.get("purpose") or "chat"),
+        stage=str(body.get("stage") or ""),
+        explicit=body.get("temperature"),
+        config=settings,
+        provider=provider,
+        model=model,
+    )
+    if decision.sent:
+        payload["temperature"] = float(decision.value)
+    (log or _log).debug(describe(decision))
 
 
 def _history_from_payload(body: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -223,9 +260,10 @@ async def stream_chat_completion(body: Dict[str, Any]) -> AsyncIterator[str]:
         data = {
             "model": model,
             "messages": messages,
-            "temperature": settings["temperature"],
             "stream": True
         }
+        # 采样参数按本次请求解析，与 llm_gateway 走同一套策略
+        _apply_sampling(data, body, settings, provider, model, log=_log)
         
         async with http_client.stream("POST", url, headers=headers, json=data) as response:
             # 关键修复：httpx.stream() 对 4xx/5xx 不会抛异常，必须显式检查状态码。
@@ -270,8 +308,17 @@ async def stream_chat_completion(body: Dict[str, Any]) -> AsyncIterator[str]:
         await http_client.aclose()
 
 
-def blocking_chat(messages: List[Dict[str, Any]], max_tokens: int = 2048) -> str:
-    """Single non-streaming completion for summaries / outlines / JSON extraction."""
+def blocking_chat(
+    messages: List[Dict[str, Any]],
+    max_tokens: int = 2048,
+    purpose: str = "chat",
+    stage: str = "",
+) -> str:
+    """Single non-streaming completion for summaries / outlines / JSON extraction.
+
+    `purpose` / `stage` 决定采样策略（见 `core.sampling`）。
+    调用方应当按实际用途传入，例如结构化字段提取传 `structured_extract`。
+    """
     from . import persist
 
     settings = persist.get_active_llm_settings()
@@ -313,12 +360,14 @@ def blocking_chat(messages: List[Dict[str, Any]], max_tokens: int = 2048) -> str
             base_url=base_url,
             http_client=http_client,
         )
-        r = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            max_tokens=max_tokens,
-            temperature=settings["temperature"],
-        )
+        kwargs: Dict[str, Any] = {
+            "model": model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+        }
+        # 采样参数按本次请求解析，与 llm_gateway 走同一套策略
+        _apply_sampling(kwargs, {"purpose": purpose, "stage": stage}, settings, provider, model, log=_log)
+        r = client.chat.completions.create(**kwargs)
         return (r.choices[0].message.content or "").strip()
     finally:
         http_client.close()

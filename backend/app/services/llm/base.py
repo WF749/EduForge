@@ -99,3 +99,16 @@ class LLMProviderBase(ABC):
         # 默认实现，子类可重写
         full_response = self.chat_completions(prompt, history, temperature, api_key, base_url, model)
         yield full_response
+
+
+def sampling_kwargs(temperature: Optional[float]) -> Dict[str, Any]:
+    """把温度拼进请求体；模型不接受时**整个字段都不发**。
+
+    发 `temperature: null` 会被厂商拒绝（400）—— 那等于把"这个模型不支持该参数"
+    变成了一次调用失败。不发才是让厂商用自己的默认行为。
+
+    用法（函数关键字参数与字典字面量都适用）：
+        client.chat.completions.create(model=m, messages=msgs, **sampling_kwargs(t))
+        data = {"model": m, "messages": msgs, **sampling_kwargs(t)}
+    """
+    return {} if temperature is None else {"temperature": temperature}

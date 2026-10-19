@@ -1,7 +1,7 @@
 """月之暗面 Kimi LLM实现"""
 import requests
 from typing import List, Dict, Optional, Any, Generator
-from .base import LLMProviderBase
+from .base import LLMProviderBase, sampling_kwargs
 from .token_limit import resolve_max_tokens
 
 class MoonshotProvider(LLMProviderBase):
@@ -73,7 +73,7 @@ class MoonshotProvider(LLMProviderBase):
         data = {
             "model": model or "moonshot-v1-8k",
             "messages": messages,
-            "temperature": temperature,
+            **sampling_kwargs(temperature),
             # 默认 8k 上下文模型：输出上限不能再往上抬，
             # 否则 输入提示 + 8192 输出 会直接超出上下文窗口而报错。
             "max_tokens": resolve_max_tokens(4096)
@@ -149,7 +149,7 @@ class MoonshotProvider(LLMProviderBase):
         data = {
             "model": model or "moonshot-v1-8k",
             "messages": messages,
-            "temperature": temperature,
+            **sampling_kwargs(temperature),
             "max_tokens": 2048,
             "stream": True
         }

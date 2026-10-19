@@ -206,7 +206,7 @@ class PPTContentGenerator:
         
         # 使用活跃的LLM提供商生成PPT大纲
         try:
-            response = llm_service.chat(prompt, [])
+            response = llm_service.chat(prompt, [], purpose="ppt_content")
         except Exception as e:
             print(f"LLM生成PPT大纲失败: {e}，使用默认大纲")
             outline = self._generate_default_outline(topic, audience, duration, key_points)
@@ -269,7 +269,7 @@ class PPTContentGenerator:
 请严格以JSON格式输出，包含knowledge_goals(知识目标数组)、ability_goals(能力目标数组)、emotional_goals(情感目标数组)，每个数组2-3个条目。
 不要输出任何其他内容，只输出JSON。"""
         
-        response = llm_service.chat(prompt, [])
+        response = llm_service.chat(prompt, [], purpose="ppt_content")
         
         try:
             parsed = self._safe_parse_json(response)
@@ -484,7 +484,7 @@ class PPTContentGenerator:
     def _generate_cover_content(self, page: Dict, topic: str, audience: str, duration: int, subject: str, teaching_content: str = "") -> Dict:
         """生成封面页内容"""
         prompt = self.prompt_templates.generate_cover_prompt(topic, audience, duration, subject, teaching_content)
-        response = llm_service.chat(prompt, [])
+        response = llm_service.chat(prompt, [], purpose="ppt_content")
         
         try:
             parsed = self._safe_parse_json(response)
@@ -548,7 +548,7 @@ class PPTContentGenerator:
 请严格以JSON格式输出，不要输出其他内容：
 {{"key_points": ["要点1", "要点2", ...], "case_study": "案例内容", "notes": "讲师备注"}}"""
         
-        response = llm_service.chat(prompt, [])
+        response = llm_service.chat(prompt, [], purpose="ppt_content")
         
         try:
             parsed = self._safe_parse_json(response)
@@ -595,7 +595,7 @@ class PPTContentGenerator:
 请严格以JSON格式输出：
 {{"exercises": [{{"question": "题目", "options": ["A. xxx", "B. xxx", "C. xxx", "D. xxx"], "answer": "正确选项"}}, ...], "notes": "教师备注"}}"""
         
-        response = llm_service.chat(prompt, [])
+        response = llm_service.chat(prompt, [], purpose="ppt_content")
         
         try:
             parsed = self._safe_parse_json(response)
@@ -653,7 +653,7 @@ class PPTContentGenerator:
 请严格以JSON格式输出，不要输出其他内容：
 {{"knowledge_review": ["总结1", "总结2", ...], "goals_achievement": "目标完成情况", "homework": "课后作业内容"}}"""
         
-        response = llm_service.chat(prompt, [])
+        response = llm_service.chat(prompt, [], purpose="ppt_content")
         
         try:
             parsed = self._safe_parse_json(response)
@@ -693,7 +693,7 @@ class PPTContentGenerator:
 
 请严格以JSON格式输出，不要输出其他内容。"""
         
-        response = llm_service.chat(prompt, [])
+        response = llm_service.chat(prompt, [], purpose="ppt_content")
         
         try:
             parsed = self._safe_parse_json(response)

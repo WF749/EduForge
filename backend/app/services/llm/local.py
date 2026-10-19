@@ -1,7 +1,7 @@
 """本地模型LLM实现"""
 import requests
 from typing import List, Dict, Optional, Any, Generator
-from .base import LLMProviderBase
+from .base import LLMProviderBase, sampling_kwargs
 from .token_limit import resolve_max_tokens
 
 class LocalModelProvider(LLMProviderBase):
@@ -182,7 +182,7 @@ class LocalModelProvider(LLMProviderBase):
                     "prompt": full_prompt,
                     "stream": False,
                     "options": {
-                        "temperature": temperature
+                        **sampling_kwargs(temperature),
                     }
                 }
 
@@ -217,7 +217,7 @@ class LocalModelProvider(LLMProviderBase):
                 data = {
                     "model": model or "llama3",
                     "messages": messages,
-                    "temperature": temperature,
+                    **sampling_kwargs(temperature),
                     # 校内模型同样要防截断：输出被截会让教案内容整片为空
                     "max_tokens": resolve_max_tokens()
                 }
@@ -354,7 +354,7 @@ class LocalModelProvider(LLMProviderBase):
                     "prompt": full_prompt,
                     "stream": True,
                     "options": {
-                        "temperature": temperature
+                        **sampling_kwargs(temperature),
                     }
                 }
 
@@ -401,7 +401,7 @@ class LocalModelProvider(LLMProviderBase):
                 data = {
                     "model": model or "llama3",
                     "messages": messages,
-                    "temperature": temperature,
+                    **sampling_kwargs(temperature),
                     "max_tokens": 2048,
                     "stream": True
                 }

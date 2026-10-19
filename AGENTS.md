@@ -42,6 +42,20 @@ Vue3 + FastAPI 单体，后端托管前端构建产物，教案/PPT/动画/游�
 | RAG 检索、评测集、指标 | [`docs/RAG.md`](docs/RAG.md) |
 | 技术引进评估（MCP / llms.txt / 可观测等） | [`docs/TECH-EVALUATION.md`](docs/TECH-EVALUATION.md) |
 | 本仓库的 Harness 机制说明 | [`docs/HARNESS.md`](docs/HARNESS.md) |
+| 项目历程、踩过的坑与修复记录 | [`docs/PROJECT-JOURNAL.md`](docs/PROJECT-JOURNAL.md) |
+
+## 每次修完问题都要做的一件事
+
+在 [`docs/PROJECT-JOURNAL.md`](docs/PROJECT-JOURNAL.md) 的 **§3 问题与修复记录** 追加一条，
+格式固定：
+
+```
+现象 → 根因 → 解法 → 验证 → 教训
+```
+
+为什么强制：本项目由 AI coding 从 0 到 1 完成，作者没有逐行写过每一行代码。
+这份日志是作者回看系统全貌的唯一抓手 —— 不写，就等于每次都重新问一遍 AI。
+顺带规则：动了架构就补 §2，遇到新的"还没解决"的坑就补 §4。
 
 ## 提交前必须跑通的验证（三条，全部纯本地、零模型额度）
 
