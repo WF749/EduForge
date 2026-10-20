@@ -39,6 +39,13 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             libjpeg-dev zlib1g-dev libgl1
 
+      - name: 强制 Python 3.11（覆盖仓库里的 .python-version）
+        # ⚠️ 这是上次失败的真正原因：仓库根的 .python-version 写着 3.12，
+        # `uv sync` 会优先读它，**压过 setup-uv 里指定的 3.11**
+        # （实测日志里 build 目录仍是 cpython-312）。
+        # 只改 CI 的这一份，不动仓库文件，避免影响作者本地环境。
+        run: echo "3.11" > .python-version
+
       - name: 安装后端依赖
         working-directory: backend
         # 说明：sentence-transformers 会带出 torch，Linux 上默认解析 CUDA 版，
@@ -46,8 +53,6 @@ jobs:
         # 曾想用 UV_TORCH_BACKEND=cpu 规避，但本机 uv 0.11.11 的 `uv sync`
         # 并无 --torch-backend 参数，环境变量是否被读取无法确认 ——
         # 按"不确定就不写"的原则去掉。慢一点但确定能成功。
-        # 真要加速，正解是在 pyproject 的 [tool.uv.sources] 里给 torch 指定
-        # CPU 索引（属于改依赖，留待需要时再评估）。
         run: uv sync
 
       - name: 接口契约（前端路径 vs 后端路由）
