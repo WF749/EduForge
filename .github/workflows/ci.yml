@@ -39,6 +39,16 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             libjpeg-dev zlib1g-dev libgl1
 
+      - name: 缓存 uv 下载目录
+        # sentence-transformers → torch → cuda-toolkit，要下 2GB+ 的 nvidia-* 包。
+        # 不缓存的话每次 CI 都重下，既慢又容易撞上 30s 的下载超时。
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: uv-${{ runner.os }}-${{ hashFiles('backend/uv.lock', 'uv.lock', 'backend/pyproject.toml', 'pyproject.toml') }}
+          restore-keys: |
+            uv-${{ runner.os }}-
+
       - name: 强制 Python 3.11（覆盖仓库里的 .python-version）
         # ⚠️ 这是上次失败的真正原因：仓库根的 .python-version 写着 3.12，
         # `uv sync` 会优先读它，**压过 setup-uv 里指定的 3.11**
@@ -48,11 +58,19 @@ jobs:
 
       - name: 安装后端依赖
         working-directory: backend
-        # 说明：sentence-transformers 会带出 torch，Linux 上默认解析 CUDA 版，
-        # 额外拉 2GB+ 的 nvidia-* 包（实测把 job 拖到 7 分钟）。
-        # 曾想用 UV_TORCH_BACKEND=cpu 规避，但本机 uv 0.11.11 的 `uv sync`
-        # 并无 --torch-backend 参数，环境变量是否被读取无法确认 ——
-        # 按"不确定就不写"的原则去掉。慢一点但确定能成功。
+        env:
+          # 日志原文："Failed to download distribution due to network timeout.
+          # Try increasing UV_HTTP_TIMEOUT (current value: 30s)"。
+          # 2GB+ 的 CUDA 包在 30 秒内下不完，放宽到 10 分钟。
+          UV_HTTP_TIMEOUT: "600"
+          # 降低并发下载，减少单个连接被拖死的概率
+          UV_CONCURRENT_DOWNLOADS: "4"
+        # 说明：sentence-transformers → torch → cuda-toolkit[cusparse]，
+        # Linux 上会额外拉 2GB+ 的 nvidia-* 包。曾想用 UV_TORCH_BACKEND=cpu
+        # 规避，但本机 uv 0.11.11 的 `uv sync` 并无 --torch-backend 参数，
+        # 该环境变量是否被读取无法确认 —— 按"不确定就不写"去掉。
+        # 真要根治，正解是在 pyproject 的 [tool.uv.sources] 里给 torch 指定
+        # CPU 索引（属于改依赖，留待需要时再评估）。
         run: uv sync
 
       - name: 接口契约（前端路径 vs 后端路由）
