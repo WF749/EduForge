@@ -1,0 +1,83 @@
+name: CI
+
+# 为什么要有这个 workflow
+# ----------------------
+# 1. README 承诺了 Docker 部署，但作者本机没有 Docker 环境 —— 靠 CI 在
+#    GitHub 的机器上真实构建一次，比在文档里空口承诺可靠。
+# 2. 离线冒烟（1180+ 项，零模型额度）每次推送都跑一遍，
+#    防止"改了 A 坏了 B"这类静默回归。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    name: 离线冒烟（零模型额度）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: 安装后端依赖
+        working-directory: backend
+        run: uv sync
+
+      - name: 跑关键冒烟
+        working-directory: ${{ github.workspace }}
+        env:
+          PYTHONPATH: backend
+        run: |
+          set -e
+          for s in \
+            smoke_safety \
+            smoke_teaching_compliance \
+            smoke_api_contract \
+            smoke_llm_service \
+            smoke_openapi \
+            smoke_text_render \
+            smoke_lesson_docx \
+            smoke_lesson_deck \
+            smoke_textbook_index \
+            smoke_deck_generator \
+            smoke_sampling ; do
+            echo "=== $s ==="
+            uv run --project backend python scripts/$s.py || exit 1
+          done
+
+      - name: 前端冒烟（Node）
+        run: |
+          set -e
+          node scripts/smoke_chat_action.mjs
+          node scripts/smoke_lesson_intent.mjs
+          node scripts/smoke_subject_guard.mjs
+
+  docker:
+    name: Docker 镜像构建
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 构建镜像
+        # 只构建不推送：验证 Dockerfile 与前端构建确实能跑通
+        run: docker build -t eduforge:ci .
+
+      - name: 启动容器并验证健康接口
+        run: |
+          docker run -d --name ef -p 8005:8005 \
+            -e HOST=0.0.0.0 -e PORT=8005 \
+            eduforge:ci
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8005/api/health || true)
+            if [ "$code" = "200" ]; then echo "健康检查通过（${i}s）"; exit 0; fi
+            sleep 1
+          done
+          echo "健康检查失败"; docker logs ef | tail -40; exit 1
+
+      - name: 清理
+        if: always()
+        run: docker rm -f ef || true
