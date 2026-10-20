@@ -26,10 +26,28 @@ jobs:
       - name: 安装 uv
         uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.12"
+          # 刻意用 3.11 而不是 .python-version 里的 3.12：
+          # 项目固定了 Pillow==9.5.0，该版本**没有 Python 3.12 的预编译包**，
+          # 在 CI 里会退化成源码编译并因缺 jpeg 头文件失败（实测）。
+          # Dockerfile 用的也是 3.11，这里保持一致，避免"容器能建、CI 不能跑"。
+          python-version: "3.11"
+
+      - name: 安装系统依赖（Pillow 编译兜底）
+        # 即便轮子缺失也有 jpeg/zlib 可编译；libgl1 供 opencv 类依赖使用
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libjpeg-dev zlib1g-dev libgl1
 
       - name: 安装后端依赖
         working-directory: backend
+        # 说明：sentence-transformers 会带出 torch，Linux 上默认解析 CUDA 版，
+        # 额外拉 2GB+ 的 nvidia-* 包（实测把 job 拖到 7 分钟）。
+        # 曾想用 UV_TORCH_BACKEND=cpu 规避，但本机 uv 0.11.11 的 `uv sync`
+        # 并无 --torch-backend 参数，环境变量是否被读取无法确认 ——
+        # 按"不确定就不写"的原则去掉。慢一点但确定能成功。
+        # 真要加速，正解是在 pyproject 的 [tool.uv.sources] 里给 torch 指定
+        # CPU 索引（属于改依赖，留待需要时再评估）。
         run: uv sync
 
       - name: 接口契约（前端路径 vs 后端路由）
