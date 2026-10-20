@@ -4,7 +4,7 @@ import re
 from typing import List, Dict, Optional, Any, Generator
 from .base import LLMProviderBase
 
-# 设计思路参考：清华大学THU-MAIC/OpenMAIC开源项目，核心代码自主实现
+# 设计思路参考了社区开源的教学设计实现，核心代码为本项目自主编写
 
 class DemoProvider(LLMProviderBase):
     """演示模式LLM提供商 - 根据主题动态生成结构化内容"""

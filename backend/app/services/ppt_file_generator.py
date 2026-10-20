@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 from typing import Optional, Dict, List
 
-# 设计思路参考：清华大学THU-MAIC/OpenMAIC开源项目，核心代码自主实现
+# 设计思路参考了社区开源的教学设计实现，核心代码为本项目自主编写
 
 # 尝试导入python-pptx库
 try:
