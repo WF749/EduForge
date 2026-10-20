@@ -6,7 +6,7 @@ from .llm_service import llm_service
 from .ppt_prompt_templates import PPTPromptTemplates
 from .topic_expansion import enrich_for_ppt
 
-# 设计思路参考：清华大学THU-MAIC/OpenMAIC开源项目，核心代码自主实现
+# 设计思路参考了社区开源的教学设计实现，核心代码为本项目自主编写
 
 class PPTContentGenerator:
     """PPT内容生成器类"""
