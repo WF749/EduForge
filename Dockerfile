@@ -25,7 +25,18 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 # 后端依赖（pyproject.toml + uv.lock）
 COPY pyproject.toml uv.lock* ./
 COPY backend/ ./backend/
-RUN uv venv --python 3.11 && (uv sync --no-dev --frozen || uv sync --no-dev)
+
+# ⚠️ 为什么这里强制用官方 PyPI：
+# uv.lock 里的包地址指向清华镜像（对国内使用者友好），但构建镜像的 CI runner
+# 在美国，跨太平洋拉 500MB 的 torch 会反复超时（实测 torch / cudnn / triton
+# 三个包各超时一次，整次构建失败）。
+# 这里只覆盖"从哪下"，不改任何版本（pyproject 里绝大多数是 == 固定版本）。
+ENV UV_INDEX_URL=https://pypi.org/simple
+ENV UV_HTTP_TIMEOUT=600
+ENV UV_CONCURRENT_DOWNLOADS=4
+
+# 去掉 --frozen：允许按新的索引重新解析；版本仍由 pyproject 固定
+RUN uv venv --python 3.11 && uv sync --no-dev
 ENV PATH="/app/.venv/bin:$PATH"
 
 # 前端构建产物放入 backend 静态托管目录（main.py 自动托管）
