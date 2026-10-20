@@ -1,11 +1,14 @@
 name: CI
 
-# 为什么要有这个 workflow
-# ----------------------
-# 1. README 承诺了 Docker 部署，但作者本机没有 Docker 环境 —— 靠 CI 在
-#    GitHub 的机器上真实构建一次，比在文档里空口承诺可靠。
-# 2. 离线冒烟（1180+ 项，零模型额度）每次推送都跑一遍，
-#    防止"改了 A 坏了 B"这类静默回归。
+# 设计说明
+# --------
+# 1. **冒烟拆成独立 step**：此前 11 个脚本塞在一个 step 里，失败时只知道
+#    "某条命令退出码非 0"，定位不到是哪个脚本。拆开后哪一步红就是哪个脚本红。
+# 2. **只放"纯逻辑 + 零外部资源"的脚本进 CI**：CI 是 Linux 容器，没有本地教材
+#    PDF、没有历史运行数据。依赖这些的脚本留在本地跑（AGENTS.md 有完整清单），
+#    CI 只守"改了 A 不会悄悄坏掉 B"这条底线。
+# 3. **Docker job 保留**：README 承诺了容器部署，而作者本机没有 Docker，
+#    只能靠 CI 真实构建兑现这个承诺（首次已验证通过，约 12 分钟）。
 
 on:
   push:
@@ -21,40 +24,43 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: 安装 uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
 
       - name: 安装后端依赖
         working-directory: backend
         run: uv sync
 
-      - name: 跑关键冒烟
-        working-directory: ${{ github.workspace }}
-        env:
-          PYTHONPATH: backend
-        run: |
-          set -e
-          for s in \
-            smoke_safety \
-            smoke_teaching_compliance \
-            smoke_api_contract \
-            smoke_llm_service \
-            smoke_openapi \
-            smoke_text_render \
-            smoke_lesson_docx \
-            smoke_lesson_deck \
-            smoke_textbook_index \
-            smoke_deck_generator \
-            smoke_sampling ; do
-            echo "=== $s ==="
-            uv run --project backend python scripts/$s.py || exit 1
-          done
+      - name: 接口契约（前端路径 vs 后端路由）
+        env: { PYTHONPATH: backend }
+        run: uv run --project backend python scripts/smoke_api_contract.py
 
-      - name: 前端冒烟（Node）
-        run: |
-          set -e
-          node scripts/smoke_chat_action.mjs
-          node scripts/smoke_lesson_intent.mjs
-          node scripts/smoke_subject_guard.mjs
+      - name: OpenAPI 文档可生成
+        env: { PYTHONPATH: backend }
+        run: uv run --project backend python scripts/smoke_openapi.py
+
+      - name: LLM 服务降级（不静默切演示模板）
+        env: { PYTHONPATH: backend }
+        run: uv run --project backend python scripts/smoke_llm_service.py
+
+      - name: 课件契约与校验（12 种功能页 + 闭环 + 5 维量规）
+        env: { PYTHONPATH: backend }
+        run: uv run --project backend python scripts/smoke_lesson_deck.py
+
+      - name: 课件生成器（校验不通过要打回重做）
+        env: { PYTHONPATH: backend }
+        run: uv run --project backend python scripts/smoke_deck_generator.py
+
+      - name: 成品文本渲染（repr 泄漏闸门）
+        env: { PYTHONPATH: backend }
+        run: uv run --project backend python scripts/smoke_text_render.py
+
+      - name: 前端纯逻辑（学科守卫）
+        run: node scripts/smoke_subject_guard.mjs
+
+      - name: 前端纯逻辑（对话动作路由）
+        run: node scripts/smoke_chat_action.mjs
 
   docker:
     name: Docker 镜像构建
@@ -63,7 +69,6 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: 构建镜像
-        # 只构建不推送：验证 Dockerfile 与前端构建确实能跑通
         run: docker build -t eduforge:ci .
 
       - name: 启动容器并验证健康接口
