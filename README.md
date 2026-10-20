@@ -131,13 +131,24 @@ npm install
 npm run dev                  # http://localhost:5173
 ```
 
-### 方式二：Docker 一键部署
+### 方式二：Docker（单容器，前后端同源）
 
 ```bash
 cp .env.example .env        # 填入至少一个 API Key
 docker compose up -d --build
 # 访问 http://localhost:8005
 ```
+
+> 关于这条路径的**如实说明**：
+> - 镜像在**容器内部完成前端构建**（`frontend/dist` 不在版本控制里，
+>   Dockerfile 会自己 `npm run build`），所以 clone 下来即可直接 build。
+> - Dockerfile 与 compose 配置经静态核对，并由 [CI](.github/workflows/ci.yml)
+>   在 GitHub 环境中真实构建 + 健康检查（作者本机无 Docker，不空口承诺）。
+> - 若想最快看到界面，**推荐方式一**（本地 uv + npm，已实测 3 秒起后端）。
+
+⚠️ 一个已知坑：容器内 `LOCAL_MODEL_URL` 默认填的是 `http://localhost:8001/v1`，
+这个 `localhost` 指**容器自己**。要连宿主机上的本地模型，请改成
+`http://host.docker.internal:8001/v1`。
 
 ---
 
