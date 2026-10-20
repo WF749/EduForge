@@ -59,19 +59,18 @@ jobs:
       - name: 安装后端依赖
         working-directory: backend
         env:
-          # 日志原文："Failed to download distribution due to network timeout.
-          # Try increasing UV_HTTP_TIMEOUT (current value: 30s)"。
-          # 2GB+ 的 CUDA 包在 30 秒内下不完，放宽到 10 分钟。
+          # ⚠️ 这是前几次失败的真根因：uv.lock 里所有包地址指向**清华镜像**
+          # （对国内使用者友好），而 GitHub runner 在美国，跨太平洋拉
+          # 500MB 的 torch / 349MB 的 cudnn / 179MB 的 triton 会反复超时：
+          #   Failed to fetch: https://pypi.tuna.tsinghua.edu.cn/.../torch-2.11.0-...whl
+          #   cause: client error (Connect) / deadline has elapsed
+          # 这里只覆盖"从哪下"，版本仍由 pyproject 固定，不改依赖。
+          UV_INDEX_URL: https://pypi.org/simple
           UV_HTTP_TIMEOUT: "600"
-          # 降低并发下载，减少单个连接被拖死的概率
           UV_CONCURRENT_DOWNLOADS: "4"
-        # 说明：sentence-transformers → torch → cuda-toolkit[cusparse]，
-        # Linux 上会额外拉 2GB+ 的 nvidia-* 包。曾想用 UV_TORCH_BACKEND=cpu
-        # 规避，但本机 uv 0.11.11 的 `uv sync` 并无 --torch-backend 参数，
-        # 该环境变量是否被读取无法确认 —— 按"不确定就不写"去掉。
-        # 真要根治，正解是在 pyproject 的 [tool.uv.sources] 里给 torch 指定
-        # CPU 索引（属于改依赖，留待需要时再评估）。
-        run: uv sync
+        # --no-frozen：允许按新的索引重新解析（lock 里记的是镜像地址）。
+        # 不加 --frozen 是有意的：否则 uv 会坚持用 lock 里的清华源地址。
+        run: uv sync --no-frozen
 
       - name: 接口契约（前端路径 vs 后端路由）
         env: { PYTHONPATH: backend }
