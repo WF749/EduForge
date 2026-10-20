@@ -6,12 +6,21 @@
 
 *Local-first multimodal lesson-preparation agent workbench for K-12 teachers*
 
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Stack: FastAPI + Vue3](https://img.shields.io/badge/Stack-FastAPI%20%2B%20Vue3-3c9.svg)](https://fastapi.tiangolo.com)
+[![Tests: 1180+ 离线冒烟](https://img.shields.io/badge/Tests-1180%2B%20offline-2ea44f.svg)](AGENTS.md)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 </div>
 
 ---
+
+> **30 秒看懂**：描述一节课 → 拿到可编辑的教案 / PPT / 动画 / 游戏，
+> 外加两道合规关卡。**本地优先**：默认不出校，模型失败会明确报告而不是假装生成。
+>
+> - 上手：[快速开始](#快速开始) · 不懂就先看 [功能状态（如实标注）](#功能状态如实标注)
+> - 想看边界：[验收边界](#验收边界) · [数据合规](#数据合规)
+> - 想看设计：[设计取舍](#设计取舍为什么是本地优先--可验证的教学约束)
+> - 想看历程：[项目工程日志](docs/PROJECT-JOURNAL.md)
 
 ## 它解决什么问题
 
@@ -56,6 +65,8 @@
 
 ## 架构
 
+![系统架构图](images/architecture.png)
+
 ```
 ┌──────────────────────────────────────────────────────────┐
 │                       前端 (Vue 3)                          │
@@ -85,6 +96,15 @@
 详见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
 
 ---
+
+<details>
+<summary>展开：对话链路图 与 PPT 生成管线图</summary>
+
+![对话链路图](images/chat-flow.png)
+
+![PPT 生成管线图](images/ppt-pipeline.png)
+
+</details>
 
 ## 技术栈
 
