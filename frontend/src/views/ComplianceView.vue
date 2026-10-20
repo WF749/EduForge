@@ -5,9 +5,27 @@
       description="两套独立关卡：教学合规查「这份教案合不合规范」，数据出校查「这段内容能不能发到校外」。互不替代。"
     />
 
+    <!--
+      结论前置：此前这页一上来就是「L1–L5 / R1–R8 / warn」这些内部编号，
+      教师看完不知道"我现在安不安全、要不要做什么"。这里先把结论说成人话。
+    -->
+    <div v-if="safety" class="wb-card wb-card-pad verdict" :class="safety.egress ? 'is-egress' : 'is-local'">
+      <div class="verdict__main">
+        <div class="verdict__line">
+          <StatusTag :status="safety.egress ? 'risk' : 'pass'"
+                     :label="safety.egress ? '内容会发到校外' : '内容不出校'" />
+          <b>{{ safety.egress ? (safety.target?.provider_label || safety.target?.provider || '云端模型') : '本地 / 校内模型' }}</b>
+          <span class="wb-muted">· {{ modeText(safety.mode) }}</span>
+        </div>
+        <p class="verdict__hint">{{ safetySummary }}</p>
+      </div>
+      <el-button type="primary" plain @click="goPrecheck">提交前先预检</el-button>
+    </div>
+
+    
     <el-tabs v-model="tab">
       <!-- 数据出校 -->
-      <el-tab-pane label="数据出校（L1–L5）" name="safety">
+      <el-tab-pane label="数据会不会出校" name="safety">
         <div class="wb-card wb-card-pad wb-stack">
           <div class="wb-row wb-row-between">
             <b>当前策略</b>
@@ -20,8 +38,8 @@
             <div v-if="safety" class="wb-stack-sm">
               <div class="wb-row">
                 <StatusTag :status="safety.egress ? 'L3' : 'L1'" :label="safety.egress ? '数据会出校' : '数据未出校'" />
-                <StatusTag :status="'L3'" :label="`阻断级别 ${safety.block_level || 'L3'}`" />
-                <span class="wb-muted">当前模式：{{ safety.mode }}（可选 {{ (safety.modes || []).join(' / ') }}）</span>
+                <StatusTag :status="'L3'" :label="`拦截门槛 ${safety.block_level || 'L3'}（中敏感）`" />
+                <span class="wb-muted">当前处理：{{ modeText(safety.mode) }}</span>
               </div>
               <p class="note">{{ safety.note }}</p>
               <div class="kv">
@@ -85,7 +103,7 @@
       </el-tab-pane>
 
       <!-- 教学合规 -->
-      <el-tab-pane label="教学合规（R1–R8）" name="teaching">
+      <el-tab-pane label="教学内容合不合规" name="teaching">
         <div class="wb-card wb-card-pad wb-stack">
           <p class="wb-card-hint">
             纯规则离线扫描，零额度消耗。生成时会自动跑一遍并附在产物上；
@@ -210,6 +228,18 @@ const statusError = ref('')
 const scanText = ref('')
 const previewRedact = ref(false)
 const scanning = ref(false)
+// 内部模式名 → 人话。教师不需要知道 warn/sanitize/enforce 的区别，
+// 只需要知道"会不会拦我"。
+const MODE_TEXT = {
+  off: '完全不检查',
+  warn: '只提醒，不拦截',
+  sanitize: '自动脱敏后再发送',
+  enforce: '命中就拦下，不发出去',
+}
+function modeText(m) {
+  return MODE_TEXT[m] || (m ? `当前策略：${m}` : '策略未知')
+}
+
 const scanError = ref('')
 const scan = ref(null)
 
@@ -232,10 +262,41 @@ const reviewing = ref(false)
 const reviewError = ref('')
 const review = ref(null)
 
+// 一句话结论：这页最先要回答的是"我现在安不安全、要不要做什么"
+const safetySummary = computed(() => {
+  const s = safety.value
+  if (!s) return ''
+  const lvl = s.block_level || 'L3'
+  if (!s.egress) {
+    return '模型跑在本机或校内，内容不离开你的环境。生成、检索、合规检查都在本地完成。'
+  }
+  const mode = s.mode
+  if (mode === 'off') {
+    return '内容会发往校外模型，且当前不做任何拦截。如果教案里含学生姓名、成绩、联系方式，建议改成「先提醒」。'
+  }
+  if (mode === 'enforce') {
+    return `命中 ${lvl} 及以上敏感信息（如姓名+成绩）会直接拦下、不发送。这是最严的一档。`
+  }
+  if (mode === 'sanitize') {
+    return `命中 ${lvl} 及以上敏感信息会自动脱敏后再发送（如「张三」→「某生」），原文不会出校。`
+  }
+  return `命中 ${lvl} 及以上敏感信息（如姓名+成绩、手机号）会被提醒、但不会拦下。想更严可以到「设置」里改成自动脱敏或直接拦下。`
+})
+
+
 const findings = computed(() => Array.isArray(scan.value?.findings) ? scan.value.findings : [])
 const reportIssues = computed(() => Array.isArray(report.value?.issues) ? report.value.issues : [])
 const reviewFindings = computed(() => Array.isArray(review.value?.findings) ? review.value.findings : [])
 const canReview = computed(() => !!store.taskId)
+
+function goPrecheck() {
+  tab.value = 'safety'
+  // 等 tab 切完再滚动，否则目标元素还没渲染
+  requestAnimationFrame(() => {
+    const el = document.querySelector('.lp')
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  })
+}
 
 async function loadStatus() {
   loadingStatus.value = true
@@ -353,4 +414,34 @@ onMounted(() => {
 }
 
 .lp { margin-top: var(--sp-4); }
+/* 一句话结论卡：让教师三秒内知道"我现在什么情况、下一步做什么" */
+.verdict {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+  border-left: 3px solid var(--wb-border-strong);
+}
+.verdict.is-egress {
+  border-left-color: var(--wb-warn-text);
+  background: var(--wb-warn-bg);
+}
+.verdict.is-local {
+  border-left-color: var(--wb-brand);
+}
+.verdict__main { min-width: 0; flex: 1 1 480px; }
+.verdict__line {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+.verdict__hint {
+  margin: 6px 0 0;
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+  color: var(--wb-text-2);
+}
+
 </style>

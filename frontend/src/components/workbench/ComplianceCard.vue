@@ -20,7 +20,7 @@
     <div v-show="open" class="cmp__body">
       <ul v-if="issues.length" class="cmp__list">
         <li v-for="(it, i) in issues" :key="i" class="cmp__item">
-          <span class="cmp__code">{{ it.code }}</span>
+          <span class="cmp__code" :title="`规则 ${it.code}`">{{ ruleName(it.code) }}</span>
           <div class="cmp__text">
             <p class="cmp__msg">{{ it.message }}</p>
             <p v-if="it.hint" class="cmp__hint">{{ it.hint }}</p>
@@ -63,6 +63,13 @@ const props = defineProps({
 const open = ref(false)
 
 const visible = computed(() => !!props.report && Object.keys(props.report).length > 0)
+
+// 规则编号讲不了人话：教师看到「R5」不知道是什么，
+// 补一个中文名，编号留在 title 里供排查用。
+const RULE_NAMES = {"R1": "课标依据", "R2": "核心素养", "R3": "教材版本", "R4": "学段匹配", "R5": "隐私泄露", "R6": "时长规范", "R7": "行为动词", "R8": "教学评一致"}
+function ruleName(code) {
+  return RULE_NAMES[code] || code || '检查项'
+}
 
 const issues = computed(() => {
   const list = props.report?.issues
