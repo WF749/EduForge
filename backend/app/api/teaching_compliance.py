@@ -23,7 +23,11 @@ async def check_teaching_compliance(
     meta: Optional[Dict[str, Any]] = Body(
         None,
         description="可选上下文: {level, subject, grade, topic, duration}",
-        examples={"示例": {"level": "初中", "subject": "物理", "grade": "八年级", "topic": "浮力", "duration": 45}},
+        # ⚠️ examples 必须是**列表**，不能是 dict。
+        # 写成 examples={"示例": {...}} 会让 FastAPI 生成的 OpenAPI schema 里
+        # examples 变成对象，进而导致 /openapi.json 直接 500（/docs 打不开）。
+        examples=[{"level": "初中", "subject": "物理", "grade": "八年级",
+                   "topic": "浮力", "duration": 45}],
     ),
 ):
     """对一份教学产物做离线合规扫描，返回问题清单与修改建议。"""
