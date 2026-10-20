@@ -7,6 +7,7 @@
 *Local-first multimodal lesson-preparation agent workbench for K-12 teachers*
 
 [![Stack: FastAPI + Vue3](https://img.shields.io/badge/Stack-FastAPI%20%2B%20Vue3-3c9.svg)](https://fastapi.tiangolo.com)
+[![CI](https://github.com/WF749/EduForge/actions/workflows/ci.yml/badge.svg)](https://github.com/WF749/EduForge/actions/workflows/ci.yml)
 [![Tests: 1180+ 离线冒烟](https://img.shields.io/badge/Tests-1180%2B%20offline-2ea44f.svg)](AGENTS.md)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
