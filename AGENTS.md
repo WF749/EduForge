@@ -44,6 +44,15 @@ Vue3 + FastAPI 单体，后端托管前端构建产物，教案/PPT/动画/游�
 | 本仓库的 Harness 机制说明 | [`docs/HARNESS.md`](docs/HARNESS.md) |
 | 项目历程、踩过的坑与修复记录 | [`docs/PROJECT-JOURNAL.md`](docs/PROJECT-JOURNAL.md) |
 
+## 提交信息
+
+**只写一行标题**，格式 `type(scope): 做了什么`。
+
+commit message 是公开历史，读者是别人不是作者。过程、原因、验证结果、
+「刻意没做什么」这类复盘内容写进 `docs/PROJECT-JOURNAL.md`，
+不要写进 commit 正文。历史上曾把内部复盘和第三方项目名写进公开提交
+信息，事后需要重写历史清理。
+
 ## 每次修完问题都要做的一件事
 
 在 [`docs/PROJECT-JOURNAL.md`](docs/PROJECT-JOURNAL.md) 的 **§3 问题与修复记录** 追加一条，
